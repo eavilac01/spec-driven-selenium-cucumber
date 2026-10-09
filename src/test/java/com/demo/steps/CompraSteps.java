@@ -14,6 +14,9 @@ import io.cucumber.java.en.When;
 @SuppressWarnings("unused") // Cucumber resuelve los métodos anotados desde los textos Gherkin.
 public final class CompraSteps {
 
+    private static final String PREFIJO_ESPERADO_VARIOS = "cart.expected";
+    private static final String PREFIJO_ESPERADO_UNICO = "cart.expected.single-product";
+
     private final TestContext testContext;
     private final PageManager pages;
 
@@ -36,14 +39,21 @@ public final class CompraSteps {
     @When("agrega los productos configurados al carrito")
     public void agregarProductosConfiguradosAlCarrito() {
         List<String> productos = ConfigReader.getList("test.purchase.products");
-        testContext.setProductosSeleccionados(productos);
+        testContext.setPrefijoEsperadoCarrito(PREFIJO_ESPERADO_VARIOS);
         productos.forEach(producto -> pages.inventoryPage().agregarProductoAlCarrito(producto));
+    }
+
+    @When("agrega el producto individual configurado al carrito")
+    public void agregarProductoIndividualConfiguradoAlCarrito() {
+        String producto = ConfigReader.getRequired("test.purchase.single-product");
+        testContext.setPrefijoEsperadoCarrito(PREFIJO_ESPERADO_UNICO);
+        pages.inventoryPage().agregarProductoAlCarrito(producto);
     }
 
     @Then("el carrito refleja la cantidad de productos configurada")
     public void validarCantidadProductosEnCarrito() {
         assertEquals(
-                testContext.getProductosSeleccionados().size(),
+                ConfigReader.getPositiveInt(testContext.getPrefijoEsperadoCarrito() + ".count"),
                 pages.inventoryPage().obtenerCantidadProductosEnCarrito(),
                 "La insignia del carrito debería reflejar todos los productos seleccionados");
     }
@@ -52,7 +62,7 @@ public final class CompraSteps {
     public void validarProductosEnCarrito() {
         pages.inventoryPage().abrirCarrito();
         assertEquals(
-                testContext.getProductosSeleccionados(),
+                ConfigReader.getList(testContext.getPrefijoEsperadoCarrito() + ".products"),
                 pages.cartPage().obtenerNombresProductos(),
                 "El carrito debería contener exactamente los productos seleccionados");
     }
