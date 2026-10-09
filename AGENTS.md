@@ -1,4 +1,4 @@
-# selenium-cucumber-bdd-framework
+# spec-driven-selenium-cucumber
 
 Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), pensado como referencia para equipos de QA: escenarios de negocio en Gherkin, ejecutados con Selenium y trazados a especificaciones aprobadas.
 

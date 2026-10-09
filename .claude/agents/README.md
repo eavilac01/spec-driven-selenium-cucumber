@@ -1,4 +1,4 @@
-# Equipo de agentes QE — selenium-cucumber-bdd-framework
+# Equipo de agentes QE — spec-driven-selenium-cucumber
 
 Equipo de subagentes de Claude Code para evolucionar el framework con **criterio de arquitectura, trazabilidad y gobierno de calidad**. Este archivo no tiene frontmatter: Claude Code lo trata como documentación.
 

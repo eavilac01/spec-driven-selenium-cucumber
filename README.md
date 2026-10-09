@@ -1,6 +1,6 @@
-# Selenium Cucumber BDD Framework
+# Spec-Driven Selenium Cucumber
 
-[![E2E Tests](https://github.com/eavilac01/selenium-cucumber-bdd-framework/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/eavilac01/selenium-cucumber-bdd-framework/actions/workflows/ci.yml)
+[![E2E Tests](https://github.com/eavilac01/spec-driven-selenium-cucumber/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/eavilac01/spec-driven-selenium-cucumber/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-17-orange?logo=openjdk)
 ![Selenium](https://img.shields.io/badge/Selenium-4.45-43B02A?logo=selenium)
 ![Cucumber](https://img.shields.io/badge/Cucumber-7.34-23D96C?logo=cucumber)
@@ -8,7 +8,7 @@
 ![Allure](https://img.shields.io/badge/Report-Allure-yellow)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> Framework de automatización E2E con Java 17, Selenium 4, Cucumber 7 y JUnit 5. POM, inyección de dependencias, ejecución en paralelo, Selenium Grid, Allure y CI (GitHub Actions y Jenkins).
+> Framework de automatización E2E guiado por especificaciones (Spec Driven Development) con Java 17, Selenium 4, Cucumber 7 y JUnit 5. POM, inyección de dependencias, ejecución en paralelo, Selenium Grid, Allure, CI (GitHub Actions y Jenkins) y un equipo de agentes de IA gobernado por reglas, hooks y un gate de calidad.
 
 Framework de referencia para automatizar [SauceDemo](https://www.saucedemo.com) con Java 17, Selenium 4, Maven, Cucumber y JUnit 5. La solución aplica Page Object Model (POM), inyección de dependencias por escenario y una separación estricta entre especificación, orquestación, interfaz e infraestructura.
 

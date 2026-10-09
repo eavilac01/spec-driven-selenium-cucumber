@@ -5,10 +5,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.demo</groupId>
-    <artifactId>selenium-cucumber-bdd-framework</artifactId>
+    <artifactId>spec-driven-selenium-cucumber</artifactId>
     <version>1.0-SNAPSHOT</version>
-    <name>Selenium Cucumber BDD Framework</name>
-    <description>Framework de automatización E2E con Java 17, Selenium 4, Cucumber 7 y JUnit 5.</description>
+    <name>Spec-Driven Selenium Cucumber</name>
+    <description>Framework de automatización E2E guiado por especificaciones (SDD) con Java 17, Selenium 4, Cucumber 7 y JUnit 5.</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

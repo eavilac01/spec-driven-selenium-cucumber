@@ -1,4 +1,4 @@
-# selenium-cucumber-bdd-framework
+# spec-driven-selenium-cucumber
 
 Framework de automatización E2E (Java 17, Selenium 4, Cucumber 7, JUnit 5) sobre SauceDemo. Detalle técnico en `README.md`.
 
