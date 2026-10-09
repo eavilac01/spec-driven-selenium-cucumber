@@ -27,7 +27,7 @@ Criterio: se muta la lógica propia que **(a)** no necesita navegador, red, arch
 |---|---|---|---|
 | `ConfigReader` (lógica) | **Dentro** | Validaciones `ConfigReader.java:21-68`; precedencia `:70-84`; normalización de clave `:96-100` | CHK-10 depende de que una propiedad `-D` gane a las demás fuentes (`:73-76`). Hoy lee `System` y el classpath directamente (`:16`, `:73`, `:87`, `:93`), así que necesita fuentes inyectadas |
 | `SecretReader` (validación y parser) | **Dentro** | Nombre `SecretReader.java:21`; precedencia y vacío `:26-33`; parser `.env` `:56-89`, con fronteras en `:66` (`<= 0`) y `:80` (`>= 2`) | Es la lógica más densa del repo, y sus mensajes de error no deben exponer valores (`:32`, `:67`, `:72`). Hoy carga `.env` en un inicializador estático (`:13-14`): una prueba que tocara la clase leería el `.env` real (P-02) |
-| `CredentialsProvider.Credentials` | **Dentro** | `CredentialsProvider.java:26-31` | El `toString` enmascarado protege PI-09. Si se rompe, ningún E2E falla: solo se filtran credenciales en los reportes |
+| `CredentialsProvider.Credentials` | **Dentro** | `CredentialsProvider.java:26-31` (antes del paso 4) | El `toString` enmascarado protege PI-09. Si se rompe, ningún E2E falla: solo se filtran credenciales en los reportes. Desde el paso 4, el record vive en `com.demo.data.Credentials` (`Credentials.java:10`) |
 | `CredentialsProvider` (fábricas) | Fuera | `CredentialsProvider.java:8-24` | Solo asocian un perfil a dos nombres de variable; un error falla de forma visible en el primer `Given` |
 | `TestContext` | Fuera | `TestContext.java:5`, `:12-35` | Contiene un `WebDriver` (de `scope` `test`) y sus guardas de `null` fallan de forma visible en el E2E |
 | `DriverFactory` | Fuera | `DriverFactory.java:36-41`, `:69-97` | Su trabajo es crear un `WebDriver`; probarla exige un navegador o mocks (dependencia nueva). Se reevalúa en el ADR-002 si el transporte separa una configuración de navegador pura |
@@ -76,7 +76,7 @@ Criterio: se muta la lógica propia que **(a)** no necesita navegador, red, arch
   - `failWhenNoMutations` = `true` (el valor por defecto; no se cambia).
   - `outputFormats` = `HTML,XML`; `timestampedReports` = `false`, para tener una ruta estable en `target/pit-reports/`.
   - `threads` = `2`. Sin `withHistory` ni `scmMutationCoverage`.
-- **Mutadores: `STRONGER`.** El código mutable es casi todo guardas (`isBlank`, `<= 0`, `matches`, `startsWith`, comillas con `&&` y `||`). `STRONGER` agrega a `DEFAULTS`, entre otros, `REMOVE_CONDITIONALS_EQUAL_ELSE`, que obliga a ejercitar las dos ramas de cada guarda. Con unas 150 líneas mutables, el coste extra es de segundos. `ALL` queda descartado porque incluye mutadores experimentales que generan muchos equivalentes.
+- **Mutadores: `STRONGER`.** El código mutable es casi todo guardas (`isBlank`, `<= 0`, `matches`, `startsWith`, comillas con `&&` y `||`). `STRONGER` agrega a `DEFAULTS` las variantes `_IF` de `REMOVE_CONDITIONALS` (`EQUAL_IF`, `ORDER_IF`), que junto con las `_ELSE` de `DEFAULTS` obligan a ejercitar las dos ramas de cada guarda, y `REMOVE_SWITCH` (composición confirmada en R-5). Con unas 150 líneas mutables, el coste extra es de segundos. `ALL` queda descartado porque incluye mutadores experimentales que generan muchos equivalentes.
 - **Dónde corre:**
   - **GitHub Actions:** job `mutation` en `.github/workflows/ci.yml`, en paralelo al job `test`. Va sin `env` de secrets: hoy están en el nivel del job `test` (`ci.yml:14-20`) y deben seguir ahí, nunca en el nivel del workflow. Tampoco lleva el paso de verificación de secrets ni navegador, y publica `target/pit-reports/`.
   - **Jenkins:** etapa `Mutation (CHK-11)` fuera de `withCredentials` (`Jenkinsfile:26-44`).
@@ -127,7 +127,7 @@ Si termina en `BUILD SUCCESS`, el umbral no protege nada y el resultado es RECHA
 
 ## Cambios propuestos a reglas y agentes (aplicados el 2026-10-09)
 
-Aplicados por el usuario, salvo dos pendientes: la última fila (`AGENTS.md:27` y la estructura del `README.md`, al cerrar el paso 4) y la actualización del *Estado actual* de la Regla 04 (`:66`, al cerrar el paso 6).
+Aplicados por el usuario, salvo un pendiente: la actualización del *Estado actual* de la Regla 04 (`:66`, al cerrar el paso 6). La última fila (`AGENTS.md` y `README.md`) quedó hecha en el paso 4.
 
 | Archivo | Cambio | Cuándo |
 |---|---|---|
@@ -138,21 +138,21 @@ Aplicados por el usuario, salvo dos pendientes: la última fila (`AGENTS.md:27` 
 | `.claude/agents/qa-automation-engineer.md:24` | Agregar `src/main/java/` a *Escribe en* | Con el paso 0 |
 | `.claude/agents/devops-engineer.md:38`, `:45` | Alinear CHK-11 con D5 (`targetClasses` `com.demo.*`, `targetTests`); agregar `src/main/java/com/demo/config/` a las rutas CRÍTICAS (manejo de secretos) | Antes del paso 1 |
 | `.claude/agents/qa-automation-architect.md:48`, `:56`; `.claude/agents/README.md:52` | Renumerar el ADR de transporte a ADR-002 | Con el paso 0 |
-| `AGENTS.md:27`; `README.md:61`, `:69`, `:78`, `:117` | Estructura con `src/main/java`. `README.md` no tiene dueño en la matriz | **Pendiente:** al cerrar el paso 4 |
+| `AGENTS.md:27`; `README.md:61`, `:69`, `:78`, `:117` | Estructura con `src/main/java`. `README.md` no tiene dueño en la matriz | **Hecha** en el paso 4; el verifier comprobó en el paso 5 que coincide con `git ls-files` |
 
 ## Plan de implementación
 
 Cada paso deja la suite en verde.
 
-| Paso | Dueño | Qué | Verde si |
-|---|---|---|---|
-| 0 | Usuario, vía coordinador | Aprueba este ADR y los cambios a reglas y agentes | — |
-| 1 | `devops-engineer` | POM: versiones en `<properties>`; `pitest-maven` con `pitest-junit5-plugin` y la configuración de D5; los `includes` de surefire de D3; la limpieza de `._*` antes de `compile` y sobre `target/classes` | CHK-07; CHK-08 con el mismo `Tests run` que antes. CHK-11 da `Skipping project` con `BUILD SUCCESS`: es lo esperado sin `src/main` y no verifica nada (*Enmiendas*) |
-| 2 | `qa-automation-engineer` | Lógica de configuración en `com.demo.config` con sus pruebas; `ConfigReader` delega | CHK-07, CHK-08, CHK-15 y CHK-16; CHK-11 ≥ 80 % |
-| 3 | `qa-automation-engineer` | Validación de nombres y parser de secretos en `com.demo.config`, con pruebas de contenido sintético; `SecretReader` lee el archivo y el entorno y delega | Lo mismo; el gate lo trata como CRÍTICO |
-| 4 | `qa-automation-engineer` | `Credentials` en `com.demo.data` con la prueba de enmascarado; imports en los steps | Lo mismo y CHK-03 |
-| 5 | `qa-test-verifier` | Criterio de verificación completo | APROBADO |
-| 6 | `devops-engineer` | Job `mutation` en GitHub Actions, etapa en Jenkins y CHK-11 en el gate. Todos exigen `target/pit-reports/mutations.xml` y tratan `Skipping project` como rechazo cuando existe `src/main/java` (*Enmiendas*) | CHK-13; run remoto en verde en los dos jobs; sin `mutations.xml`, el job y el gate fallan |
+| Paso | Dueño | Qué | Verde si | Estado |
+|---|---|---|---|---|
+| 0 | Usuario, vía coordinador | Aprueba este ADR y los cambios a reglas y agentes | — | Hecho |
+| 1 | `devops-engineer` | POM: versiones en `<properties>`; `pitest-maven` con `pitest-junit5-plugin` y la configuración de D5; los `includes` de surefire de D3; la limpieza de `._*` antes de `compile` y sobre `target/classes` | CHK-07; CHK-08 con el mismo `Tests run` que antes. CHK-11 da `Skipping project` con `BUILD SUCCESS`: es lo esperado sin `src/main` y no verifica nada (*Enmiendas*) | Hecho (`4d75090`) |
+| 2 | `qa-automation-engineer` | Lógica de configuración en `com.demo.config` con sus pruebas; `ConfigReader` delega | CHK-07, CHK-08, CHK-15 y CHK-16; CHK-11 ≥ 80 % | Hecho (`decb120`) |
+| 3 | `qa-automation-engineer` | Validación de nombres y parser de secretos en `com.demo.config`, con pruebas de contenido sintético; `SecretReader` lee el archivo y el entorno y delega | Lo mismo; el gate lo trata como CRÍTICO | Hecho (`afe8618`) |
+| 4 | `qa-automation-engineer` | `Credentials` en `com.demo.data` con la prueba de enmascarado; imports en los steps | Lo mismo y CHK-03 | Hecho |
+| 5 | `qa-test-verifier` | Criterio de verificación completo | APROBADO | Hecho (APROBADO, 2026-10-09) |
+| 6 | `devops-engineer` | Job `mutation` en GitHub Actions, etapa en Jenkins y CHK-11 en el gate. Todos exigen `target/pit-reports/mutations.xml` y tratan `Skipping project` como rechazo cuando existe `src/main/java` (*Enmiendas*) | CHK-13; run remoto en verde en los dos jobs; sin `mutations.xml`, el job y el gate fallan | Pendiente |
 
 ## Criterio de verificación
 
@@ -177,15 +177,15 @@ Además:
 
 ## Riesgos
 
-Este ADR se escribió sin red y sin `./mvnw`. El estado refleja el paso 1 (*Enmiendas*).
+Este ADR se escribió sin red y sin `./mvnw`. El estado refleja el paso 5 (*Enmiendas*).
 
 | # | Supuesto | Lo confirma | Si es falso | Estado (2026-10-09) |
 |---|---|---|---|---|
 | R-1 | `pitest-maven` solo muta `target/classes` | devops, paso 1: el reporte | `pages` y `steps` saldrían como NO_COVERAGE y el umbral fallaría (error visible, nunca un verde falso); se acota `targetClasses` por enmienda | **Confirmado** |
 | R-2 | Las versiones de referencia existen y son compatibles con JUnit 5.14.2 y Java 17 | devops, en Maven Central | Se usa la última estable compatible | **Resuelto:** 1.30.0 y 1.2.3 (D4) |
 | R-3 | PIT aporta `junit-platform-launcher` | devops, paso 1: la fase de cobertura encuentra las pruebas | Se agrega desde el BOM (D4) | **Refutado:** no hace falta |
-| R-4 | Los motores `cucumber` y `junit-platform-suite` no descubren nada con un selector de una clase que no es `@Suite` | verifier, paso 5: el log | Se excluyen los motores por enmienda | **Parcial:** lo cierra el verifier en el paso 5 |
-| R-5 | La composición exacta de `STRONGER` en la versión elegida | Los mutadores del reporte | Se documenta la composición real en este ADR | Sin confirmar (primer reporte con `src/main`) |
+| R-4 | Los motores `cucumber` y `junit-platform-suite` no descubren nada con un selector de una clase que no es `@Suite` | verifier, paso 5: el log | Se excluyen los motores por enmienda | **Cerrado** (verifier, paso 5): solo corrió `[engine:junit-jupiter]`, sin `RunnerTest`, Cucumber ni navegador |
+| R-5 | La composición exacta de `STRONGER` en la versión elegida | Los mutadores del reporte | Se documenta la composición real en este ADR | **Resuelto** (verifier, paso 5, `javap` sobre `StandardMutatorGroups` de 1.30.0): `STRONGER` = `DEFAULTS` + `REMOVE_SWITCH` + `REMOVE_CONDITIONALS_ORDER_IF` + `REMOVE_CONDITIONALS_EQUAL_IF`. `DEFAULTS` ya incluye las variantes `_ELSE` (*Enmiendas*) |
 | R-6 | En macOS, los `._*` romperían la compilación de `src/main` (no es reproducible en Linux) | devops, paso 1 | — | **Mitigado;** sin confirmar en macOS |
 | R-7 | El tiempo se mantiene dentro del presupuesto de D5 | El primer run de CI | Se investiga la E/S en las pruebas | Sin confirmar (paso 6) |
 
@@ -202,3 +202,14 @@ Sin cambios en D1–D6 ni en el estado. Hallazgos:
 - **Fallo abierto de CHK-11 (corrige el paso 1):** sin `target/classes`, PIT 1.30.0 imprime `Skipping project because: Project has either no tests or no production code` y termina en `BUILD SUCCESS`, aun con `failWhenNoMutations=true` (`pom.xml:221`). Ningún parámetro lo cambia. Mitigación en el paso 6: el job `mutation` y el gate exigen `target/pit-reports/mutations.xml` y tratan `Skipping project` como rechazo cuando existe `src/main/java`. Se agrega el mismo requisito al *Criterio de verificación*.
 - **Comprobado en una copia aislada:** D6 da `BUILD FAILURE` con un puntaje de 50 % frente al umbral de 80; `-DmutationThreshold=0` no baja el umbral (D5); Surefire ejecuta las pruebas unitarias (D3).
 - Cambios a reglas y agentes aplicados, salvo los pendientes indicados en su sección. Cita corregida: el *Estado actual* de la Regla 04 está en `:66`, no en `:53`.
+
+### 2026-10-09 — Pasos 2 a 5 (commits `decb120` y `afe8618`; los pasos 4 y 5 aún sin commit)
+
+Sin cambios en D1–D6 ni en el estado. Resultado del paso 5 (`qa-test-verifier`, APROBADO):
+- **`src/main` completo:** `ConfigResolver`, `DotEnvParser` y `SecretResolver` (`com.demo.config`) y `Credentials` (`com.demo.data`), con 90 pruebas unitarias. CHK-08 da 95 (5 E2E y 90 unitarias) en las dos ejecuciones.
+- **CHK-11:** 73/73 KILLED (100 %): 33 en `ConfigResolver`, 1 en `Credentials` y 39 en las dos clases de secretos. Sin `Skipping project` y con `mutations.xml` presente. PIT omite los métodos generados del record (`Record junk mutation filter`).
+- **D6:** `BUILD FAILURE` con un puntaje de 1 frente al umbral de 80.
+- **R-4 cerrado y R-5 resuelto** (*Riesgos*). Se corrige D5: `REMOVE_CONDITIONALS_EQUAL_ELSE` ya está en `DEFAULTS`; `STRONGER` agrega las variantes `_IF` y `REMOVE_SWITCH`. La decisión no cambia. Las variantes `_IF` aportaron 24 de los 73 mutantes (`EQUAL_IF` 21, `ORDER_IF` 3).
+- **Lo que PIT no alcanza** (`requireNonNull`, entrada vacía del parser, `trim` tras `export` y accesores del record): el coordinador lo validó con control negativo manual en copias aisladas sin `.env` (2 casos en el paso 2, 5 en el paso 3 y 3 en el paso 4), todos con rojo observado.
+- `AGENTS.md` y `README.md` describen `src/main/java` y las pruebas unitarias; el verifier comprobó que coinciden con `git ls-files`.
+- **Pendiente:** solo el paso 6 y, con él, el *Estado actual* de la Regla 04 y R-7.
