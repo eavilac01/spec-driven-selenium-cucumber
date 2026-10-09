@@ -127,18 +127,19 @@ Si termina en `BUILD SUCCESS`, el umbral no protege nada y el resultado es RECHA
 
 ## Cambios propuestos a reglas y agentes (aplicados el 2026-10-09)
 
-Aplicados por el usuario, salvo un pendiente: la actualización del *Estado actual* de la Regla 04 (`:66`, al cerrar el paso 6). La última fila (`AGENTS.md` y `README.md`) quedó hecha en el paso 4.
+Todos aplicados por el usuario; no queda ninguno pendiente. La fila de `AGENTS.md` y `README.md` quedó hecha en el paso 4; el *Estado actual* de la Regla 04 y la última fila, al cerrar el paso 6 (*Enmiendas*).
 
 | Archivo | Cambio | Cuándo |
 |---|---|---|
 | `.claude/rules/02-agent-permissions.md:10` | `qa-automation-engineer` también escribe `src/main/java/`. Hoy nadie puede (P-10) | **Prerrequisito del paso 2** |
 | `.claude/rules/04-quality-checks.md:17` | CHK-11: "≥ 80 % sobre el alcance de ADR-001 (todo `src/main/java`); cada sobreviviente de las clases tocadas, justificado". PIT calcula el umbral por ejecución, no por clase | Antes del paso 5 |
-| `.claude/rules/04-quality-checks.md` | CHK-15 (pureza de `src/main/java`) y CHK-16 (aislamiento de las pruebas unitarias), con los comandos de *Criterio de verificación*. Actualizar el *Estado actual* (`:66`) al cerrar el paso 6 | Antes del paso 5 (CHK-15 y CHK-16 aplicadas; el *Estado actual*, **pendiente** hasta el paso 6) |
+| `.claude/rules/04-quality-checks.md` | CHK-15 (pureza de `src/main/java`) y CHK-16 (aislamiento de las pruebas unitarias), con los comandos de *Criterio de verificación*. Actualizar el *Estado actual* (`:66`) al cerrar el paso 6 | Antes del paso 5 (CHK-15 y CHK-16 aplicadas). El *Estado actual* (hoy en `:69`), **hecho** al cerrar el paso 6 |
 | `.claude/rules/01-spec-driven-development.md` | Nota en la tabla: "la lógica pura de la capa 4 vive en `src/main/java` (ADR-001)". Aclarar que un ADR también puede originarse en una CHK y que las pruebas unitarias del framework no requieren spec (SDD-02 rige el código que ejecuta features) | Con el paso 0 |
 | `.claude/agents/qa-automation-engineer.md:24` | Agregar `src/main/java/` a *Escribe en* | Con el paso 0 |
 | `.claude/agents/devops-engineer.md:38`, `:45` | Alinear CHK-11 con D5 (`targetClasses` `com.demo.*`, `targetTests`); agregar `src/main/java/com/demo/config/` a las rutas CRÍTICAS (manejo de secretos) | Antes del paso 1 |
 | `.claude/agents/qa-automation-architect.md:48`, `:56`; `.claude/agents/README.md:52` | Renumerar el ADR de transporte a ADR-002 | Con el paso 0 |
 | `AGENTS.md:27`; `README.md:61`, `:69`, `:78`, `:117` | Estructura con `src/main/java`. `README.md` no tiene dueño en la matriz | **Hecha** en el paso 4; el verifier comprobó en el paso 5 que coincide con `git ls-files` |
+| `.claude/rules/04-quality-checks.md:17`, `:47-49`, `:60`; `.claude/agents/devops-engineer.md:38`, `:50` | CHK-11 exige la guarda en 0, y su comando la ejecuta después de PIT; comando conjunto de CHK-15/16 (`scripts/check-unit-purity.sh`); el gate de devops (paso 7) usa los dos scripts | **Hecha** al cerrar el paso 6 |
 
 ## Plan de implementación
 
@@ -150,9 +151,9 @@ Cada paso deja la suite en verde.
 | 1 | `devops-engineer` | POM: versiones en `<properties>`; `pitest-maven` con `pitest-junit5-plugin` y la configuración de D5; los `includes` de surefire de D3; la limpieza de `._*` antes de `compile` y sobre `target/classes` | CHK-07; CHK-08 con el mismo `Tests run` que antes. CHK-11 da `Skipping project` con `BUILD SUCCESS`: es lo esperado sin `src/main` y no verifica nada (*Enmiendas*) | Hecho (`4d75090`) |
 | 2 | `qa-automation-engineer` | Lógica de configuración en `com.demo.config` con sus pruebas; `ConfigReader` delega | CHK-07, CHK-08, CHK-15 y CHK-16; CHK-11 ≥ 80 % | Hecho (`decb120`) |
 | 3 | `qa-automation-engineer` | Validación de nombres y parser de secretos en `com.demo.config`, con pruebas de contenido sintético; `SecretReader` lee el archivo y el entorno y delega | Lo mismo; el gate lo trata como CRÍTICO | Hecho (`afe8618`) |
-| 4 | `qa-automation-engineer` | `Credentials` en `com.demo.data` con la prueba de enmascarado; imports en los steps | Lo mismo y CHK-03 | Hecho |
+| 4 | `qa-automation-engineer` | `Credentials` en `com.demo.data` con la prueba de enmascarado; imports en los steps | Lo mismo y CHK-03 | Hecho (`c8486ee`) |
 | 5 | `qa-test-verifier` | Criterio de verificación completo | APROBADO | Hecho (APROBADO, 2026-10-09) |
-| 6 | `devops-engineer` | Job `mutation` en GitHub Actions, etapa en Jenkins y CHK-11 en el gate. Todos exigen `target/pit-reports/mutations.xml` y tratan `Skipping project` como rechazo cuando existe `src/main/java` (*Enmiendas*) | CHK-13; run remoto en verde en los dos jobs; sin `mutations.xml`, el job y el gate fallan | Pendiente |
+| 6 | `devops-engineer` | Job `mutation` en GitHub Actions, etapa en Jenkins y CHK-11 en el gate. Todos exigen `target/pit-reports/mutations.xml` y tratan `Skipping project` como rechazo cuando existe `src/main/java` (*Enmiendas*) | CHK-13; run remoto en verde en los dos jobs; sin `mutations.xml`, el job y el gate fallan | Hecho (`90687f4`) |
 
 ## Criterio de verificación
 
@@ -177,7 +178,7 @@ Además:
 
 ## Riesgos
 
-Este ADR se escribió sin red y sin `./mvnw`. El estado refleja el paso 5 (*Enmiendas*).
+Este ADR se escribió sin red y sin `./mvnw`. El estado refleja el paso 6: todos los riesgos están cerrados, resueltos o mitigados (*Enmiendas*).
 
 | # | Supuesto | Lo confirma | Si es falso | Estado (2026-10-09) |
 |---|---|---|---|---|
@@ -187,7 +188,7 @@ Este ADR se escribió sin red y sin `./mvnw`. El estado refleja el paso 5 (*Enmi
 | R-4 | Los motores `cucumber` y `junit-platform-suite` no descubren nada con un selector de una clase que no es `@Suite` | verifier, paso 5: el log | Se excluyen los motores por enmienda | **Cerrado** (verifier, paso 5): solo corrió `[engine:junit-jupiter]`, sin `RunnerTest`, Cucumber ni navegador |
 | R-5 | La composición exacta de `STRONGER` en la versión elegida | Los mutadores del reporte | Se documenta la composición real en este ADR | **Resuelto** (verifier, paso 5, `javap` sobre `StandardMutatorGroups` de 1.30.0): `STRONGER` = `DEFAULTS` + `REMOVE_SWITCH` + `REMOVE_CONDITIONALS_ORDER_IF` + `REMOVE_CONDITIONALS_EQUAL_IF`. `DEFAULTS` ya incluye las variantes `_ELSE` (*Enmiendas*) |
 | R-6 | En macOS, los `._*` romperían la compilación de `src/main` (no es reproducible en Linux) | devops, paso 1 | — | **Mitigado;** sin confirmar en macOS |
-| R-7 | El tiempo se mantiene dentro del presupuesto de D5 | El primer run de CI | Se investiga la E/S en las pruebas | Sin confirmar (paso 6) |
+| R-7 | El tiempo se mantiene dentro del presupuesto de D5 | El primer run de CI | Se investiga la E/S en las pruebas | **Cerrado en cuanto al resultado** (paso 6): el usuario confirmó el run remoto de `90687f4` en verde, sin informar el tiempo del job. En local, PIT tarda unos 3 s y Maven con PIT 5,8 s. El tiempo remoto exacto no se midió; lo acota `timeout-minutes: 10` (`ci.yml:64`), que haría fallar el job |
 
 ## Enmiendas
 
@@ -213,3 +214,27 @@ Sin cambios en D1–D6 ni en el estado. Resultado del paso 5 (`qa-test-verifier`
 - **Lo que PIT no alcanza** (`requireNonNull`, entrada vacía del parser, `trim` tras `export` y accesores del record): el coordinador lo validó con control negativo manual en copias aisladas sin `.env` (2 casos en el paso 2, 5 en el paso 3 y 3 en el paso 4), todos con rojo observado.
 - `AGENTS.md` y `README.md` describen `src/main/java` y las pruebas unitarias; el verifier comprobó que coinciden con `git ls-files`.
 - **Pendiente:** solo el paso 6 y, con él, el *Estado actual* de la Regla 04 y R-7.
+
+### 2026-10-09 — Paso 6 y cierre (commit `90687f4`, `devops-engineer`)
+
+Sin cambios en D1–D6 ni en el estado. Con este paso, el ADR queda **completamente implementado**: no le quedan pasos ni cambios a reglas o agentes pendientes.
+
+- **Guarda contra el fallo abierto de PIT** (`scripts/check-mutation-report.sh`). Corre después de PIT, que ya habrá fallado si el puntaje quedó bajo el umbral. Sale con 1 si:
+  - (a) hay código en `src/main/java` y falta `target/pit-reports/mutations.xml`;
+  - (b) el log contiene `Skipping project`;
+  - (c) el reporte no tiene ninguna mutación;
+  - (d) el reporte está truncado (le falta `</mutations>`), el log no tiene el resumen `Generated N mutations`, o N no coincide con las mutaciones del reporte (es un reporte de otra ejecución);
+  - (e) no hay ningún `.java` en `src/main/java`. Para retirar el código mutable hay que enmendar este ADR y retirar el job.
+- **Criterio de falla cerrada:** la guarda solo da 0 si demuestra que el reporte existe, es completo y es de esta ejecución. Una raíz equivocada, un reporte anterior o un log sin resumen se rechazan. Ante un error de uso sale con 2. Automatiza la condición de `mutations.xml` y `Skipping project` del *Criterio de verificación*: el `BUILD SUCCESS` de PIT no basta (enmienda del paso 1).
+- **`scripts/check-unit-purity.sh`:** ejecuta CHK-15 y CHK-16 con los comandos de la Regla 04, para que GitHub Actions y Jenkins no repitan las expresiones regulares. También falla cerrado: si `git grep` termina con un código mayor que 1 (un error), el resultado es 1.
+- **GitHub Actions:** job `mutation` (`ci.yml:62-95`), en paralelo a `test`, sin `env` de secrets ni navegador y con `timeout-minutes: 10`. Ejecuta el script de pureza, PIT con `pipefail` y `tee` y la guarda, y publica `target/pit-reports/` como artefacto. Los secrets siguen en el nivel del job `test` (`ci.yml:14-20`).
+- **Jenkins:** etapa `Mutation (CHK-11)` (`Jenkinsfile:24-45`), fuera de `withCredentials` y con un timeout de 10 minutos. Corre antes de `Test`, porque `clean test` borra `target/pit-reports`. Además borra el reporte y el log anteriores, porque el workspace persiste entre builds.
+- **Gate local (devops):** CHK-08 dio 95/95 en las dos ejecuciones, CHK-11 dio 73/73 y la guarda terminó en 0. La guarda se probó con 12 controles negativos, todos en rojo, incluido un log real de `Skipping project` con `BUILD SUCCESS`.
+- **Run remoto:** el usuario confirmó en la conversación que el CI de `90687f4` está en verde. Con eso se cierra R-7 (*Riesgos*).
+- **Reglas y agentes:** el usuario los aplicó, y estaban sin commit al redactar esta enmienda.
+  - La Regla 04 agrega la guarda al criterio y al comando de CHK-11 (`:17`, `:47-49`), el comando conjunto de CHK-15/16 (`:60`) y un *Estado actual* con CHK-11, CHK-15 y CHK-16 activas (`:69`).
+  - `devops-engineer.md` usa los dos scripts en su tabla (`:38`) y en el paso 7 del gate (`:50`).
+  - La invocación de PIT de D5 no cambia: la Regla 04 la envuelve con la guarda.
+- **P2 abiertos (no bloquean; dueño: `devops-engineer`):**
+  - `.github/workflows/ci.yml` no declara `permissions: contents: read`, ni en el workflow ni en los jobs. El `GITHUB_TOKEN` queda con los permisos por defecto del repositorio.
+  - El `Jenkinsfile` no se validó en un Jenkins real.

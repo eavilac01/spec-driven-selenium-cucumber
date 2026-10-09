@@ -14,7 +14,7 @@ Comprobaciones deterministas que los agentes citan por ID. Una CHK en rojo es un
 | CHK-08 | Suite completa | `BUILD SUCCESS` (devops la corre **2 veces** con el mismo `Tests run`) | engineer, devops |
 | CHK-09 | Escenario independiente | Verde solo y dentro de la suite | engineer, verifier |
 | CHK-10 | Control negativo | **Falla** con `AssertionFailedError` en el `Then` | verifier |
-| CHK-11 | Mutación (alcance del ADR-001: todo `src/main/java`) | Puntaje ≥ 80 % en la ejecución; cada mutante sobreviviente de las clases tocadas, justificado | verifier, devops |
+| CHK-11 | Mutación (alcance del ADR-001: todo `src/main/java`) | Puntaje ≥ 80 % en la ejecución y la guarda en 0 (`mutations.xml` presente, sin `Skipping project`); cada mutante sobreviviente de las clases tocadas, justificado | verifier, devops |
 | CHK-12 | Trazabilidad SDD: `Spec:` hacia una spec `aprobada`, `@AC-` y `@tec-` en cada escenario, cada `@AC-` existe en la spec y cada AC verificable tiene escenario | Exit 0; con exit 1 imprime `archivo:línea: motivo` | designer, devops |
 | CHK-13 | Pipelines válidos | Sin error | devops |
 | CHK-14 | Cuarentena reglada | Cada `@quarantine` tiene su fila en `docs/quarantine.md` con dueño y fecha no vencida | devops |
@@ -44,8 +44,9 @@ git grep -nE "ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY"
 ./mvnw -B -ntp test -Dheadless=true -Dcucumber.filter.tags="@AC-XXX-NN"
 # CHK-10 (la clave sale del valor esperado que verifica el Then)
 ./mvnw -B -ntp test -Dheadless=true -Dcucumber.filter.tags="@AC-XXX-NN" -D<clave.esperada>=__CONTROL_NEGATIVO__
-# CHK-11
-./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage
+# CHK-11 (con la guarda contra el "Skipping project" de PIT, que da BUILD SUCCESS sin mutar nada)
+rm -rf target/pit-reports
+bash -c 'set -o pipefail; ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage 2>&1 | tee pit.log' && bash scripts/check-mutation-report.sh pit.log
 # CHK-12
 bash scripts/check-traceability.sh
 # CHK-13
@@ -55,6 +56,8 @@ git grep -nE 'System\.(getenv|getProperty)|java\.nio\.file|java\.io\.File|getRes
 # CHK-16 (dos comandos; ambos sin salida)
 git grep -nE 'org\.openqa|io\.cucumber|com\.demo\.(utils|pages|steps|hooks|runners)|System\.getenv|"\.env"' -- src/test/java/com/demo/config src/test/java/com/demo/data
 git ls-files src/test/java/com/demo/config src/test/java/com/demo/data | grep -v 'Test\.java$'
+# CHK-15 y CHK-16 juntas, como en CI y Jenkins (exit 0 = sin salida; falla cerrado si git grep da error)
+bash scripts/check-unit-purity.sh
 ```
 
 Control negativo de CHK-11 (ADR-001, D6): con menos pruebas, el umbral **debe** fallar (`BUILD FAILURE`).
@@ -63,6 +66,6 @@ Control negativo de CHK-11 (ADR-001, D6): con menos pruebas, el umbral **debe** 
 ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage -Dpit.targetTests='com.demo.data.*Test'
 ```
 
-**Estado actual:** CHK-12 está activa en `scripts/check-traceability.sh` y corre en GitHub Actions y Jenkins antes de la suite. CHK-11 (PIT), CHK-15 y CHK-16 tienen su ADR aceptado (`docs/adr/001-mutation-testing-pit.md`) y se activan con su plan de implementación; hasta entonces se reportan como `n/a` con un hallazgo P1.
+**Estado actual:** CHK-12 está activa en `scripts/check-traceability.sh` y corre en GitHub Actions y Jenkins antes de la suite. CHK-11, CHK-15 y CHK-16 están activas (ADR-001): job `mutation` en GitHub Actions y etapa `Mutation (CHK-11)` en Jenkins, sin secrets ni navegador (`90687f4`), con `scripts/check-mutation-report.sh` contra el fallo abierto de PIT.
 
 La cobertura de líneas **no** es una CHK: mide qué código se ejecutó, no qué se verificó.

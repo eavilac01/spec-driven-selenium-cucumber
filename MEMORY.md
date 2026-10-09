@@ -8,7 +8,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - CHK-10 demostrado en los 7 AC verificables: cada control negativo falla en el `Then`.
 - Package `com.demo`, Maven Wrapper, `PageManager`, reportes Allure y HTML de Cucumber.
 - Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…16).
-- ADR-001 (mutación con PIT), pasos 1–5 hechos: PIT 1.30.0 + junit5-plugin 1.2.3; `src/main` con `ConfigResolver`, `DotEnvParser`, `SecretResolver` y `Credentials`; 90 unitarias (suite 95); PIT 73/73; R-1…R-5 resueltos. Falta el paso 6 (CI).
+- ADR-001 (mutación con PIT) implementado completo: `src/main` con `ConfigResolver`, `DotEnvParser`, `SecretResolver` y `Credentials`; 90 unitarias (suite 95); PIT 73/73; job `mutation` en CI y etapa en Jenkins (`90687f4`) con guarda de reporte; run remoto en verde.
+- CHK-01…16 todas activas; las de CI: CHK-12 antes de la suite y CHK-11/15/16 en el job `mutation`.
 - Hooks activos: gate DevOps y protección de `.claude/**`, `CLAUDE.md`, `MEMORY.md` y `AGENTS.md` (56/56 casos).
 - `AGENTS.md` en la raíz, para cualquier agente de código; bajo `ask`.
 - Repo renombrado a `spec-driven-selenium-cucumber` en GitHub y en local (`~/repo/`), con la memoria de Claude Code migrada.
@@ -39,10 +40,9 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - No existe la CLI `gh` en esta máquina: las operaciones de GitHub (renombrar, settings) las hace el usuario en la web.
 
 ## Próximos pasos
-1. Confirmar en verde el run de GitHub Actions sobre el último push (primer paso CHK-12 en GitHub).
-2. Responder las preguntas Q-* de las specs (usuario).
-3. ADR-001 paso 6 (`devops-engineer`): job `mutation` en CI y etapa en Jenkins que exijan `mutations.xml` y rechacen `Skipping project`; después, "Estado actual" de la Regla 04.
-4. ADR-002: capa de transporte y de acciones de negocio (`qa-automation-architect`).
-5. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05).
-6. Con las Q-* respondidas, cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.
-7. Paralelismo, solo después de confirmar la independencia de los escenarios.
+1. Responder las preguntas Q-* de las specs (usuario).
+2. P2 de CI: `permissions: contents: read` en el workflow; Jenkinsfile sin validar (no hay Jenkins local).
+3. ADR-002: capa de transporte y de acciones de negocio (`qa-automation-architect`).
+4. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05).
+5. Con las Q-* respondidas, cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.
+6. Paralelismo, solo después de confirmar la independencia de los escenarios.

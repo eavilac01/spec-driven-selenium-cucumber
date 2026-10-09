@@ -35,7 +35,7 @@ Senior. Su trabajo es que **el verde signifique algo**: sin pruebas que no corri
 | Tarea | Definición |
 |---|---|
 | CHK-12 | `scripts/check-traceability.sh`: cada escenario lleva `@AC-[A-Z]+-[0-9]{2}` y `@tec-*`, y cada feature `Spec:`; sale con 1 e imprime archivo:línea. Corre en CI antes de la suite |
-| CHK-11 | Según ADR-001 (D4–D6): `pitest-maven` + `pitest-junit5-plugin`; `targetClasses` = `com.demo.*` (solo `src/main/java`); `targetTests` = `com.demo.config.*Test,com.demo.data.*Test`; `excludedTestClasses` = `com.demo.runners.*`; `STRONGER`; `mutationThreshold=80` fijo en el POM; job `mutation` en CI sin secrets ni navegador |
+| CHK-11 | Según ADR-001 (D4–D6): `pitest-maven` + `pitest-junit5-plugin`; `targetClasses` = `com.demo.*` (solo `src/main/java`); `targetTests` = `com.demo.config.*Test,com.demo.data.*Test`; `excludedTestClasses` = `com.demo.runners.*`; `STRONGER`; `mutationThreshold=80` fijo en el POM; job `mutation` en CI y etapa en Jenkins sin secrets ni navegador, con `check-unit-purity.sh` y `check-mutation-report.sh` (hecho, `90687f4`) |
 | Cuarentena | `@quarantine` + fila en `docs/quarantine.md` (dueño, ingreso, límite ≤ 14 días, issue, diagnóstico). Job principal: `not @quarantine` (bloquea). Job `quarantine`: `continue-on-error`, reporta |
 | Umbral de inestabilidad | Cuarentena con 2 o más fallos intermitentes en 20 ejecuciones de `main`, o 1 o más en 10 ejecuciones locales sin cambios |
 | Paralelismo | Solo tras confirmar la independencia: `junit-platform.properties` con `cucumber.execution.parallel.enabled=true`, `fixed`, `parallelism=2` (igual a `SE_NODE_MAX_SESSIONS`) |
@@ -47,7 +47,7 @@ Senior. Su trabajo es que **el verde signifique algo**: sin pruebas que no corri
 4. CHK-07 → compila.
 5. CHK-12 y CHK-14 → en verde (o `n/a` mientras no exista CHK-12, con hallazgo P1).
 6. CHK-08 **dos veces** → ambas `BUILD SUCCESS` con el mismo `Tests run`. Si difieren, es inestabilidad: RECHAZADO.
-7. CHK-11 → sobre el umbral (o `n/a` con hallazgo P1).
+7. CHK-11 → `rm -rf target/pit-reports`; con `set -o pipefail`, PIT con `| tee <log>` y después `bash scripts/check-mutation-report.sh <log>` → ambos en 0. CHK-15/16 → `bash scripts/check-unit-purity.sh` en 0.
 8. CHK-13 si cambió el CI; los secrets referenciados coinciden con `.env.example`.
 9. Pruebas nuevas en el diff → se exige el APROBADO del verifier sobre este commit.
 10. Escribe `.claude/devops-gate.json` en **un comando**; el push va en **otro**, porque el hook evalúa antes de ejecutar.
