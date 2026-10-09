@@ -4,7 +4,7 @@
 # Cierra el hueco de `ask`: las reglas `ask` de settings.json solo controlan las herramientas
 # Edit/Write, así que un comando Bash podía modificar la configuración de los agentes sin pedir
 # confirmación. Este hook bloquea los comandos Bash que ESCRIBEN en rutas protegidas:
-#   .claude/**   CLAUDE.md   MEMORY.md
+#   .claude/**   CLAUDE.md   MEMORY.md   AGENTS.md
 # Excepción: .claude/devops-gate.json, que el agente devops-engineer escribe por diseño.
 #
 # Leer está permitido (cat, grep, git grep, git diff, wc, sed -n, python script.py ruta…).
@@ -48,8 +48,8 @@ CMD="$(extract_command)"
 # Solo la ruta exacta (con límite de palabra), para que `devops-gate.json.bak` no se cuele.
 ANALYSIS="$(printf '%s' "$CMD" | sed -E 's#\.claude/devops-gate\.json([^[:alnum:]._/-]|$)#__GATE_FILE__\1#g')"
 
-# Ruta protegida: un segmento ".claude" de ruta, o los archivos CLAUDE.md / MEMORY.md.
-PROT='(\.claude([/"'"'"'[:space:]]|$)|CLAUDE\.md|MEMORY\.md)'
+# Ruta protegida: un segmento ".claude" de ruta, o los archivos CLAUDE.md / MEMORY.md / AGENTS.md.
+PROT='(\.claude([/"'"'"'[:space:]]|$)|CLAUDE\.md|MEMORY\.md|AGENTS\.md)'
 
 # Sin ninguna mención a una ruta protegida no hay nada que analizar.
 printf '%s' "$ANALYSIS" | grep -Eq "$PROT" || exit 0
@@ -79,7 +79,7 @@ elif printf '%s' "$ANALYSIS" | grep -Eq "(^|[^[:alnum:]_.-])($INLINE)"; then
 fi
 
 if [ -n "$reason" ]; then
-  echo "BLOQUEADO por protect-config-hook: $reason (.claude/**, CLAUDE.md o MEMORY.md). La configuración de los agentes solo se modifica con las herramientas Edit/Write, que piden confirmación al usuario (Regla 02, P-01; Regla 03, PI-07). Si solo necesitas leer, usa un comando de lectura." >&2
+  echo "BLOQUEADO por protect-config-hook: $reason (.claude/**, CLAUDE.md, MEMORY.md o AGENTS.md). La configuración de los agentes solo se modifica con las herramientas Edit/Write, que piden confirmación al usuario (Regla 02, P-01; Regla 03, PI-07). Si solo necesitas leer, usa un comando de lectura." >&2
   exit 2
 fi
 exit 0

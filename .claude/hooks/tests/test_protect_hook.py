@@ -42,6 +42,10 @@ CASES = [
     (BLOCK, "find .claude -name '*.md' -exec sed -i 's/a/b/' {} +"),
     (BLOCK, "echo x > .claude/devops-gate.json.bak"),
     (BLOCK, "echo x > .claude/devops-gate.jsonX"),
+    # AGENTS.md: instrucciones para cualquier agente de código
+    (BLOCK, "echo x >> AGENTS.md"),
+    (BLOCK, "sed -i 's/a/b/' AGENTS.md"),
+    (BLOCK, "git checkout -- AGENTS.md"),
     # --- Lecturas y operaciones legítimas: deben permitirse ---
     (ALLOW, "cat .claude/agents/qa-test-verifier.md"),
     (ALLOW, "git grep -n Thread -- .claude"),
@@ -66,6 +70,7 @@ CASES = [
     (ALLOW, "git -C /repo log --oneline -- .claude"),
     (ALLOW, "cd .claude && ls -la"),
     (ALLOW, "find .claude -name '*.md'"),
+    (ALLOW, "cat AGENTS.md"),
     (ALLOW, "cat > .claude/devops-gate.json <<'EOF'\n{\"verdict\": \"APROBADO\"}\nEOF"),
 ]
 

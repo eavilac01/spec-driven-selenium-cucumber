@@ -17,6 +17,8 @@
       "Write(./CLAUDE.md)",
       "Edit(./MEMORY.md)",
       "Write(./MEMORY.md)",
+      "Edit(./AGENTS.md)",
+      "Write(./AGENTS.md)",
       "Edit(./.github/workflows/**)",
       "Write(./.github/workflows/**)",
       "Bash(curl:*)",

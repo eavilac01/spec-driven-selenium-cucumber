@@ -20,7 +20,7 @@ Motivo: en algunas instalaciones de Claude Code no existen las herramientas `Gre
 
 | # | Prohibición | Motivo |
 |---|---|---|
-| P-01 | Editar `.claude/**` o `CLAUDE.md` | Es la configuración de los propios agentes: solo el usuario la cambia, en la conversación |
+| P-01 | Editar `.claude/**`, `CLAUDE.md` o `AGENTS.md` | Es la configuración de los propios agentes: solo el usuario la cambia, en la conversación |
 | P-02 | Leer, imprimir o copiar `.env`, variables de entorno o secretos (`env`, `printenv`, `echo $TEST_…`) | Evita fugas de credenciales hacia logs, reportes o memoria |
 | P-03 | `git push` sin el gate `APROBADO` sobre HEAD; `--force`, `-f` o `--no-verify` | Nunca se sube algo roto ni se reescribe historia compartida |
 | P-04 | Marcar una spec como `aprobada` | La aprobación es humana (SDD-09) |
@@ -36,9 +36,9 @@ Motivo: en algunas instalaciones de Claude Code no existen las herramientas `Gre
 | Control | Dónde |
 |---|---|
 | Herramientas mínimas por agente (el verificador no tiene `Edit` ni `Write`; arquitecto y diseñador usan `Bash` solo como B-01). Ojo: `memory` agrega `Read`/`Write`/`Edit`, por eso el verificador no la tiene | Frontmatter `tools` de cada agente |
-| `deny`: `.env` y `git push --force`/`-f` · `ask`: `.claude/**`, `CLAUDE.md`, `MEMORY.md` (se importa como instrucción), `.github/workflows/**`, `curl`, `wget`, `WebFetch` | `.claude/settings.json` → `permissions` |
+| `deny`: `.env` y `git push --force`/`-f` · `ask`: `.claude/**`, `CLAUDE.md`, `MEMORY.md` (se importa como instrucción), `AGENTS.md`, `.github/workflows/**`, `curl`, `wget`, `WebFetch` | `.claude/settings.json` → `permissions` |
 | Push bloqueado sin un veredicto vigente | `.claude/hooks/devops-gate-hook.sh` |
-| Ningún comando `Bash` escribe en `.claude/**`, `CLAUDE.md` ni `MEMORY.md` (excepto `.claude/devops-gate.json`); la única vía son `Edit`/`Write`, bajo `ask` | `.claude/hooks/protect-config-hook.sh` (pruebas en `.claude/hooks/tests/`) |
+| Ningún comando `Bash` escribe en `.claude/**`, `CLAUDE.md`, `MEMORY.md` ni `AGENTS.md` (excepto `.claude/devops-gate.json`); la única vía son `Edit`/`Write`, bajo `ask` | `.claude/hooks/protect-config-hook.sh` (pruebas en `.claude/hooks/tests/`) |
 | Reglas verificables por comando | `.claude/rules/04-quality-checks.md` |
 
 **Límite honesto:** B-01 (solo lectura fuera de la configuración) sigue dependiendo del prompt; el hook solo garantiza que la **configuración** no se toca por `Bash`, y no cubre escrituras cuyo destino no aparece en el comando (p. ej. `patch < archivo`). Los hooks son una barrera contra el olvido y la inyección, no un aislamiento frente a un adversario.
