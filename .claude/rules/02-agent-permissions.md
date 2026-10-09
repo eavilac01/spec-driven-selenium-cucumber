@@ -31,6 +31,6 @@
 | Control | Dónde |
 |---|---|
 | Herramientas mínimas por agente (el verificador no tiene `Edit` ni `Write`; arquitecto y diseñador no tienen `Bash`). Ojo: `memory` agrega `Read`/`Write`/`Edit`, por eso el verificador no la tiene | Frontmatter `tools` de cada agente |
-| `deny`: `.env` y `git push --force`/`-f` · `ask`: `.claude/**`, `CLAUDE.md`, `.github/workflows/**`, `curl`, `wget`, `WebFetch` | `.claude/settings.json` → `permissions` |
+| `deny`: `.env` y `git push --force`/`-f` · `ask`: `.claude/**`, `CLAUDE.md`, `MEMORY.md` (se importa como instrucción), `.github/workflows/**`, `curl`, `wget`, `WebFetch` | `.claude/settings.json` → `permissions` |
 | Push bloqueado sin un veredicto vigente | `.claude/hooks/devops-gate-hook.sh` |
 | Reglas verificables por comando | `.claude/rules/04-quality-checks.md` |

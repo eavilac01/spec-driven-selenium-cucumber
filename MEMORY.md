@@ -15,6 +15,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - PIT solo sobre la lógica propia del framework; los E2E se validan con control negativo (`-D…`), porque un SUT externo no se puede mutar.
 - El verifier no tiene `memory`: activarla le agrega `Write`/`Edit` y rompe su independencia.
 - Solo el usuario aprueba specs (SDD-09) y reescribe historia (push forzado bloqueado en settings).
+- `MEMORY.md` está bajo `ask`: se importa como instrucción, así que cada cambio lo confirma el usuario.
 
 ## Aprendizajes y errores a evitar
 - Commits sin `Co-Authored-By` ni marcas de IA; autor según el git local del repo.
