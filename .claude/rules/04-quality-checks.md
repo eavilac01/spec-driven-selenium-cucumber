@@ -7,7 +7,7 @@ Comprobaciones deterministas que los agentes citan por ID. Una CHK en rojo es un
 | CHK-01 | Sin `Thread.sleep` ni esperas implícitas | Sin salida | engineer, verifier, devops |
 | CHK-02 | Sin reintentos automáticos | Sin salida | verifier, devops |
 | CHK-03 | Steps y acciones sin Selenium | Sin salida | engineer, verifier |
-| CHK-04 | Features sin vocabulario de interfaz | Sin salida (el diseñador lo comprueba con `Grep`) | designer, verifier |
+| CHK-04 | Features sin vocabulario de interfaz | Sin salida | designer, verifier |
 | CHK-05 | Higiene del repositorio | Sin salida | devops |
 | CHK-06 | Sin tokens ni llaves versionadas | Sin salida, salvo coincidencias que sean la definición de un patrón | devops |
 | CHK-07 | Compilación | Código de salida 0 | engineer, devops |

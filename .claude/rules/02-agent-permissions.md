@@ -5,11 +5,16 @@
 | Agente | Puede escribir | Solo lee | Ejecuta |
 |---|---|---|---|
 | Coordinador (sesión principal) | Lista de tareas; `MEMORY.md`; specs **solo** para marcar `aprobada` por orden explícita del usuario | Todo, excepto `.env` | Comandos de lectura; `git push` solo con el gate aprobado |
-| `qa-automation-architect` | `docs/adr/` | `src/`, `docs/`, `pom.xml` | Nada (no tiene `Bash`) |
-| `qa-test-designer` | `docs/specs/`, `src/test/resources/features/` | `src/test/java/`, `config.properties` | Nada (no tiene `Bash`) |
+| `qa-automation-architect` | `docs/adr/` | `src/`, `docs/`, `pom.xml` | Solo B-01 |
+| `qa-test-designer` | `docs/specs/`, `src/test/resources/features/` | `src/test/java/`, `config.properties` | Solo B-01 |
 | `qa-automation-engineer` | `src/test/java/`, `src/test/resources/config.properties`, `.env.example` | `docs/` | `./mvnw` y `git grep`/`git status`/`git diff` |
 | `qa-test-verifier` | **Nada** | Todo, excepto `.env` | `./mvnw`, `git grep`/`git diff`/`git status`, el script de mutación |
 | `devops-engineer` | `.github/`, `Jenkinsfile`, `docker-compose.yml`, `pom.xml` (solo plugins de ejecución y calidad), `junit-platform.properties`, `scripts/`, `docs/quarantine.md`, `.claude/devops-gate.json` | Todo, excepto `.env` | `./mvnw`, `git`, `docker compose`, `scripts/` |
+
+## B-01 — Bash de solo lectura
+Arquitecto y diseñador tienen `Bash` **solo** para buscar: `git grep`, `git ls-files`, `git diff`, `git log` y `git show`. Prohibidos la redirección (`>`, `>>`, `tee`), `sed -i`, `rm`, `mv`, `cp`, `./mvnw` y cualquier acceso a la red.
+
+Motivo: en algunas instalaciones de Claude Code no existen las herramientas `Grep` ni `Glob`; si se declaran y no existen, se descartan en silencio. `git grep` y `git ls-files` funcionan siempre y solo leen archivos versionados.
 
 ## Ningún agente puede
 
@@ -30,7 +35,7 @@
 
 | Control | Dónde |
 |---|---|
-| Herramientas mínimas por agente (el verificador no tiene `Edit` ni `Write`; arquitecto y diseñador no tienen `Bash`). Ojo: `memory` agrega `Read`/`Write`/`Edit`, por eso el verificador no la tiene | Frontmatter `tools` de cada agente |
+| Herramientas mínimas por agente (el verificador no tiene `Edit` ni `Write`; arquitecto y diseñador usan `Bash` solo como B-01). Ojo: `memory` agrega `Read`/`Write`/`Edit`, por eso el verificador no la tiene | Frontmatter `tools` de cada agente |
 | `deny`: `.env` y `git push --force`/`-f` · `ask`: `.claude/**`, `CLAUDE.md`, `MEMORY.md` (se importa como instrucción), `.github/workflows/**`, `curl`, `wget`, `WebFetch` | `.claude/settings.json` → `permissions` |
 | Push bloqueado sin un veredicto vigente | `.claude/hooks/devops-gate-hook.sh` |
 | Reglas verificables por comando | `.claude/rules/04-quality-checks.md` |

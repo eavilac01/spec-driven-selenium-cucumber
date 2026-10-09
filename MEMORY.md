@@ -7,7 +7,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Package `com.demo`, Maven Wrapper, `PageManager`, reportes Allure y HTML de Cucumber.
 - Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…14).
 - Hook del gate DevOps activo: ningún push sin `APROBADO` sobre HEAD.
-- Flujo coordinador → `devops-engineer` → push probado de punta a punta (2 gates APROBADOS por el agente, último en `7d8e979`).
+- Flujo coordinador → `devops-engineer` → push probado de punta a punta (3 gates APROBADOS por el agente).
+- Verifier confirmado tras el reinicio: sin `Edit`/`Write`/`NotebookEdit` ni memoria propia.
 
 ## Decisiones (y por qué)
 - El coordinador es la sesión principal, porque un subagente no puede delegar en otros.
@@ -23,9 +24,11 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Un `: ` dentro de la `description` de un agente rompe su YAML.
 - Los comandos con `|` no van en tablas Markdown: se escapan como `\|` y cambian la regex.
 - El CI falla si faltan los 6 secrets `TEST_*` en GitHub.
+- En esta instalación no existen `Grep` ni `Glob`; se descartan en silencio. Buscar con `git grep`/`git ls-files` (B-01).
+- `Bash` puede escribir en `.claude/**` sin pasar por `ask`: editar la configuración solo con `Edit`/`Write`.
 
 ## Próximos pasos
-1. Reiniciar Claude Code para que el verifier cargue sin `Write`/`Edit` y comprobarlo.
+1. Reiniciar y confirmar que arquitecto y diseñador cargan `Bash` (B-01).
 2. Specs retroactivas de login y compra (`qa-test-designer`) → aprobación del usuario.
 3. ADR-001: capa de transporte y de acciones de negocio (`qa-automation-architect`).
 4. CHK-12 `scripts/check-traceability.sh` y CHK-11 PIT, este último tras su ADR (`devops-engineer`).
