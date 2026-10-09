@@ -8,7 +8,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - CHK-10 demostrado en los 7 AC verificables: cada control negativo falla en el `Then`.
 - Package `com.demo`, Maven Wrapper, `PageManager`, reportes Allure y HTML de Cucumber.
 - Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…16).
-- ADR-001 (mutación con PIT) aceptado: lógica pura a `src/main/java`, pruebas unitarias, CHK-11/15/16. Paso 1 (`4d75090`): PIT 1.30.0 + junit5-plugin 1.2.3. Paso 2: `ConfigResolver` en `src/main`, 34 unitarias, PIT 33/33; R-4 cerrado.
+- ADR-001 (mutación con PIT) aceptado: lógica pura a `src/main/java`, pruebas unitarias, CHK-11/15/16. Paso 1 (`4d75090`): PIT 1.30.0 + junit5-plugin 1.2.3. Paso 2: `ConfigResolver`, PIT 33/33; R-4 cerrado. Paso 3: `DotEnvParser` + `SecretResolver`, 85 unitarias, PIT 72/72.
 - Hooks activos: gate DevOps y protección de `.claude/**`, `CLAUDE.md`, `MEMORY.md` y `AGENTS.md` (56/56 casos).
 - `AGENTS.md` en la raíz, para cualquier agente de código; bajo `ask`.
 - Repo renombrado a `spec-driven-selenium-cucumber` en GitHub y en local (`~/repo/`), con la memoria de Claude Code migrada.
@@ -40,7 +40,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 ## Próximos pasos
 1. Confirmar en verde el run de GitHub Actions sobre el último push (primer paso CHK-12 en GitHub).
 2. Responder las preguntas Q-* de las specs (usuario).
-3. ADR-001: pasos 3 (secretos) y 4 (`Credentials`) → 5 verifier → 6 job `mutation` que exija `mutations.xml`. P2: R-5 (`STRONGER` observado) en el ADR; caso con espacio Unicode (`isBlank`).
+3. ADR-001: paso 4 (`Credentials`) → 5 verifier → 6 job `mutation` que exija `mutations.xml`. P2: R-5 (`STRONGER` observado) en el ADR.
+- Riesgo residual aceptado: el error de nombre inválido de `SecretResolver` repite el argumento; hoy todos los llamadores pasan constantes.
 4. ADR-002: capa de transporte y de acciones de negocio (`qa-automation-architect`).
 5. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05); ejemplo XPath desactualizado en `README.md`.
 6. Con las Q-* respondidas, cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.

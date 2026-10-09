@@ -182,6 +182,16 @@ class ConfigResolverTest {
         assertEquals("La configuración obligatoria 'blanco' no tiene valor", blank.getMessage());
     }
 
+    @Test
+    void getRequiredTreatsAUnicodeSpaceAsBlank() {
+        file.setProperty("unicode", "\u2003");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> resolver.getRequired("unicode"));
+
+        assertEquals("La configuración obligatoria 'unicode' no tiene valor", exception.getMessage());
+    }
+
     // --- getOptional ---
 
     @Test
@@ -316,6 +326,16 @@ class ConfigResolverTest {
                     () -> resolver.getList(key));
             assertEquals("La configuración '%s' contiene un elemento vacío".formatted(key), exception.getMessage());
         }
+    }
+
+    @Test
+    void getListTreatsAUnicodeSpaceElementAsEmpty() {
+        file.setProperty("l", "a,\u2003,b");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> resolver.getList("l"));
+
+        assertEquals("La configuración 'l' contiene un elemento vacío", exception.getMessage());
     }
 
     @Test
