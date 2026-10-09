@@ -13,6 +13,12 @@ pipeline {
             }
         }
 
+        stage('Traceability SDD (CHK-12)') {
+            steps {
+                sh 'bash scripts/check-traceability.sh'
+            }
+        }
+
         stage('Test') {
             steps {
                 sh 'java -version'
