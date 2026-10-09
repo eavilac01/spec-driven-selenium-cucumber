@@ -6,6 +6,7 @@
 ![Cucumber](https://img.shields.io/badge/Cucumber-7.34-23D96C?logo=cucumber)
 ![JUnit](https://img.shields.io/badge/JUnit-5-25A162?logo=junit5)
 ![Allure](https://img.shields.io/badge/Report-Allure-yellow)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > Framework de automatización E2E con Java 17, Selenium 4, Cucumber 7 y JUnit 5. POM, inyección de dependencias, ejecución en paralelo, Selenium Grid, Allure y CI (GitHub Actions y Jenkins).
 
@@ -86,6 +87,7 @@ Reglas de dependencia:
 ├── .github/workflows/ci.yml
 ├── .mvn/wrapper/maven-wrapper.properties
 ├── Jenkinsfile
+├── LICENSE
 ├── README.md
 ├── .gitignore
 ├── docker-compose.yml
@@ -403,3 +405,9 @@ Lista de control antes de integrar cambios:
 **IntelliJ muestra `no usages` en hooks o steps.** No significa que estén muertos: Cucumber descubre los métodos anotados y los invoca mediante reflexión a partir del glue y de los textos Gherkin. Por eso las clases de glue tienen una supresión `unused` acotada y documentada. No se crean llamadas artificiales desde producción o desde el runner, porque eso duplicaría el ciclo de vida y sí sería un defecto de diseño.
 
 **Configuración de Cucumber.** El glue, los plugins y la publicación silenciosa están declarados en `RunnerTest` mediante `@ConfigurationParameter` y las constantes oficiales de Cucumber. Esto mantiene una única fuente de configuración con referencias visibles para el IDE y el análisis estático.
+
+## Licencia
+
+Distribuido bajo la licencia MIT. Consulta [`LICENSE`](LICENSE) para más detalles.
+
+© 2026 Eduardo Avila Carranza
