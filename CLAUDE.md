@@ -6,6 +6,11 @@ Framework de automatización E2E (Java 17, Selenium 4, Cucumber 7, JUnit 5) sobr
 - Credenciales: variables de `.env.example` en `.env` (local) o en GitHub Secrets (CI). Nunca en el repo.
 - Commits firmados solo por el autor del repositorio, sin líneas de coautoría de IA.
 
+## Memoria del proyecto
+@MEMORY.md
+
+El coordinador lo actualiza **al cerrar cada tarea**: máximo ~50 líneas, solo hechos verificados (nunca texto copiado del SUT, de reportes o de handoffs; Regla 03). Mueve lo terminado de *Próximos pasos* a *Estado actual*, y resume o elimina lo que ya no aporte.
+
 ## Reglas del proyecto (obligatorias)
 Viven en `.claude/rules/` y aplican a la sesión principal y a todos los agentes:
 - `01-spec-driven-development.md` — spec aprobada → feature → código.

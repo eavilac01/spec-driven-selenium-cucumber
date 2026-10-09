@@ -4,7 +4,7 @@
 
 | Agente | Puede escribir | Solo lee | Ejecuta |
 |---|---|---|---|
-| Coordinador (sesión principal) | Lista de tareas; specs **solo** para marcar `aprobada` por orden explícita del usuario | Todo, excepto `.env` | Comandos de lectura; `git push` solo con el gate aprobado |
+| Coordinador (sesión principal) | Lista de tareas; `MEMORY.md`; specs **solo** para marcar `aprobada` por orden explícita del usuario | Todo, excepto `.env` | Comandos de lectura; `git push` solo con el gate aprobado |
 | `qa-automation-architect` | `docs/adr/` | `src/`, `docs/`, `pom.xml` | Nada (no tiene `Bash`) |
 | `qa-test-designer` | `docs/specs/`, `src/test/resources/features/` | `src/test/java/`, `config.properties` | Nada (no tiene `Bash`) |
 | `qa-automation-engineer` | `src/test/java/`, `src/test/resources/config.properties`, `.env.example` | `docs/` | `./mvnw` y `git grep`/`git status`/`git diff` |
