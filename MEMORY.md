@@ -8,7 +8,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…14).
 - Hooks activos: gate DevOps (ningún push sin `APROBADO` sobre HEAD) y protección de la configuración (probado en vivo).
 - Flujo coordinador → `devops-engineer` → push probado de punta a punta (3 gates APROBADOS por el agente).
-- Verifier confirmado tras el reinicio: sin `Edit`/`Write`/`NotebookEdit` ni memoria propia.
+- Herramientas confirmadas tras el reinicio: verifier sin `Edit`/`Write` ni memoria; arquitecto y diseñador con `Bash` (B-01).
 
 ## Decisiones (y por qué)
 - El coordinador es la sesión principal, porque un subagente no puede delegar en otros.
@@ -28,10 +28,9 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - `ask` solo controla `Edit`/`Write`; `protect-config-hook.sh` bloquea las escrituras por `Bash` en `.claude/**`, `CLAUDE.md` y `MEMORY.md`.
 
 ## Próximos pasos
-1. Reiniciar y confirmar que arquitecto y diseñador cargan `Bash` (B-01).
-2. Specs retroactivas de login y compra (`qa-test-designer`) → aprobación del usuario.
-3. ADR-001: capa de transporte y de acciones de negocio (`qa-automation-architect`).
-4. CHK-12 `scripts/check-traceability.sh` y CHK-11 PIT, este último tras su ADR (`devops-engineer`).
-5. Etiquetar las features con `@AC-`/`@tec-` una vez aprobadas las specs.
-6. Fábricas de datos con `Clock` y semilla inyectados; fronteras del checkout y del carrito.
-7. Paralelismo, solo después de confirmar la independencia de los escenarios.
+1. Specs retroactivas de login y compra (`qa-test-designer`) → aprobación del usuario.
+2. ADR-001: capa de transporte y de acciones de negocio (`qa-automation-architect`).
+3. CHK-12 `scripts/check-traceability.sh` y CHK-11 PIT, este último tras su ADR (`devops-engineer`).
+4. Etiquetar las features con `@AC-`/`@tec-` una vez aprobadas las specs.
+5. Fábricas de datos con `Clock` y semilla inyectados; fronteras del checkout y del carrito.
+6. Paralelismo, solo después de confirmar la independencia de los escenarios.
