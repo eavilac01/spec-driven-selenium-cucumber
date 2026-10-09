@@ -83,9 +83,14 @@ Reglas de dependencia:
 
 ```text
 .
+├── .claude
+│   ├── agents/          # equipo de agentes QE (ver README interno)
+│   ├── hooks/devops-gate-hook.sh
+│   └── settings.json
 ├── .env.example
 ├── .github/workflows/ci.yml
 ├── .mvn/wrapper/maven-wrapper.properties
+├── CLAUDE.md
 ├── Jenkinsfile
 ├── LICENSE
 ├── README.md
@@ -405,6 +410,14 @@ Lista de control antes de integrar cambios:
 **IntelliJ muestra `no usages` en hooks o steps.** No significa que estén muertos: Cucumber descubre los métodos anotados y los invoca mediante reflexión a partir del glue y de los textos Gherkin. Por eso las clases de glue tienen una supresión `unused` acotada y documentada. No se crean llamadas artificiales desde producción o desde el runner, porque eso duplicaría el ciclo de vida y sí sería un defecto de diseño.
 
 **Configuración de Cucumber.** El glue, los plugins y la publicación silenciosa están declarados en `RunnerTest` mediante `@ConfigurationParameter` y las constantes oficiales de Cucumber. Esto mantiene una única fuente de configuración con referencias visibles para el IDE y el análisis estático.
+
+## Equipo de agentes QE
+
+El repositorio incluye un equipo de subagentes de Claude Code en `.claude/agents/` que gobierna la evolución del framework con responsabilidades separadas: arquitecto de automatización, diseñador de casos, ingeniero de automatización, **verificador independiente** e ingeniero DevOps. El coordinador es la sesión principal (`CLAUDE.md`).
+
+Cada regla de calidad está escrita como criterio de rechazo dentro del agente que la aplica: arquitectura en cinco capas, `Thread.sleep` prohibido, datos por fábricas, trazabilidad `@AC-`/`@tec-`, control negativo obligatorio, mutación como métrica y cuarentena sin reintentos. Un hook bloquea cualquier `git push` sin el veredicto `APROBADO` del gate DevOps sobre el commit exacto.
+
+Justificación de cada rol, asignación de modelo y roles descartados: [`.claude/agents/README.md`](.claude/agents/README.md).
 
 ## Licencia
 

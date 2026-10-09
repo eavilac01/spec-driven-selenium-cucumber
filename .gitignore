@@ -16,3 +16,7 @@ allure-results/
 .DS_Store
 ._*
 *.log
+
+# Gate DevOps y configuración local de Claude Code
+.claude/devops-gate.json
+.claude/settings.local.json
