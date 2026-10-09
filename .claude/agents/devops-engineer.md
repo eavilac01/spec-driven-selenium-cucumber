@@ -35,14 +35,14 @@ Senior. Su trabajo es que **el verde signifique algo**: sin pruebas que no corri
 | Tarea | Definición |
 |---|---|
 | CHK-12 | `scripts/check-traceability.sh`: cada escenario lleva `@AC-[A-Z]+-[0-9]{2}` y `@tec-*`, y cada feature `Spec:`; sale con 1 e imprime archivo:línea. Corre en CI antes de la suite |
-| CHK-11 | `pitest-maven` + `pitest-junit5-plugin`; `targetClasses` = `com.demo.utils/config/data`; solo pruebas unitarias; `mutationThreshold=80`; job `mutation` en CI |
+| CHK-11 | Según ADR-001 (D4–D6): `pitest-maven` + `pitest-junit5-plugin`; `targetClasses` = `com.demo.*` (solo `src/main/java`); `targetTests` = `com.demo.config.*Test,com.demo.data.*Test`; `excludedTestClasses` = `com.demo.runners.*`; `STRONGER`; `mutationThreshold=80` fijo en el POM; job `mutation` en CI sin secrets ni navegador |
 | Cuarentena | `@quarantine` + fila en `docs/quarantine.md` (dueño, ingreso, límite ≤ 14 días, issue, diagnóstico). Job principal: `not @quarantine` (bloquea). Job `quarantine`: `continue-on-error`, reporta |
 | Umbral de inestabilidad | Cuarentena con 2 o más fallos intermitentes en 20 ejecuciones de `main`, o 1 o más en 10 ejecuciones locales sin cambios |
 | Paralelismo | Solo tras confirmar la independencia: `junit-platform.properties` con `cucumber.execution.parallel.enabled=true`, `fixed`, `parallelism=2` (igual a `SE_NODE_MAX_SESSIONS`) |
 
 ### B. Gate previo a push (sobre el commit exacto)
 1. Contexto: `git status --short`, `git log --oneline origin/main..HEAD`, `git diff --stat origin/main...HEAD`.
-2. Riesgo: cambios en `.github/`, `Jenkinsfile`, `pom.xml`, `.env.example`, `SecretReader`, `CredentialsProvider`, `DriverFactory` o `.claude/` → **CRÍTICO** (todo es bloqueante).
+2. Riesgo: cambios en `.github/`, `Jenkinsfile`, `pom.xml`, `.env.example`, `SecretReader`, `CredentialsProvider`, `DriverFactory`, `src/main/java/com/demo/config/` o `.claude/` → **CRÍTICO** (todo es bloqueante).
 3. CHK-05, CHK-06, CHK-01, CHK-02 → sin salida.
 4. CHK-07 → compila.
 5. CHK-12 y CHK-14 → en verde (o `n/a` mientras no exista CHK-12, con hallazgo P1).

@@ -7,7 +7,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Specs `docs/specs/login.md` y `compra.md` aprobadas (2026-10-09); features con `Spec:`, `@AC-` y `@tec-`.
 - CHK-10 demostrado en los 7 AC verificables: cada control negativo falla en el `Then`.
 - Package `com.demo`, Maven Wrapper, `PageManager`, reportes Allure y HTML de Cucumber.
-- Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…14).
+- Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…16).
+- ADR-001 (mutación con PIT) aceptado: lógica pura a `src/main/java`, pruebas unitarias, CHK-11/15/16. Plan de 7 pasos sin implementar.
 - Hooks activos: gate DevOps y protección de `.claude/**`, `CLAUDE.md`, `MEMORY.md` y `AGENTS.md` (56/56 casos).
 - `AGENTS.md` en la raíz, para cualquier agente de código; bajo `ask`.
 - Repo renombrado a `spec-driven-selenium-cucumber` en GitHub y en local (`~/repo/`), con la memoria de Claude Code migrada.
@@ -37,8 +38,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 ## Próximos pasos
 1. Confirmar en verde el run de GitHub Actions sobre `03606a8` (nombre nuevo del repo y primer paso CHK-12).
 2. Responder las preguntas Q-* de las specs (usuario).
-3. CHK-11 PIT tras su ADR (`qa-automation-architect`, luego `devops-engineer`).
-4. ADR-001: capa de transporte y de acciones de negocio (`qa-automation-architect`).
+3. Implementar ADR-001: paso 1 POM (`devops-engineer`, confirma versiones y riesgos R-1…R-7) → pasos 2–4 (`qa-automation-engineer`) → 5 verifier → 6 job `mutation`.
+4. ADR-002: capa de transporte y de acciones de negocio (`qa-automation-architect`).
 5. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05); ejemplo XPath desactualizado en `README.md`.
 6. Con las Q-* respondidas, cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.
 7. Paralelismo, solo después de confirmar la independencia de los escenarios.

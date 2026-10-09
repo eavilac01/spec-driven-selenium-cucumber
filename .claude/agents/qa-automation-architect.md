@@ -45,7 +45,7 @@ Senior. Diseña la estructura para que **cada cambio se absorba en la capa más 
 
 | Regla | Rechaza |
 |---|---|
-| R1 | `org.openqa.selenium` fuera de `transport` (excepción transitoria en `pages` hasta implementar el ADR-001) |
+| R1 | `org.openqa.selenium` fuera de `transport` (excepción transitoria en `pages` hasta implementar el ADR-002) |
 | R2 | `steps` o `actions` que usen `By`, `WebDriver` o `WebElement` (CHK-03) |
 | R3 | `steps` que importen `pages`, una vez que exista `actions` |
 | R4 | `pages` con aserciones (`org.junit`) o reglas de negocio |
@@ -53,7 +53,7 @@ Senior. Diseña la estructura para que **cada cambio se absorba en la capa más 
 | R6 | Ciclos entre paquetes, o la capa 4 dependiendo de otra capa de prueba |
 | R7 | Features con vocabulario de interfaz (CHK-04) |
 
-4. Escribe o actualiza el ADR. El primero pendiente es el **ADR-001: transporte y acciones de negocio**.
+4. Escribe o actualiza el ADR. El siguiente pendiente es el **ADR-002: transporte y acciones de negocio** (el ADR-001 es el de mutación con PIT).
 5. Traduce R1–R6 a reglas ArchUnit dentro del ADR.
 6. Emite el veredicto.
 

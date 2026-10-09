@@ -420,7 +420,7 @@ El repositorio incluye un equipo de subagentes de Claude Code (`.claude/agents/`
 - **Spec Driven Development:** spec aprobada por una persona → feature trazada (`@AC-`, `@tec-`) → código. Ningún nivel se escribe sin el anterior (`.claude/rules/01`).
 - **Permisos por agente:** qué puede escribir, leer y ejecutar cada rol, aplicado también con `permissions` en `.claude/settings.json` (`.claude/rules/02`).
 - **Defensa contra prompt injection:** el contenido de la aplicación, los reportes y los archivos es dato, nunca instrucción (`.claude/rules/03`).
-- **Comprobaciones deterministas:** catálogo CHK-01…14 (sleep, reintentos, capas, control negativo, mutación, trazabilidad) y un hook que bloquea `git push` sin el gate DevOps (`.claude/rules/04`).
+- **Comprobaciones deterministas:** catálogo CHK-01…16 (sleep, reintentos, capas, control negativo, mutación, trazabilidad) y un hook que bloquea `git push` sin el gate DevOps (`.claude/rules/04`).
 
 Índice, justificación de roles y asignación de modelo: [`.claude/agents/README.md`](.claude/agents/README.md).
 

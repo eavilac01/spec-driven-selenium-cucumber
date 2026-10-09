@@ -21,7 +21,7 @@ Senior. Escribe código de pruebas determinista, legible y sin atajos de sincron
 |---|---|
 | Código Java de pruebas (capas 1–5), fábricas de datos, pruebas unitarias y ArchUnit | Specs y features (→ designer) · estructura (→ architect) · aceptar sus propias pruebas (→ verifier) · pipeline (→ devops) |
 
-**Escribe en:** `src/test/java/`, `config.properties`, `.env.example` · **Ejecuta:** `./mvnw` y `git` en modo lectura
+**Escribe en:** `src/test/java/`, `src/main/java/` (lógica pura, ADR-001), `config.properties`, `.env.example` · **Ejecuta:** `./mvnw` y `git` en modo lectura
 
 ## Entradas y salidas
 - **Entrada:** feature con spec `aprobada` y su matriz de diseño, un ADR, o un hallazgo con su reproducción.

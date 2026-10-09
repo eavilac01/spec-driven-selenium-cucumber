@@ -13,7 +13,7 @@ Equipo de subagentes de Claude Code para evolucionar el framework con **criterio
 │   ├── 01-spec-driven-development.md   spec → feature → código
 │   ├── 02-agent-permissions.md         qué puede y qué no puede cada agente
 │   ├── 03-prompt-injection.md          dato ≠ instrucción
-│   └── 04-quality-checks.md            catálogo CHK-01…14 con comandos
+│   └── 04-quality-checks.md            catálogo CHK-01…16 con comandos
 ├── hooks/devops-gate-hook.sh  → bloquea git push sin gate
 └── settings.json              → permisos deny/ask y registro del hook
 ```
@@ -49,7 +49,7 @@ Rúbrica (0–2 por eje): **I**mpacto, **R**azonamiento, **V**olumen (invertido)
 
 ## Supuestos
 1. **Mutación con SUT externo:** PIT se aplica sobre la lógica propia del framework; los escenarios E2E demuestran que fallan con el control negativo (CHK-10), comprobado.
-2. **Deuda:** las features actuales no tienen spec (SDD) y las páginas reciben `WebDriver` (ADR-001 pendiente). Todo lo nuevo cumple las reglas.
+2. **Deuda:** las páginas reciben `WebDriver` (ADR-002 pendiente). Las features ya tienen spec aprobada (SDD). Todo lo nuevo cumple las reglas.
 3. **CHK-12 en rojo al crearse:** es intencional; hace visible la deuda.
 
 ## Uso

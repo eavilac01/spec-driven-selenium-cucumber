@@ -14,10 +14,12 @@ Comprobaciones deterministas que los agentes citan por ID. Una CHK en rojo es un
 | CHK-08 | Suite completa | `BUILD SUCCESS` (devops la corre **2 veces** con el mismo `Tests run`) | engineer, devops |
 | CHK-09 | Escenario independiente | Verde solo y dentro de la suite | engineer, verifier |
 | CHK-10 | Control negativo | **Falla** con `AssertionFailedError` en el `Then` | verifier |
-| CHK-11 | Mutación | Puntaje ≥ 80 % en las clases tocadas | verifier, devops |
+| CHK-11 | Mutación (alcance del ADR-001: todo `src/main/java`) | Puntaje ≥ 80 % en la ejecución; cada mutante sobreviviente de las clases tocadas, justificado | verifier, devops |
 | CHK-12 | Trazabilidad SDD: `Spec:` hacia una spec `aprobada`, `@AC-` y `@tec-` en cada escenario, cada `@AC-` existe en la spec y cada AC verificable tiene escenario | Exit 0; con exit 1 imprime `archivo:línea: motivo` | designer, devops |
 | CHK-13 | Pipelines válidos | Sin error | devops |
 | CHK-14 | Cuarentena reglada | Cada `@quarantine` tiene su fila en `docs/quarantine.md` con dueño y fecha no vencida | devops |
+| CHK-15 | `src/main/java` puro: sin entorno, archivos, Selenium, Cucumber ni JUnit (ADR-001) | Sin salida | engineer, verifier, devops |
+| CHK-16 | Pruebas unitarias aisladas: sin Selenium, Cucumber, capas de prueba, entorno ni `.env` real, y solo `*Test.java` en sus directorios (ADR-001) | Sin salida | engineer, verifier |
 
 ## Comandos (copiar tal cual)
 
@@ -48,8 +50,19 @@ git grep -nE "ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY"
 bash scripts/check-traceability.sh
 # CHK-13
 python3 -c "import yaml,sys;[yaml.safe_load(open(f)) for f in sys.argv[1:]]" .github/workflows/*.yml
+# CHK-15
+git grep -nE 'System\.(getenv|getProperty)|java\.nio\.file|java\.io\.File|getResource|org\.openqa|io\.cucumber|org\.junit' -- src/main/java
+# CHK-16 (dos comandos; ambos sin salida)
+git grep -nE 'org\.openqa|io\.cucumber|com\.demo\.(utils|pages|steps|hooks|runners)|System\.getenv|"\.env"' -- src/test/java/com/demo/config src/test/java/com/demo/data
+git ls-files src/test/java/com/demo/config src/test/java/com/demo/data | grep -v 'Test\.java$'
 ```
 
-**Estado actual:** CHK-12 está activa en `scripts/check-traceability.sh` y corre en GitHub Actions y Jenkins antes de la suite. CHK-11 (PIT) aún no está configurada: requiere su ADR; mientras tanto se reporta como `n/a` con un hallazgo P1.
+Control negativo de CHK-11 (ADR-001, D6): con menos pruebas, el umbral **debe** fallar (`BUILD FAILURE`).
+
+```bash
+./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage -Dpit.targetTests='com.demo.data.*Test'
+```
+
+**Estado actual:** CHK-12 está activa en `scripts/check-traceability.sh` y corre en GitHub Actions y Jenkins antes de la suite. CHK-11 (PIT), CHK-15 y CHK-16 tienen su ADR aceptado (`docs/adr/001-mutation-testing-pit.md`) y se activan con su plan de implementación; hasta entonces se reportan como `n/a` con un hallazgo P1.
 
 La cobertura de líneas **no** es una CHK: mide qué código se ejecutó, no qué se verificó.
