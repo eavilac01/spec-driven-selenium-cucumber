@@ -33,6 +33,15 @@ CASES = [
     (BLOCK, "bash -c \"echo x > .claude/a\""),
     (BLOCK, "cd /tmp && echo y > /home/u/repo/.claude/agents/x.md"),
     (BLOCK, "echo ok; echo x > MEMORY.md"),
+    # Huecos encontrados por el gate DevOps (a14acb2)
+    (BLOCK, "git -C . checkout HEAD -- .claude"),
+    (BLOCK, "git -c core.x=y restore CLAUDE.md"),
+    (BLOCK, "cd .claude && echo x > settings.json"),
+    (BLOCK, "cd .claude/agents; rm qa-test-verifier.md"),
+    (BLOCK, "find .claude -name x -delete"),
+    (BLOCK, "find .claude -name '*.md' -exec sed -i 's/a/b/' {} +"),
+    (BLOCK, "echo x > .claude/devops-gate.json.bak"),
+    (BLOCK, "echo x > .claude/devops-gate.jsonX"),
     # --- Lecturas y operaciones legítimas: deben permitirse ---
     (ALLOW, "cat .claude/agents/qa-test-verifier.md"),
     (ALLOW, "git grep -n Thread -- .claude"),
@@ -53,6 +62,11 @@ CASES = [
     (ALLOW, "git log --oneline -- MEMORY.md"),
     (ALLOW, "echo hola > /tmp/x.txt"),
     (ALLOW, "git push origin main"),
+    # Contrapartes legítimas de los huecos cerrados
+    (ALLOW, "git -C /repo log --oneline -- .claude"),
+    (ALLOW, "cd .claude && ls -la"),
+    (ALLOW, "find .claude -name '*.md'"),
+    (ALLOW, "cat > .claude/devops-gate.json <<'EOF'\n{\"verdict\": \"APROBADO\"}\nEOF"),
 ]
 
 fails = 0

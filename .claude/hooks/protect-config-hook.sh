@@ -45,7 +45,8 @@ CMD="$(extract_command)"
 [ -z "$CMD" ] && exit 0
 
 # La excepción se elimina antes de analizar: escribir el veredicto del gate es legítimo.
-ANALYSIS="${CMD//.claude\/devops-gate.json/__GATE_FILE__}"
+# Solo la ruta exacta (con límite de palabra), para que `devops-gate.json.bak` no se cuele.
+ANALYSIS="$(printf '%s' "$CMD" | sed -E 's#\.claude/devops-gate\.json([^[:alnum:]._/-]|$)#__GATE_FILE__\1#g')"
 
 # Ruta protegida: un segmento ".claude" de ruta, o los archivos CLAUDE.md / MEMORY.md.
 PROT='(\.claude([/"'"'"'[:space:]]|$)|CLAUDE\.md|MEMORY\.md)'
@@ -55,7 +56,11 @@ printf '%s' "$ANALYSIS" | grep -Eq "$PROT" || exit 0
 
 SEG='[^|;&]*'   # resto del segmento actual del comando
 WRITERS='(tee|sed[[:space:]]+(-[a-zA-Z]*i|--in-place)|rm|mv|cp|ln|touch|truncate|chmod|chown|install|rsync|dd[[:space:]]+[^|;&]*of=)'
-GIT_WRITERS='git[[:space:]]+(checkout|restore|rm|mv|clean|apply|stash)'
+GIT_WRITERS='git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+)*[[:space:]]+(checkout|restore|rm|mv|clean|apply|stash)'
+FIND_WRITERS="find$SEG$PROT$SEG(-delete|-exec|-execdir|-ok)"
+# Entrar en un directorio protegido y escribir después con una ruta relativa (cd .claude && echo x > a).
+CD_PROT="cd[[:space:]]+[\"']?[^[:space:]|;&]*$PROT"
+ANY_WRITE='>>?[[:space:]]*[^&[:space:]]|(^|[^[:alnum:]_.-])(tee|sed[[:space:]]+(-[a-zA-Z]*i|--in-place)|rm|mv|cp|ln|touch|truncate|chmod|chown|install|rsync)[[:space:]]'
 INLINE='(python3?|perl|ruby|node)[[:space:]]+(-[a-zA-Z]*[ce]|-)([[:space:]]|$)|(bash|sh|zsh)[[:space:]]+-c'
 
 reason=""
@@ -65,6 +70,10 @@ elif printf '%s' "$ANALYSIS" | grep -Eq "(^|[^[:alnum:]_.-])$WRITERS([[:space:]]
   reason="comando que modifica archivos sobre una ruta protegida"
 elif printf '%s' "$ANALYSIS" | grep -Eq "(^|[^[:alnum:]_.-])$GIT_WRITERS$SEG$PROT"; then
   reason="git que reescribe archivos de una ruta protegida"
+elif printf '%s' "$ANALYSIS" | grep -Eq "(^|[^[:alnum:]_.-])$FIND_WRITERS"; then
+  reason="find con -delete/-exec sobre una ruta protegida"
+elif printf '%s' "$ANALYSIS" | grep -Eq "(^|[^[:alnum:]_.-])$CD_PROT" && printf '%s' "$ANALYSIS" | grep -Eq "$ANY_WRITE"; then
+  reason="cd a una ruta protegida seguido de una escritura con ruta relativa"
 elif printf '%s' "$ANALYSIS" | grep -Eq "(^|[^[:alnum:]_.-])($INLINE)"; then
   reason="intérprete con código en línea en un comando que menciona una ruta protegida"
 fi
