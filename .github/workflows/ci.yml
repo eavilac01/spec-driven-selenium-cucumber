@@ -11,31 +11,42 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      TEST_USER_STANDARD_USERNAME: ${{ secrets.TEST_USER_STANDARD_USERNAME }}
+      TEST_USER_STANDARD_PASSWORD: ${{ secrets.TEST_USER_STANDARD_PASSWORD }}
+      TEST_LOGIN_CASES_LOCKED_USER_USERNAME: ${{ secrets.TEST_LOGIN_CASES_LOCKED_USER_USERNAME }}
+      TEST_LOGIN_CASES_LOCKED_USER_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_LOCKED_USER_PASSWORD }}
+      TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME }}
+      TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
           cache: maven
 
+      - name: Verify required secrets
+        run: |
+          missing=0
+          for name in $(grep -E '^[A-Z_]+=' .env.example | cut -d= -f1); do
+            if [ -z "${!name}" ]; then
+              echo "::error title=Secret faltante::Configura '$name' en Settings > Secrets and variables > Actions"
+              missing=1
+            fi
+          done
+          exit $missing
+
       - name: Run tests (headless Chrome)
-        env:
-          TEST_USER_STANDARD_USERNAME: ${{ secrets.TEST_USER_STANDARD_USERNAME }}
-          TEST_USER_STANDARD_PASSWORD: ${{ secrets.TEST_USER_STANDARD_PASSWORD }}
-          TEST_LOGIN_CASES_LOCKED_USER_USERNAME: ${{ secrets.TEST_LOGIN_CASES_LOCKED_USER_USERNAME }}
-          TEST_LOGIN_CASES_LOCKED_USER_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_LOCKED_USER_PASSWORD }}
-          TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME }}
-          TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD }}
         run: ./mvnw -B -ntp clean test -Dheadless=true
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports
           path: |
