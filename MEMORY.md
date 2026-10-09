@@ -6,7 +6,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Suite 4/4 en verde, local y en GitHub Actions: login exitoso, 2 rechazos de login y compra E2E.
 - Package `com.demo`, Maven Wrapper, `PageManager`, reportes Allure y HTML de Cucumber.
 - Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…14).
-- Hook del gate DevOps activo: ningún push sin `APROBADO` sobre HEAD.
+- Hooks activos: gate DevOps (ningún push sin `APROBADO` sobre HEAD) y protección de la configuración (probado en vivo).
 - Flujo coordinador → `devops-engineer` → push probado de punta a punta (3 gates APROBADOS por el agente).
 - Verifier confirmado tras el reinicio: sin `Edit`/`Write`/`NotebookEdit` ni memoria propia.
 
@@ -25,7 +25,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Los comandos con `|` no van en tablas Markdown: se escapan como `\|` y cambian la regex.
 - El CI falla si faltan los 6 secrets `TEST_*` en GitHub.
 - En esta instalación no existen `Grep` ni `Glob`; se descartan en silencio. Buscar con `git grep`/`git ls-files` (B-01).
-- `Bash` puede escribir en `.claude/**` sin pasar por `ask`: editar la configuración solo con `Edit`/`Write`.
+- `ask` solo controla `Edit`/`Write`; `protect-config-hook.sh` bloquea las escrituras por `Bash` en `.claude/**`, `CLAUDE.md` y `MEMORY.md`.
 
 ## Próximos pasos
 1. Reiniciar y confirmar que arquitecto y diseñador cargan `Bash` (B-01).
