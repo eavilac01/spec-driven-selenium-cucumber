@@ -163,7 +163,10 @@ class SecretResolverTest {
     void unicodeSpaceOnlySecretIsBlank() {
         environment.put("K", "\u2003");
 
-        assertThrows(IllegalStateException.class, () -> resolver().getRequired("K"));
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> resolver().getRequired("K"));
+
+        assertEquals("La variable sensible obligatoria 'K' no tiene valor", exception.getMessage());
     }
 
     // --- Fuentes obligatorias ---

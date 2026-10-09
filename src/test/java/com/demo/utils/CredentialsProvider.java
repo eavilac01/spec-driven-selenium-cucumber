@@ -1,5 +1,7 @@
 package com.demo.utils;
 
+import com.demo.data.Credentials;
+
 public final class CredentialsProvider {
 
     private CredentialsProvider() {
@@ -21,13 +23,5 @@ public final class CredentialsProvider {
         return new Credentials(
                 SecretReader.getRequired("TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME"),
                 SecretReader.getRequired("TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD"));
-    }
-
-    public record Credentials(String username, String password) {
-
-        @Override
-        public String toString() {
-            return "Credentials[username=***, password=***]";
-        }
     }
 }

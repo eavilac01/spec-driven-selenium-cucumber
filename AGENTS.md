@@ -15,16 +15,22 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 - `./mvnw -B -ntp clean test -Dheadless=true` — ejecuta la suite completa (debe pasar antes de cada commit)
 - `./mvnw -B -ntp test -Dheadless=true -Dcucumber.filter.tags="@AC-LOGIN-01"` — ejecuta un escenario o un grupo por tag
 - `./mvnw -B -ntp -q test-compile` — compila sin ejecutar (comprobación rápida)
+- `./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage` — pruebas de mutación sobre `src/main/java` (umbral 80 %, ADR-001)
+- `bash scripts/check-traceability.sh` — trazabilidad spec → feature (CHK-12)
 - `docker compose up -d` y `-Dremote.url=http://localhost:4444` — ejecuta contra el Selenium Grid local
 - `allure serve target/allure-results` — abre el reporte (requiere Allure CLI)
 - Lint: no hay linter configurado; las comprobaciones de estilo y calidad están en `.claude/rules/04-quality-checks.md` (CHK-01…16)
 
 ## Estructura del proyecto
 - `docs/specs/` — specs de negocio (fuente de verdad, SDD) y su plantilla `_plantilla.md`
+- `docs/adr/` — decisiones de arquitectura (ADR-001: mutación con PIT)
 - `src/test/resources/features/` — escenarios Gherkin con tags `@AC-` y `@tec-`
+- `src/main/java/com/demo/config/` y `data/` — lógica pura del framework (configuración, secretos, credenciales): sin E/S, Selenium ni Cucumber; es lo que muta PIT
+- `src/test/java/com/demo/config/` y `data/` — pruebas unitarias JUnit 5 de esa lógica, aisladas (solo `*Test.java`)
 - `src/test/java/com/demo/steps/` — step definitions: vocabulario de negocio, sin Selenium
 - `src/test/java/com/demo/pages/` — page objects (`BasePage` con esperas explícitas, `PageManager`)
-- `src/test/java/com/demo/utils/` — driver por hilo, configuración, secretos y contexto del escenario
+- `src/test/java/com/demo/utils/` — driver por hilo, contexto del escenario y fachadas (`ConfigReader`, `SecretReader`, `CredentialsProvider`) que leen el entorno y delegan en `src/main`
+- `scripts/` — `check-traceability.sh` (CHK-12)
 - `src/test/java/com/demo/hooks/` y `runners/` — ciclo de vida del navegador y runner de JUnit Platform
 - `src/test/resources/config.properties` — URLs, rutas, valores esperados y datos de prueba no sensibles
 - `.claude/` — agentes del equipo QE, reglas, hooks y permisos

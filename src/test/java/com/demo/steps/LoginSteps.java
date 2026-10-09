@@ -2,10 +2,10 @@ package com.demo.steps;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.demo.data.Credentials;
 import com.demo.pages.PageManager;
 import com.demo.utils.ConfigReader;
 import com.demo.utils.CredentialsProvider;
-import com.demo.utils.CredentialsProvider.Credentials;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;

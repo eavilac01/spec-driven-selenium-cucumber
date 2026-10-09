@@ -8,7 +8,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - CHK-10 demostrado en los 7 AC verificables: cada control negativo falla en el `Then`.
 - Package `com.demo`, Maven Wrapper, `PageManager`, reportes Allure y HTML de Cucumber.
 - Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…16).
-- ADR-001 (mutación con PIT) aceptado: lógica pura a `src/main/java`, pruebas unitarias, CHK-11/15/16. Paso 1 (`4d75090`): PIT 1.30.0 + junit5-plugin 1.2.3. Paso 2: `ConfigResolver`, PIT 33/33; R-4 cerrado. Paso 3: `DotEnvParser` + `SecretResolver`, 85 unitarias, PIT 72/72.
+- ADR-001 (mutación con PIT), pasos 1–5 hechos: PIT 1.30.0 + junit5-plugin 1.2.3; `src/main` con `ConfigResolver`, `DotEnvParser`, `SecretResolver` y `Credentials`; 90 unitarias (suite 95); PIT 73/73; R-1…R-5 resueltos. Falta el paso 6 (CI).
 - Hooks activos: gate DevOps y protección de `.claude/**`, `CLAUDE.md`, `MEMORY.md` y `AGENTS.md` (56/56 casos).
 - `AGENTS.md` en la raíz, para cualquier agente de código; bajo `ask`.
 - Repo renombrado a `spec-driven-selenium-cucumber` en GitHub y en local (`~/repo/`), con la memoria de Claude Code migrada.
@@ -23,6 +23,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - `MEMORY.md` está bajo `ask`: se importa como instrucción, así que cada cambio lo confirma el usuario.
 - Los `Then` comparan contra claves `*.expected*` independientes de la entrada; si no, el control negativo es imposible.
 - Las specs referencian escenarios por tag (`@AC-…`), no por línea: las líneas cambian con cada edición.
+- Riesgo residual aceptado: el error de nombre inválido de `SecretResolver` repite el argumento; hoy todos los llamadores pasan constantes.
 
 ## Aprendizajes y errores a evitar
 - Commits sin `Co-Authored-By` ni marcas de IA; autor según el git local del repo.
@@ -34,15 +35,14 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - `ask` solo controla `Edit`/`Write`; `protect-config-hook.sh` bloquea las escrituras por `Bash` en los archivos protegidos.
 - En SauceDemo (SPA) la URL cambia antes que el DOM: esperar un contenedor propio de la página, no solo la URL.
 - PIT 1.30.0 sin `target/classes` dice "Skipping project" y da `BUILD SUCCESS` (falla abierto): CI y gate deben exigir `target/pit-reports/mutations.xml`.
-- PIT no muta `requireNonNull` (llamada no `void`): esas pruebas se validan con control negativo manual en una copia aislada (sin `.env`).
+- PIT no muta `requireNonNull` ni los accesores de un record: esas pruebas se validan con control negativo manual en una copia aislada (sin `.env`).
 - No existe la CLI `gh` en esta máquina: las operaciones de GitHub (renombrar, settings) las hace el usuario en la web.
 
 ## Próximos pasos
 1. Confirmar en verde el run de GitHub Actions sobre el último push (primer paso CHK-12 en GitHub).
 2. Responder las preguntas Q-* de las specs (usuario).
-3. ADR-001: paso 4 (`Credentials`) → 5 verifier → 6 job `mutation` que exija `mutations.xml`. P2: R-5 (`STRONGER` observado) en el ADR.
-- Riesgo residual aceptado: el error de nombre inválido de `SecretResolver` repite el argumento; hoy todos los llamadores pasan constantes.
+3. ADR-001 paso 6 (`devops-engineer`): job `mutation` en CI y etapa en Jenkins que exijan `mutations.xml` y rechacen `Skipping project`; después, "Estado actual" de la Regla 04.
 4. ADR-002: capa de transporte y de acciones de negocio (`qa-automation-architect`).
-5. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05); ejemplo XPath desactualizado en `README.md`.
+5. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05).
 6. Con las Q-* respondidas, cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.
 7. Paralelismo, solo después de confirmar la independencia de los escenarios.

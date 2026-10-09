@@ -76,6 +76,7 @@ Reglas de dependencia:
 - Las páginas exponen acciones y estado; no contienen aserciones, no comparten estado global y nunca invocan `driver.findElement` directamente.
 - `BasePage` es el único punto para sincronizar e interactuar: visibilidad, clic, escritura, texto, invisibilidad, listas, URL y scroll.
 - `utils` concentra configuración, creación/liberación del driver y estado por escenario; no depende de capas superiores.
+- La lógica pura de configuración, secretos y credenciales vive en `src/main/java` (`com.demo.config`, `com.demo.data`), sin E/S ni Selenium: las fachadas de `utils` leen el entorno y delegan en ella. Es el código que verifican las pruebas unitarias y PIT (ADR-001).
 - Los hooks administran el ciclo de vida y la evidencia, pero no implementan reglas de negocio.
 - No se admiten dependencias circulares ni saltos de capa, por ejemplo, un feature que codifique un selector o una página que invoque un step.
 
@@ -86,22 +87,35 @@ Reglas de dependencia:
 ├── .claude
 │   ├── agents/          # equipo de agentes QE (ver README interno)
 │   ├── rules/           # SDD, permisos, prompt injection, CHK
-│   ├── hooks/devops-gate-hook.sh
+│   ├── hooks/           # gate DevOps y protección de la configuración (+ pruebas)
 │   └── settings.json
 ├── .env.example
 ├── .github/workflows/ci.yml
 ├── .mvn/wrapper/maven-wrapper.properties
+├── AGENTS.md
 ├── CLAUDE.md
+├── MEMORY.md
 ├── Jenkinsfile
 ├── LICENSE
 ├── README.md
 ├── .gitignore
 ├── docker-compose.yml
-├── docs/specs/_plantilla.md
+├── docs
+│   ├── adr/001-mutation-testing-pit.md
+│   └── specs/           # _plantilla.md, login.md, compra.md
 ├── mvnw / mvnw.cmd
 ├── pom.xml
+├── scripts/check-traceability.sh
+├── src/main/java/com/demo      # lógica pura, sin E/S (ADR-001)
+│   ├── config
+│   │   ├── ConfigResolver.java
+│   │   ├── DotEnvParser.java
+│   │   └── SecretResolver.java
+│   └── data/Credentials.java
 └── src/test
     ├── java/com/demo
+    │   ├── config/      # pruebas unitarias de src/main/.../config
+    │   ├── data/        # pruebas unitarias de src/main/.../data
     │   ├── hooks/Hooks.java
     │   ├── pages
     │   │   ├── BasePage.java
@@ -177,7 +191,7 @@ Para configuración no sensible, las variables de entorno se aceptan con el nomb
 La prioridad es `id`, después CSS con atributos estables como `data-test` y, solo cuando expresa una relación del DOM, XPath relativo. Se prohíben XPath absolutos e índices posicionales porque acoplan la prueba a la estructura visual. El botón de un producto es un caso dinámico legítimo: parte del nombre visible y encuentra el botón dentro del mismo contenedor `inventory_item`.
 
 ```xpath
-//div[text()='Sauce Labs Backpack']/ancestor::div[@class='inventory_item']//button
+//div[@data-test='inventory-item'][.//div[@data-test='inventory-item-name' and normalize-space()='Sauce Labs Backpack']]//button
 ```
 
 El valor procedente de datos de prueba se convierte de forma segura en un literal XPath antes de construir el selector.
