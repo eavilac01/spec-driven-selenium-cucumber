@@ -22,6 +22,11 @@
         <maven.compiler.plugin.version>3.13.0</maven.compiler.plugin.version>
         <maven.surefire.plugin.version>3.5.3</maven.surefire.plugin.version>
         <maven.surefire.junit-platform.provider.version>3.5.4</maven.surefire.junit-platform.provider.version>
+        <!-- ADR-001 (D4): PIT solo muta src/main/java; versiones confirmadas en Maven Central. -->
+        <pitest.maven.version>1.30.0</pitest.maven.version>
+        <pitest.junit5.plugin.version>1.2.3</pitest.junit5.plugin.version>
+        <!-- ADR-001 (D6): solo para el control negativo de CHK-11. El umbral no es parametrizable. -->
+        <pit.targetTests>com.demo.config.*Test,com.demo.data.*Test</pit.targetTests>
     </properties>
 
     <dependencyManagement>
@@ -104,9 +109,10 @@
                 <artifactId>maven-antrun-plugin</artifactId>
                 <version>${maven.antrun.plugin.version}</version>
                 <executions>
+                    <!-- ADR-001 (R-6): antes de compile, para proteger también src/main/java. -->
                     <execution>
                         <id>remove-appledouble-source-files</id>
-                        <phase>generate-test-sources</phase>
+                        <phase>generate-sources</phase>
                         <goals>
                             <goal>run</goal>
                         </goals>
@@ -114,6 +120,23 @@
                             <target>
                                 <delete includeemptydirs="false">
                                     <fileset dir="${project.basedir}/src"
+                                             includes="**/._*"
+                                             defaultexcludes="false"
+                                             erroronmissingdir="false"/>
+                                </delete>
+                            </target>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>remove-appledouble-main-output</id>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <delete includeemptydirs="false">
+                                    <fileset dir="${project.build.outputDirectory}"
                                              includes="**/._*"
                                              defaultexcludes="false"
                                              erroronmissingdir="false"/>
@@ -161,11 +184,47 @@
                     <useModulePath>false</useModulePath>
                     <includes>
                         <include>**/RunnerTest.java</include>
+                        <!-- ADR-001 (D3): pruebas unitarias de la lógica de src/main/java. -->
+                        <include>com/demo/config/**/*Test.java</include>
+                        <include>com/demo/data/**/*Test.java</include>
                     </includes>
                     <systemPropertyVariables>
                         <SE_SKIP_DRIVER_IN_PATH>true</SE_SKIP_DRIVER_IN_PATH>
                         <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
                     </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <!-- ADR-001 (D4, D5): CHK-11. Sin executions: solo corre si se invoca mutationCoverage. -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>${pitest.maven.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-junit5-plugin</artifactId>
+                        <version>${pitest.junit5.plugin.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <targetClasses>
+                        <param>com.demo.*</param>
+                    </targetClasses>
+                    <targetTests>${pit.targetTests}</targetTests>
+                    <excludedTestClasses>
+                        <param>com.demo.runners.*</param>
+                    </excludedTestClasses>
+                    <mutators>
+                        <mutator>STRONGER</mutator>
+                    </mutators>
+                    <mutationThreshold>80</mutationThreshold>
+                    <failWhenNoMutations>true</failWhenNoMutations>
+                    <outputFormats>
+                        <outputFormat>HTML</outputFormat>
+                        <outputFormat>XML</outputFormat>
+                    </outputFormats>
+                    <timestampedReports>false</timestampedReports>
+                    <threads>2</threads>
                 </configuration>
             </plugin>
         </plugins>
