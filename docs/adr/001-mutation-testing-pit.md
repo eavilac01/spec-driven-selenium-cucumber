@@ -8,14 +8,14 @@
 
 ## Contexto
 
-- CHK-11 exige un puntaje de mutación ≥ 80 % (`.claude/rules/04-quality-checks.md:17`) y aún no está configurada (`:53`). PIT es una dependencia nueva y requiere un ADR (P-06).
+- CHK-11 exige un puntaje de mutación ≥ 80 % (`.claude/rules/04-quality-checks.md:17`) y aún no está configurada (*Estado actual*, `:66`). PIT es una dependencia nueva y requiere un ADR (P-06).
 - Decisiones previas que este ADR respeta: PIT se aplica **solo** a la lógica propia del framework; los escenarios E2E se validan con el control negativo (CHK-10), porque el SUT es externo y no se puede mutar.
 - Hechos del repositorio:
   - Todo el código está en `src/test/java`; `git ls-files src/main` no devuelve nada.
   - No hay pruebas unitarias: el único `*Test.java` es `com.demo.runners.RunnerTest`, una `@Suite` del motor de Cucumber (`RunnerTest.java:12-15`).
   - Surefire solo incluye `**/RunnerTest.java` (`pom.xml:162-164`).
   - Selenium, Cucumber y JUnit tienen `scope` `test` (`pom.xml:51,56,61,66,71,76`).
-  - El plugin `pitest-maven` toma como código mutable el directorio de salida principal (`target/classes`); las clases de `target/test-classes` solo se usan como pruebas. No está confirmado ejecutándolo (riesgo R-1).
+  - El plugin `pitest-maven` toma como código mutable el directorio de salida principal (`target/classes`); las clases de `target/test-classes` solo se usan como pruebas. Confirmado en el paso 1 (R-1, *Enmiendas*).
 
 ## Decisión
 
@@ -55,13 +55,13 @@ Criterio: se muta la lógica propia que **(a)** no necesita navegador, red, arch
 
 ### D4. Dependencias y plugins (P-06)
 
-| Artefacto | Dónde | Versión propuesta |
+| Artefacto | Dónde | Versión confirmada |
 |---|---|---|
-| `org.pitest:pitest-maven` | `<build><plugins>`, **sin** `<executions>`: no se ata a ninguna fase y `./mvnw test` no cambia | Referencia `1.17.4`, o la última estable 1.x |
-| `org.pitest:pitest-junit5-plugin` | `<dependency>` del plugin `pitest-maven`, no del proyecto | Referencia `1.2.1`, o la última estable 1.2.x |
-| `org.junit.platform:junit-platform-launcher` | Solo si PIT no la aporta: dependencia `test` sin versión, gestionada por `junit-bom` (`pom.xml:36-42`) | La del BOM (JUnit 5.14.2, `pom.xml:18`) |
+| `org.pitest:pitest-maven` | `<build><plugins>`, **sin** `<executions>`: no se ata a ninguna fase y `./mvnw test` no cambia | `1.30.0` (`pom.xml:26`) |
+| `org.pitest:pitest-junit5-plugin` | `<dependency>` del plugin `pitest-maven`, no del proyecto | `1.2.3` (`pom.xml:27`) |
+| `org.junit.platform:junit-platform-launcher` | Solo si PIT no la aporta: dependencia `test` sin versión, gestionada por `junit-bom` | No se agrega: no hace falta (R-3 refutado) |
 
-- **Las versiones las confirma `devops-engineer` en Maven Central al implementar**: este ADR se escribió sin acceso a la red.
+- Versiones confirmadas por `devops-engineer` en Maven Central con `./mvnw` (paso 1, commit `4d75090`), compatibles con JUnit 5.14.2 y Java 17.
 - Las versiones van en `<properties>`, como el resto (`pom.xml:13-25`).
 - No hace falta nada más: ni `exec-maven-plugin`, ni Mockito, ni AssertJ. ArchUnit pertenece al ADR-002.
 
@@ -123,20 +123,22 @@ Si termina en `BUILD SUCCESS`, el umbral no protege nada y el resultado es RECHA
   - Se agrega un job de CI.
   - Las reglas y los archivos de agentes cambian, y solo el usuario puede aplicarlo.
 - **Comportamiento actual fijado:** las pruebas fijan el comportamiento de hoy, incluidos dos P2 abiertos (`MEMORY.md`, *Próximos pasos* 5): el entorno puede sobrescribir claves `*.expected*` y `getPositiveInt` rechaza `0`. Se deciden aparte; si cambian, primero cambian sus pruebas.
-- **AppleDouble:** la limpieza de `._*` en `src` corre en `generate-test-sources` (`pom.xml:108-109`), después de `compile`, así que ya no protege `src/main/java`.
+- **AppleDouble:** la limpieza de `._*` en `src` corría en `generate-test-sources`, después de `compile`, y no protegía `src/main/java`. Mitigado en el paso 1 (R-6): corre en `generate-sources` (`pom.xml:115`) y también sobre `target/classes` en `process-classes` (`pom.xml:132`).
 
-## Cambios propuestos a reglas y agentes (no aplicados)
+## Cambios propuestos a reglas y agentes (aplicados el 2026-10-09)
+
+Aplicados por el usuario, salvo dos pendientes: la última fila (`AGENTS.md:27` y la estructura del `README.md`, al cerrar el paso 4) y la actualización del *Estado actual* de la Regla 04 (`:66`, al cerrar el paso 6).
 
 | Archivo | Cambio | Cuándo |
 |---|---|---|
 | `.claude/rules/02-agent-permissions.md:10` | `qa-automation-engineer` también escribe `src/main/java/`. Hoy nadie puede (P-10) | **Prerrequisito del paso 2** |
 | `.claude/rules/04-quality-checks.md:17` | CHK-11: "≥ 80 % sobre el alcance de ADR-001 (todo `src/main/java`); cada sobreviviente de las clases tocadas, justificado". PIT calcula el umbral por ejecución, no por clase | Antes del paso 5 |
-| `.claude/rules/04-quality-checks.md` | CHK-15 (pureza de `src/main/java`) y CHK-16 (aislamiento de las pruebas unitarias), con los comandos de *Criterio de verificación*. Actualizar el *Estado actual* (`:53`) al cerrar el paso 6 | Antes del paso 5 |
+| `.claude/rules/04-quality-checks.md` | CHK-15 (pureza de `src/main/java`) y CHK-16 (aislamiento de las pruebas unitarias), con los comandos de *Criterio de verificación*. Actualizar el *Estado actual* (`:66`) al cerrar el paso 6 | Antes del paso 5 (CHK-15 y CHK-16 aplicadas; el *Estado actual*, **pendiente** hasta el paso 6) |
 | `.claude/rules/01-spec-driven-development.md` | Nota en la tabla: "la lógica pura de la capa 4 vive en `src/main/java` (ADR-001)". Aclarar que un ADR también puede originarse en una CHK y que las pruebas unitarias del framework no requieren spec (SDD-02 rige el código que ejecuta features) | Con el paso 0 |
 | `.claude/agents/qa-automation-engineer.md:24` | Agregar `src/main/java/` a *Escribe en* | Con el paso 0 |
 | `.claude/agents/devops-engineer.md:38`, `:45` | Alinear CHK-11 con D5 (`targetClasses` `com.demo.*`, `targetTests`); agregar `src/main/java/com/demo/config/` a las rutas CRÍTICAS (manejo de secretos) | Antes del paso 1 |
 | `.claude/agents/qa-automation-architect.md:48`, `:56`; `.claude/agents/README.md:52` | Renumerar el ADR de transporte a ADR-002 | Con el paso 0 |
-| `AGENTS.md:27`; `README.md:61`, `:69`, `:78`, `:117` | Estructura con `src/main/java`. `README.md` no tiene dueño en la matriz | Al cerrar el paso 4 |
+| `AGENTS.md:27`; `README.md:61`, `:69`, `:78`, `:117` | Estructura con `src/main/java`. `README.md` no tiene dueño en la matriz | **Pendiente:** al cerrar el paso 4 |
 
 ## Plan de implementación
 
@@ -145,12 +147,12 @@ Cada paso deja la suite en verde.
 | Paso | Dueño | Qué | Verde si |
 |---|---|---|---|
 | 0 | Usuario, vía coordinador | Aprueba este ADR y los cambios a reglas y agentes | — |
-| 1 | `devops-engineer` | POM: versiones en `<properties>`; `pitest-maven` con `pitest-junit5-plugin` y la configuración de D5; los `includes` de surefire de D3; la limpieza de `._*` antes de `compile` y sobre `target/classes` | CHK-07; CHK-08 con el mismo `Tests run` que antes; CHK-11 falla con "no mutations" (esperado: aún no hay `src/main`) |
+| 1 | `devops-engineer` | POM: versiones en `<properties>`; `pitest-maven` con `pitest-junit5-plugin` y la configuración de D5; los `includes` de surefire de D3; la limpieza de `._*` antes de `compile` y sobre `target/classes` | CHK-07; CHK-08 con el mismo `Tests run` que antes. CHK-11 da `Skipping project` con `BUILD SUCCESS`: es lo esperado sin `src/main` y no verifica nada (*Enmiendas*) |
 | 2 | `qa-automation-engineer` | Lógica de configuración en `com.demo.config` con sus pruebas; `ConfigReader` delega | CHK-07, CHK-08, CHK-15 y CHK-16; CHK-11 ≥ 80 % |
 | 3 | `qa-automation-engineer` | Validación de nombres y parser de secretos en `com.demo.config`, con pruebas de contenido sintético; `SecretReader` lee el archivo y el entorno y delega | Lo mismo; el gate lo trata como CRÍTICO |
 | 4 | `qa-automation-engineer` | `Credentials` en `com.demo.data` con la prueba de enmascarado; imports en los steps | Lo mismo y CHK-03 |
 | 5 | `qa-test-verifier` | Criterio de verificación completo | APROBADO |
-| 6 | `devops-engineer` | Job `mutation` en GitHub Actions, etapa en Jenkins y CHK-11 en el gate | CHK-13; run remoto en verde en los dos jobs |
+| 6 | `devops-engineer` | Job `mutation` en GitHub Actions, etapa en Jenkins y CHK-11 en el gate. Todos exigen `target/pit-reports/mutations.xml` y tratan `Skipping project` como rechazo cuando existe `src/main/java` (*Enmiendas*) | CHK-13; run remoto en verde en los dos jobs; sin `mutations.xml`, el job y el gate fallan |
 
 ## Criterio de verificación
 
@@ -168,20 +170,35 @@ git ls-files src/test/java/com/demo/config src/test/java/com/demo/data | grep -v
 ```
 
 Además:
+- Existe `target/pit-reports/mutations.xml` y el log no contiene `Skipping project`: el `BUILD SUCCESS` de CHK-11 no basta (*Enmiendas*).
 - `target/pit-reports/index.html` lista solo clases de `com.demo.config` y `com.demo.data`.
 - El log de PIT no ejecuta `RunnerTest` ni el motor `cucumber`.
 - Cada mutante sobreviviente tiene su justificación (D5).
 
-## Riesgos sin confirmar
+## Riesgos
 
-Este ADR se escribió sin red y sin `./mvnw`.
+Este ADR se escribió sin red y sin `./mvnw`. El estado refleja el paso 1 (*Enmiendas*).
 
-| # | Supuesto | Lo confirma | Si es falso |
-|---|---|---|---|
-| R-1 | `pitest-maven` solo muta `target/classes` | devops, paso 1: el reporte | `pages` y `steps` saldrían como NO_COVERAGE y el umbral fallaría (error visible, nunca un verde falso); se acota `targetClasses` por enmienda |
-| R-2 | Las versiones de referencia existen y son compatibles con JUnit 5.14.2 y Java 17 | devops, en Maven Central | Se usa la última estable compatible |
-| R-3 | PIT aporta `junit-platform-launcher` | devops, paso 1: la fase de cobertura encuentra las pruebas | Se agrega desde el BOM (D4) |
-| R-4 | Los motores `cucumber` y `junit-platform-suite` no descubren nada con un selector de una clase que no es `@Suite` | verifier, paso 5: el log | Se excluyen los motores por enmienda |
-| R-5 | La composición exacta de `STRONGER` en la versión elegida | Los mutadores del reporte | Se documenta la composición real en este ADR |
-| R-6 | En macOS, los `._*` romperían la compilación de `src/main` (no es reproducible en Linux) | devops, paso 1 | — |
-| R-7 | El tiempo se mantiene dentro del presupuesto de D5 | El primer run de CI | Se investiga la E/S en las pruebas |
+| # | Supuesto | Lo confirma | Si es falso | Estado (2026-10-09) |
+|---|---|---|---|---|
+| R-1 | `pitest-maven` solo muta `target/classes` | devops, paso 1: el reporte | `pages` y `steps` saldrían como NO_COVERAGE y el umbral fallaría (error visible, nunca un verde falso); se acota `targetClasses` por enmienda | **Confirmado** |
+| R-2 | Las versiones de referencia existen y son compatibles con JUnit 5.14.2 y Java 17 | devops, en Maven Central | Se usa la última estable compatible | **Resuelto:** 1.30.0 y 1.2.3 (D4) |
+| R-3 | PIT aporta `junit-platform-launcher` | devops, paso 1: la fase de cobertura encuentra las pruebas | Se agrega desde el BOM (D4) | **Refutado:** no hace falta |
+| R-4 | Los motores `cucumber` y `junit-platform-suite` no descubren nada con un selector de una clase que no es `@Suite` | verifier, paso 5: el log | Se excluyen los motores por enmienda | **Parcial:** lo cierra el verifier en el paso 5 |
+| R-5 | La composición exacta de `STRONGER` en la versión elegida | Los mutadores del reporte | Se documenta la composición real en este ADR | Sin confirmar (primer reporte con `src/main`) |
+| R-6 | En macOS, los `._*` romperían la compilación de `src/main` (no es reproducible en Linux) | devops, paso 1 | — | **Mitigado;** sin confirmar en macOS |
+| R-7 | El tiempo se mantiene dentro del presupuesto de D5 | El primer run de CI | Se investiga la E/S en las pruebas | Sin confirmar (paso 6) |
+
+## Enmiendas
+
+### 2026-10-09 — Paso 1 (commit `4d75090`, `devops-engineer`)
+
+Sin cambios en D1–D6 ni en el estado. Hallazgos:
+- **R-1 confirmado:** con una clase sonda en `src/main/java/com/demo/config`, `mutations.xml` contenía solo esa clase (sin `utils`, `pages` ni `steps`).
+- **R-2 resuelto:** `pitest-maven` 1.30.0 y `pitest-junit5-plugin` 1.2.3, confirmados en Maven Central con `./mvnw`; funcionan con JUnit 5.14.2 y Java 17. D4 actualizado.
+- **R-3 refutado:** `junit-platform-launcher` no hace falta; con pruebas sonda corrió `[engine:junit-jupiter]`.
+- **R-4 parcial:** los logs de PIT no mencionan `RunnerTest`, `cucumber`, `chrome` ni `webdriver`. Lo cierra el verifier en el paso 5.
+- **R-6 mitigado:** la limpieza de `._*` pasa a `generate-sources` y se agrega una ejecución sobre `target/classes` en `process-classes`. Sin confirmar en macOS.
+- **Fallo abierto de CHK-11 (corrige el paso 1):** sin `target/classes`, PIT 1.30.0 imprime `Skipping project because: Project has either no tests or no production code` y termina en `BUILD SUCCESS`, aun con `failWhenNoMutations=true` (`pom.xml:221`). Ningún parámetro lo cambia. Mitigación en el paso 6: el job `mutation` y el gate exigen `target/pit-reports/mutations.xml` y tratan `Skipping project` como rechazo cuando existe `src/main/java`. Se agrega el mismo requisito al *Criterio de verificación*.
+- **Comprobado en una copia aislada:** D6 da `BUILD FAILURE` con un puntaje de 50 % frente al umbral de 80; `-DmutationThreshold=0` no baja el umbral (D5); Surefire ejecuta las pruebas unitarias (D3).
+- Cambios a reglas y agentes aplicados, salvo los pendientes indicados en su sección. Cita corregida: el *Estado actual* de la Regla 04 está en `:66`, no en `:53`.
