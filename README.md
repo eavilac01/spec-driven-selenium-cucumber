@@ -1,5 +1,6 @@
 # Selenium Cucumber BDD Framework
 
+[![E2E Tests](https://github.com/eavilac01/selenium-cucumber-bdd-framework/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/eavilac01/selenium-cucumber-bdd-framework/actions/workflows/ci.yml)
 ![Java](https://img.shields.io/badge/Java-17-orange?logo=openjdk)
 ![Selenium](https://img.shields.io/badge/Selenium-4.45-43B02A?logo=selenium)
 ![Cucumber](https://img.shields.io/badge/Cucumber-7.34-23D96C?logo=cucumber)
