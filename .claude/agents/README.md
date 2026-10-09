@@ -1,56 +1,58 @@
 # Equipo de agentes QE — selenium-cucumber-bdd-framework
 
-Equipo de subagentes de Claude Code que trabaja sobre este framework de automatización. Su objetivo no es la cobertura amplia sino demostrar **criterio de arquitectura, trazabilidad y gobierno de calidad**. Este archivo no tiene frontmatter: Claude Code lo trata como documentación, no como agente.
+Equipo de subagentes de Claude Code para evolucionar el framework con **criterio de arquitectura, trazabilidad y gobierno de calidad**. Este archivo no tiene frontmatter: Claude Code lo trata como documentación.
 
-**Principio que ordena al equipo:** el modelo propone y el código dispone. Cada salida generada por un agente queda envuelta en una verificación que no depende de un modelo (reglas ArchUnit, `git grep`, gate de trazabilidad, control negativo, PIT, hook de push). Cada agente declara en su sección *Entradas y salidas* quién valida su salida y qué ocurre si esa validación falla.
+**Principio:** el modelo propone y el código dispone. Toda salida generada pasa por una verificación determinista (CHK, ArchUnit, hook de push, aprobación humana de specs).
+
+## Estructura
+
+```
+.claude/
+├── agents/     → un archivo por rol (este índice incluido)
+├── rules/      → reglas comunes que todos aplican
+│   ├── 01-spec-driven-development.md   spec → feature → código
+│   ├── 02-agent-permissions.md         qué puede y qué no puede cada agente
+│   ├── 03-prompt-injection.md          dato ≠ instrucción
+│   └── 04-quality-checks.md            catálogo CHK-01…14 con comandos
+├── hooks/devops-gate-hook.sh  → bloquea git push sin gate
+└── settings.json              → permisos deny/ask y registro del hook
+```
+
+## Flujo (SDD)
+
+```
+Usuario → designer: spec (borrador) → Usuario aprueba → designer: feature
+       → architect (si hay estructura nueva) → engineer: código
+       → verifier: APROBADO → devops: gate → push
+```
 
 ## Roster
 
-| Agente | Responsabilidad única | model / effort | Puntaje rúbrica (I/R/V/C) | Motivo de la asignación |
-|---|---|---|---|---|
-| *Sesión principal* (`CLAUDE.md`) | **Coordinador**: descompone el objetivo, delega con contrato, verifica el cierre y mantiene el estado. No implementa | sesión | — | En Claude Code un subagente no puede invocar a otros; la coordinación solo puede vivir en la sesión principal |
-| `qa-automation-architect` | Cinco capas, interfaz de transporte, reglas de dependencia R1–R7, ADRs y reglas ArchUnit | opus / xhigh | 2/2/2/2 = 8 | Se invoca poco y cada invocación fija la estructura que replican todas las pruebas; el error de diseño es el más caro de revertir |
-| `qa-test-designer` | Catálogo de criterios de aceptación, features con intención de negocio, técnicas formales y etiquetas `@AC-`/`@tec-` | sonnet / high | 1/1/0/2 = 4 | Las técnicas formales son procedimiento con patrón y el volumen es alto; `high` para no perder fronteras. El verificador y el gate de trazabilidad cubren el coste del error |
-| `qa-automation-engineer` | Código Java de pruebas: transporte, páginas, acciones, steps, fábricas de datos y pruebas unitarias | sonnet / high | 1/1/0/1 = 3 | Alto volumen con patrones fijados por ADR; el error se detecta de inmediato en la compilación, el verificador o el gate |
-| `qa-test-verifier` | Veredicto independiente: control negativo, mutación, aserciones, sleep, reintentos, independencia y camino feliz | opus / high | 1/2/1/2 = 6 | Decide si una prueba se acepta; un falso APROBADO deja una prueba que nunca detectará un defecto. No edita código |
-| `devops-engineer` | Pipelines, paralelismo, reportes, gates de trazabilidad, mutación y cuarentena; double check previo a push | opus / high | 2/2/1/2 = 7 | Único rol que decide qué se sube; el estándar fija opus/high como mínimo y nunca se rebaja |
+| Agente | Rol | Escribe en | model / effort | Rúbrica I/R/V/C | Motivo |
+|---|---|---|---|---|---|
+| *Sesión principal* | Coordinador: descompone, delega, verifica el cierre y mantiene el estado. No implementa | Lista de tareas | sesión | — | Un subagente no puede delegar en otros |
+| `qa-automation-architect` | Capas, reglas R1–R7, ADRs, ArchUnit | `docs/adr/` | opus / xhigh | 2/2/2/2 = 8 | Pocas invocaciones que deciden la estructura de todo |
+| `qa-test-designer` | Specs, features, técnicas formales, trazabilidad | `docs/specs/`, `features/` | sonnet / high | 1/1/0/2 = 4 | Procedimiento con patrón y volumen alto; el error lo cubren el verifier y CHK-12 |
+| `qa-automation-engineer` | Código Java de pruebas, fábricas, unit tests | `src/test/java/` | sonnet / high | 1/1/0/1 = 3 | Volumen alto con patrones fijados por ADR |
+| `qa-test-verifier` | Veredicto independiente de aceptación | **nada** | opus / high | 1/2/1/2 = 6 | Un falso APROBADO deja una prueba que nunca detecta |
+| `devops-engineer` | CI, gates, cuarentena, double check previo a push | CI, `scripts/`, `pom.xml` (plugins) | opus / high | 2/2/1/2 = 7 | Único rol que decide qué se sube |
 
-Ejes de la rúbrica (0–2 cada uno): **I**mpacto e irreversibilidad, profundidad de **R**azonamiento, **V**olumen (invertido: más volumen, menos puntos), **C**oste del error. Total ≥ 5 → `opus`; 3–4 → `sonnet`. `xhigh` solo para roles que deciden y se invocan poco. Los valores `effort` son los que acepta Claude Code (`low`/`medium`/`high`/`xhigh`/`max`).
+Rúbrica (0–2 por eje): **I**mpacto, **R**azonamiento, **V**olumen (invertido), **C**oste del error. Total ≥ 5 → `opus`; 3–4 → `sonnet`. `xhigh` solo para roles que deciden y se invocan poco.
 
-## Roles evaluados y descartados
+## Roles descartados
 
-| Rol | Motivo | Cuándo reconsiderarlo |
+| Rol | Motivo | Reconsiderar si… |
 |---|---|---|
-| Coordinador como subagente | Un subagente no puede delegar en otros. Se implementa como bloque de orquestación en `CLAUDE.md` | Si se migra a un orquestador externo (Claude Agent SDK) |
-| Ingeniero de datos y ambientes | SauceDemo es externo y sin estado de servidor: usuarios fijos, sin API ni BD para preparar estado. Las fábricas son poca lógica y las implementa `qa-automation-engineer`; la independencia y el reloj inyectado los hace cumplir `qa-test-verifier`; los secretos en CI son de `devops-engineer` | Con un sistema bajo prueba propio que permita sembrar datos por API o BD |
-| Evaluador de componentes de IA | El proyecto no genera ni clasifica nada con modelos | Si se incorpora generación asistida de casos, de localizadores o de datos |
+| Coordinador como subagente | No puede delegar en Claude Code | Se migra al Claude Agent SDK |
+| Datos y ambientes | SauceDemo es externo y sin estado de servidor; las fábricas las hace el engineer y los secretos en CI el devops | Hay un SUT propio con API o BD para sembrar datos |
+| Evaluador de IA | No hay componentes de IA | Se agrega generación asistida de casos o localizadores |
 
-## Dónde vive cada regla técnica
+## Supuestos
+1. **Mutación con SUT externo:** PIT se aplica sobre la lógica propia del framework; los escenarios E2E demuestran que fallan con el control negativo (CHK-10), comprobado.
+2. **Deuda:** las features actuales no tienen spec (SDD) y las páginas reciben `WebDriver` (ADR-001 pendiente). Todo lo nuevo cumple las reglas.
+3. **CHK-12 en rojo al crearse:** es intencional; hace visible la deuda.
 
-| Regla | Agente que la aplica como criterio de rechazo |
-|---|---|
-| Cinco capas, steps sin localizadores, features sin vocabulario de interfaz | `qa-automation-architect` (R1–R7) y, para features, `qa-test-designer` |
-| `Thread.sleep` prohibido | `qa-test-verifier` (rechazo automático), `devops-engineer` (gate), `qa-automation-engineer` (autoverificación) |
-| Datos por fábrica, sin orden, reloj y semilla inyectados | `qa-automation-engineer` (implementa) y `qa-test-verifier` (rechaza) |
-| Trazabilidad `@AC-` + `@tec-` | `qa-test-designer` (etiqueta) y `devops-engineer` (`scripts/check-traceability.sh` en CI) |
-| La prueba nueva debe fallar contra un resultado roto | `qa-test-verifier` (control negativo por `-D`, comprobado) |
-| Mutación ≥ 80 %, cobertura de líneas no es criterio | `devops-engineer` (job PIT) y `qa-test-verifier` (veredicto) |
-| Sin reintentos; cuarentena con dueño y fecha | `devops-engineer` (umbral, carril `@quarantine`, `docs/quarantine.md`) |
-| Técnicas formales, fronteras exactas, criterios no verificables no se inventan | `qa-test-designer` |
-
-## Supuestos documentados
-1. **Mutación con sistema bajo prueba externo.** No se puede mutar la lógica de SauceDemo. La métrica de mutación (PIT) se aplica a la lógica determinista propia del framework con pruebas unitarias; para los escenarios E2E, la demostración de que la prueba falla se hace por control negativo, corrompiendo el valor esperado con `-D<clave>=…`.
-2. **Catálogo de criterios.** Como no existía, `qa-test-designer` crea `docs/acceptance-criteria.md` desde las narrativas actuales, con IDs `AC-<DOMINIO>-<NN>`.
-3. **Deuda conocida.** Hoy las páginas reciben `WebDriver` y los steps llaman a las páginas. Es deuda registrada por el ADR-001 pendiente; todo código nuevo o modificado cumple la arquitectura objetivo.
-4. **Gate de trazabilidad en rojo al crearse.** Los escenarios actuales no tienen `@AC-`/`@tec-`; el primer rojo es intencional y visible.
-
-## Cómo invocar
-- **Delegación automática:** la sesión principal delega según la `description` de cada agente y el protocolo de `CLAUDE.md`.
-- **Invocación explícita:** `@agent-qa-test-verifier`, o "usa el agente qa-test-designer para …".
-- **Ritmo de una tarea:** objetivo → (arquitecto si toca la estructura) → diseñador → implementador → verificador → gate DevOps → push.
-
-## Gate DevOps
-`devops-engineer` es paso obligatorio antes de `git push`, PR o merge. **Hook instalado:** `.claude/hooks/devops-gate-hook.sh`, registrado en `.claude/settings.json`, bloquea cualquier `git push` si `.claude/devops-gate.json` no contiene `verdict: APROBADO` para el `commit` igual a HEAD. Ese JSON está en `.gitignore`.
-
-## Validar tras editar a mano
-`python3 <ruta-al-skill-agent-team>/scripts/validate_agents.py .claude/agents` → 0 errores.
+## Uso
+- Automático: la sesión principal delega según la `description` y `CLAUDE.md`.
+- Explícito: `@agent-qa-test-verifier` o "usa qa-test-designer para…".
+- Tras editar a mano, valida con `validate_agents.py .claude/agents` → 0 errores.

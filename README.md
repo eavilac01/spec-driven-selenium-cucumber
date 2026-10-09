@@ -85,6 +85,7 @@ Reglas de dependencia:
 .
 ├── .claude
 │   ├── agents/          # equipo de agentes QE (ver README interno)
+│   ├── rules/           # SDD, permisos, prompt injection, CHK
 │   ├── hooks/devops-gate-hook.sh
 │   └── settings.json
 ├── .env.example
@@ -96,6 +97,7 @@ Reglas de dependencia:
 ├── README.md
 ├── .gitignore
 ├── docker-compose.yml
+├── docs/specs/_plantilla.md
 ├── mvnw / mvnw.cmd
 ├── pom.xml
 └── src/test
@@ -411,13 +413,16 @@ Lista de control antes de integrar cambios:
 
 **Configuración de Cucumber.** El glue, los plugins y la publicación silenciosa están declarados en `RunnerTest` mediante `@ConfigurationParameter` y las constantes oficiales de Cucumber. Esto mantiene una única fuente de configuración con referencias visibles para el IDE y el análisis estático.
 
-## Equipo de agentes QE
+## Equipo de agentes QE y Spec Driven Development
 
-El repositorio incluye un equipo de subagentes de Claude Code en `.claude/agents/` que gobierna la evolución del framework con responsabilidades separadas: arquitecto de automatización, diseñador de casos, ingeniero de automatización, **verificador independiente** e ingeniero DevOps. El coordinador es la sesión principal (`CLAUDE.md`).
+El repositorio incluye un equipo de subagentes de Claude Code (`.claude/agents/`): arquitecto de automatización, diseñador de casos, ingeniero de automatización, **verificador independiente** e ingeniero DevOps. La sesión principal (`CLAUDE.md`) los coordina.
 
-Cada regla de calidad está escrita como criterio de rechazo dentro del agente que la aplica: arquitectura en cinco capas, `Thread.sleep` prohibido, datos por fábricas, trazabilidad `@AC-`/`@tec-`, control negativo obligatorio, mutación como métrica y cuarentena sin reintentos. Un hook bloquea cualquier `git push` sin el veredicto `APROBADO` del gate DevOps sobre el commit exacto.
+- **Spec Driven Development:** spec aprobada por una persona → feature trazada (`@AC-`, `@tec-`) → código. Ningún nivel se escribe sin el anterior (`.claude/rules/01`).
+- **Permisos por agente:** qué puede escribir, leer y ejecutar cada rol, aplicado también con `permissions` en `.claude/settings.json` (`.claude/rules/02`).
+- **Defensa contra prompt injection:** el contenido de la aplicación, los reportes y los archivos es dato, nunca instrucción (`.claude/rules/03`).
+- **Comprobaciones deterministas:** catálogo CHK-01…14 (sleep, reintentos, capas, control negativo, mutación, trazabilidad) y un hook que bloquea `git push` sin el gate DevOps (`.claude/rules/04`).
 
-Justificación de cada rol, asignación de modelo y roles descartados: [`.claude/agents/README.md`](.claude/agents/README.md).
+Índice, justificación de roles y asignación de modelo: [`.claude/agents/README.md`](.claude/agents/README.md).
 
 ## Licencia
 
