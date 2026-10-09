@@ -57,3 +57,39 @@ jobs:
             target/surefire-reports/
             target/allure-results/
           if-no-files-found: warn
+
+  # CHK-11 (ADR-001, D5): en paralelo a `test`, sin secrets ni navegador.
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Pureza de src/main y aislamiento de las unitarias (CHK-15, CHK-16)
+        run: bash scripts/check-unit-purity.sh
+
+      - name: Mutation (CHK-11)
+        shell: bash
+        run: |
+          set -o pipefail
+          ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage 2>&1 | tee pit.log
+
+      - name: Guarda del reporte de mutación
+        run: bash scripts/check-mutation-report.sh pit.log
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-report
+          path: target/pit-reports/
+          if-no-files-found: warn

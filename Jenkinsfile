@@ -19,6 +19,31 @@ pipeline {
             }
         }
 
+        // CHK-11 (ADR-001, D5): fuera de withCredentials, sin secrets ni navegador.
+        // Va antes de 'Test' porque `clean test` borra target/pit-reports.
+        stage('Mutation (CHK-11)') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh 'bash scripts/check-unit-purity.sh'
+                // El workspace persiste entre builds: sin reporte ni log previos.
+                sh 'rm -rf target/pit-reports pit.log'
+                sh '''#!/usr/bin/env bash
+set -euo pipefail
+./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage 2>&1 | tee pit.log
+'''
+                sh 'bash scripts/check-mutation-report.sh pit.log'
+            }
+            post {
+                always {
+                    archiveArtifacts allowEmptyArchive: true,
+                        artifacts: 'target/pit-reports/**',
+                        fingerprint: true
+                }
+            }
+        }
+
         stage('Test') {
             steps {
                 sh 'java -version'
