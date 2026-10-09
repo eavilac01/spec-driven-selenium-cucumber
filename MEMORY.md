@@ -7,7 +7,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Package `com.demo`, Maven Wrapper, `PageManager`, reportes Allure y HTML de Cucumber.
 - Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…14).
 - Hook del gate DevOps activo: ningún push sin `APROBADO` sobre HEAD.
-- Commit `61c8036` (quitar `memory` al verifier) aprobado por el gate y **sin subir**: espera la confirmación del usuario (PI-07).
+- Flujo coordinador → `devops-engineer` → push probado de punta a punta (2 gates APROBADOS por el agente, último en `7d8e979`).
 
 ## Decisiones (y por qué)
 - El coordinador es la sesión principal, porque un subagente no puede delegar en otros.
@@ -24,7 +24,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - El CI falla si faltan los 6 secrets `TEST_*` en GitHub.
 
 ## Próximos pasos
-1. Decidir el push de `61c8036` y reiniciar Claude Code para que el verifier cargue sin `Write`/`Edit`.
+1. Reiniciar Claude Code para que el verifier cargue sin `Write`/`Edit` y comprobarlo.
 2. Specs retroactivas de login y compra (`qa-test-designer`) → aprobación del usuario.
 3. ADR-001: capa de transporte y de acciones de negocio (`qa-automation-architect`).
 4. CHK-12 `scripts/check-traceability.sh` y CHK-11 PIT, este último tras su ADR (`devops-engineer`).
