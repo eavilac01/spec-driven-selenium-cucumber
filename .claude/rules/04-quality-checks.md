@@ -15,7 +15,7 @@ Comprobaciones deterministas que los agentes citan por ID. Una CHK en rojo es un
 | CHK-09 | Escenario independiente | Verde solo y dentro de la suite | engineer, verifier |
 | CHK-10 | Control negativo | **Falla** con `AssertionFailedError` en el `Then` | verifier |
 | CHK-11 | Mutación | Puntaje ≥ 80 % en las clases tocadas | verifier, devops |
-| CHK-12 | Trazabilidad SDD | Cada escenario tiene `@AC-` y `@tec-`, y cada feature tiene `Spec:` | designer, devops |
+| CHK-12 | Trazabilidad SDD: `Spec:` hacia una spec `aprobada`, `@AC-` y `@tec-` en cada escenario, cada `@AC-` existe en la spec y cada AC verificable tiene escenario | Exit 0; con exit 1 imprime `archivo:línea: motivo` | designer, devops |
 | CHK-13 | Pipelines válidos | Sin error | devops |
 | CHK-14 | Cuarentena reglada | Cada `@quarantine` tiene su fila en `docs/quarantine.md` con dueño y fecha no vencida | devops |
 
@@ -50,6 +50,6 @@ bash scripts/check-traceability.sh
 python3 -c "import yaml,sys;[yaml.safe_load(open(f)) for f in sys.argv[1:]]" .github/workflows/*.yml
 ```
 
-**Estado actual:** CHK-11 (PIT) y CHK-12 (script) aún no están configuradas; crearlas es tarea de `devops-engineer`. Mientras tanto se reportan como `n/a` con un hallazgo P1.
+**Estado actual:** CHK-12 está activa en `scripts/check-traceability.sh` y corre en GitHub Actions y Jenkins antes de la suite. CHK-11 (PIT) aún no está configurada: requiere su ADR; mientras tanto se reporta como `n/a` con un hallazgo P1.
 
 La cobertura de líneas **no** es una CHK: mide qué código se ejecutó, no qué se verificó.

@@ -20,3 +20,5 @@ allure-results/
 # Gate DevOps y configuración local de Claude Code
 .claude/devops-gate.json
 .claude/settings.local.json
+# Memoria propia de los agentes: local, no se publica (Regla 03)
+.claude/agent-memory/

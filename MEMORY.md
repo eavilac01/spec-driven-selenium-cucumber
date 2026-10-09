@@ -10,6 +10,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…14).
 - Hooks activos: gate DevOps y protección de `.claude/**`, `CLAUDE.md`, `MEMORY.md` y `AGENTS.md` (56/56 casos).
 - `AGENTS.md` en la raíz, para cualquier agente de código; bajo `ask`.
+- Repo renombrado a `spec-driven-selenium-cucumber` en GitHub y en local (`~/repo/`), con la memoria de Claude Code migrada.
+- CHK-12 activa: `scripts/check-traceability.sh` (awk POSIX, compatible con mawk) en CI y Jenkins antes de la suite; 7 controles negativos probados.
 
 ## Decisiones (y por qué)
 - El coordinador es la sesión principal, porque un subagente no puede delegar en otros.
@@ -33,10 +35,10 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - No existe la CLI `gh` en esta máquina: las operaciones de GitHub (renombrar, settings) las hace el usuario en la web.
 
 ## Próximos pasos
-1. Renombrar la carpeta local a `spec-driven-selenium-cucumber` y migrar la memoria de Claude Code (usuario, con la sesión cerrada).
-2. Confirmar en verde el run de GitHub Actions sobre `aa62093`.
-3. CHK-12 `scripts/check-traceability.sh` (`devops-engineer`); CHK-11 PIT tras su ADR (`qa-automation-architect`).
+1. Confirmar en verde el run de GitHub Actions sobre `03606a8` (nombre nuevo del repo y primer paso CHK-12).
+2. Responder las preguntas Q-* de las specs (usuario).
+3. CHK-11 PIT tras su ADR (`qa-automation-architect`, luego `devops-engineer`).
 4. ADR-001: capa de transporte y de acciones de negocio (`qa-automation-architect`).
 5. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05); ejemplo XPath desactualizado en `README.md`.
-6. Resolver las preguntas Q-* de las specs para cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.
+6. Con las Q-* respondidas, cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.
 7. Paralelismo, solo después de confirmar la independencia de los escenarios.
