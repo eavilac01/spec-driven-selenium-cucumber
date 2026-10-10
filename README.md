@@ -176,7 +176,7 @@ flowchart TB
 
 | Comprobación | Qué impide | Dónde corre |
 |---|---|---|
-| **CHK-17** · `scripts/check-layers.sh` | Saltos de capa (reglas R1–R6), con autoprueba de 154 casos | CI (job `mutation`) y Jenkins |
+| **CHK-17** · `scripts/check-layers.sh` | Saltos de capa (reglas R1–R6), con autoprueba de 162 casos | CI (job `mutation`) y Jenkins |
 | **CHK-12** · `scripts/check-traceability.sh` | Escenarios sin spec aprobada o sin `@AC-`/`@tec-` | CI y Jenkins, antes de la suite |
 | **CHK-15/16** · `scripts/check-unit-purity.sh` | E/S o Selenium en `src/main`; pruebas unitarias acopladas | CI (job `mutation`) y Jenkins |
 | **CHK-11** · PIT + `scripts/check-mutation-report.sh` | Pruebas unitarias que no detectan defectos (umbral 80 %) | CI (job `mutation`) y Jenkins |
