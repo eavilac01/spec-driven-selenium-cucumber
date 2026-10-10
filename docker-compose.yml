@@ -18,5 +18,7 @@ services:
       SE_EVENT_BUS_HOST: selenium-hub
       SE_EVENT_BUS_PUBLISH_PORT: 4442
       SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+      # Igual a cucumber.execution.parallel.config.fixed.parallelism
+      # (src/test/resources/junit-platform.properties) y al servicio de ci.yml.
       SE_NODE_MAX_SESSIONS: 2
       SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
