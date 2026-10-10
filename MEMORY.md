@@ -14,7 +14,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Hooks activos: gate DevOps y protección de `.claude/**`, `CLAUDE.md`, `MEMORY.md` y `AGENTS.md` (56/56 casos).
 - `AGENTS.md` en la raíz, para cualquier agente de código; bajo `ask`.
 - Repo renombrado a `spec-driven-selenium-cucumber` en GitHub y en local (`~/repo/`), con la memoria de Claude Code migrada.
-- CHK-12 activa: `scripts/check-traceability.sh` (awk POSIX, compatible con mawk) en CI y Jenkins antes de la suite; 7 controles negativos probados.
+- CI con 4 jobs (`test`, `e2e-firefox`, `e2e-grid`, `mutation`) y paralelismo por escenario (2 hilos); Jenkinsfile endurecido (6 Secret text = nombres de `.env.example`), sin servidor real.
 
 ## Decisiones (y por qué)
 - El coordinador es la sesión principal, porque un subagente no puede delegar en otros.
@@ -39,12 +39,11 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - PIT 1.30.0 sin `target/classes` dice "Skipping project" y da `BUILD SUCCESS` (falla abierto): CI y gate deben exigir `target/pit-reports/mutations.xml`.
 - PIT no muta `requireNonNull` ni los accesores de un record: esas pruebas se validan con control negativo manual en una copia aislada (sin `.env`).
 - Una mutante declarada "equivalente" se demuestra, no se supone: en CHK-17 dos lo parecían y fallaban abierto.
+- Firefox local es de snap: en local necesita `-Dwebdriver.gecko.driver=/snap/bin/geckodriver`; en CI no.
 - No existe la CLI `gh` en esta máquina: las operaciones de GitHub (renombrar, settings) las hace el usuario en la web.
 
 ## Próximos pasos
-1. Responder las preguntas Q-* de las specs (usuario).
-2. P2 de CI: Jenkinsfile sin validar en un Jenkins real; stage `Test` sin timeout; filtro `not @quarantine` cuando exista la cuarentena. (`permissions: contents: read` hecho en `6c6b95b`, CI en verde.)
-3. ADR-002, P2 abiertos: R-3 (sin `ThreadLocal`, `Navegador` solo vale en serie → resolver antes del paralelismo), R-6 (Firefox y Grid sin ejecutar en CI); R-4 confirmado en Actions (`257baaa`, verde); `BrowserSettingsTest` `:235`/`:252` verifican solo el tipo de la causa.
-4. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05).
-5. Con las Q-* respondidas, cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.
-6. Paralelismo, solo después de confirmar la independencia de los escenarios.
+1. Specs con valores ratificados (exploración 2026-10-10) en `en-cambio` → aprobación del usuario → features y steps de AC-LOGIN-04…09 y AC-COMPRA-05…13.
+2. AC-COMPRA-09 es defecto conocido del SUT (permite comprar con carrito vacío): `@quarantine` tipo `defecto-sut` + `docs/quarantine.md` + script de CHK-14 (devops).
+3. Confirmar en el run remoto de `caf2fa0` los jobs `e2e-firefox` y `e2e-grid` (cierra R-6) y el paralelismo (cierra R-3); R-4 sigue abierto solo para Jenkins.
+4. P2: el entorno puede sobrescribir claves `*.expected*`; `BrowserSettingsTest` `:235`/`:252` verifican solo el tipo de la causa.

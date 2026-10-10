@@ -17,7 +17,7 @@ Comprobaciones deterministas que los agentes citan por ID. Una CHK en rojo es un
 | CHK-11 | Mutación (alcance del ADR-001: todo `src/main/java`) | Puntaje ≥ 80 % en la ejecución y la guarda en 0 (`mutations.xml` presente, sin `Skipping project`); cada mutante sobreviviente de las clases tocadas, justificado | verifier, devops |
 | CHK-12 | Trazabilidad SDD: `Spec:` hacia una spec `aprobada`, `@AC-` y `@tec-` en cada escenario, cada `@AC-` existe en la spec y cada AC verificable tiene escenario | Exit 0; con exit 1 imprime `archivo:línea: motivo` | designer, devops |
 | CHK-13 | Pipelines válidos | Sin error | devops |
-| CHK-14 | Cuarentena reglada | Cada `@quarantine` tiene su fila en `docs/quarantine.md` con dueño y fecha no vencida | devops |
+| CHK-14 | Cuarentena reglada, con dos tipos | Cada `@quarantine` tiene su fila en `docs/quarantine.md` con su tipo: `inestable` (dueño, ingreso, diagnóstico y límite ≤ 14 días, no vencido) o `defecto-sut` (dueño, referencia al defecto en la spec según SDD-08, comportamiento esperado frente a observado y próxima revisión ≤ 90 días, no vencida); ninguna fila sin escenario | devops |
 | CHK-15 | `src/main/java` puro: sin entorno, archivos, Selenium, Cucumber ni JUnit (ADR-001) | Sin salida | engineer, verifier, devops |
 | CHK-16 | Pruebas unitarias aisladas: sin Selenium, Cucumber, capas de prueba, entorno ni `.env` real, y solo `*Test.java` en sus directorios (ADR-001) | Sin salida | engineer, verifier |
 | CHK-17 | Capas (ADR-002): R1–R6 de D7, incluidas páginas como parámetro en acciones; falla cerrado (directorios de capa, `git grep` con rc ≥ 2 o con stderr) | Exit 0 en el script y en su autoprueba | engineer, verifier, devops |

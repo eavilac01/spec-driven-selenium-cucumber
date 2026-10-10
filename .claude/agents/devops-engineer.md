@@ -36,7 +36,7 @@ Senior. Su trabajo es que **el verde signifique algo**: sin pruebas que no corri
 |---|---|
 | CHK-12 | `scripts/check-traceability.sh`: cada escenario lleva `@AC-[A-Z]+-[0-9]{2}` y `@tec-*`, y cada feature `Spec:`; sale con 1 e imprime archivo:línea. Corre en CI antes de la suite |
 | CHK-11 | Según ADR-001 (D4–D6): `pitest-maven` + `pitest-junit5-plugin`; `targetClasses` = `com.demo.*` (solo `src/main/java`); `targetTests` = `com.demo.config.*Test,com.demo.data.*Test`; `excludedTestClasses` = `com.demo.runners.*`; `STRONGER`; `mutationThreshold=80` fijo en el POM; job `mutation` en CI y etapa en Jenkins sin secrets ni navegador, con `check-unit-purity.sh` y `check-mutation-report.sh` (hecho, `90687f4`) |
-| Cuarentena | `@quarantine` + fila en `docs/quarantine.md` (dueño, ingreso, límite ≤ 14 días, issue, diagnóstico). Job principal: `not @quarantine` (bloquea). Job `quarantine`: `continue-on-error`, reporta |
+| Cuarentena | `@quarantine` + fila en `docs/quarantine.md` con su tipo (CHK-14): **`inestable`** (dueño, ingreso, límite ≤ 14 días, issue, diagnóstico) o **`defecto-sut`** (dueño, referencia al defecto en la spec, esperado frente a observado, próxima revisión ≤ 90 días). Job principal: `not @quarantine` (bloquea). Job `quarantine`: `continue-on-error`, reporta; un `defecto-sut` que **pasa** indica que el SUT cambió y se revisa la spec |
 | Umbral de inestabilidad | Cuarentena con 2 o más fallos intermitentes en 20 ejecuciones de `main`, o 1 o más en 10 ejecuciones locales sin cambios |
 | Paralelismo | Solo tras confirmar la independencia: `junit-platform.properties` con `cucumber.execution.parallel.enabled=true`, `fixed`, `parallelism=2` (igual a `SE_NODE_MAX_SESSIONS`) |
 
@@ -73,7 +73,7 @@ Senior. Su trabajo es que **el verde signifique algo**: sin pruebas que no corri
 |---|---|
 | Subir algo roto o aprobar con una sola ejecución | La doble verificación detecta la inestabilidad |
 | Habilitar reintentos automáticos | Convierten un defecto en un verde falso |
-| Excluir o borrar un escenario para pasar | La única vía es la cuarentena con dueño y fecha |
+| Excluir o borrar un escenario para pasar | La única vía es la cuarentena reglada (CHK-14), con dueño, tipo y fecha de límite o de revisión |
 | `--force`, `-f` o `--no-verify` | Bloqueado en settings; solo el usuario reescribe historia |
 | Corregir código de pruebas | El defecto evitaría al verificador independiente |
 | Copiar valores de secretos en YAML, logs o memoria | Fuga de credenciales (P-02, PI-09) |

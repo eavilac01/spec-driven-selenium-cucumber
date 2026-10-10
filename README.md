@@ -12,13 +12,81 @@
 
 Framework de referencia para automatizar [SauceDemo](https://www.saucedemo.com) con Java 17, Selenium 4, Maven, Cucumber y JUnit 5. La solución aplica Page Object Model (POM), inyección de dependencias por escenario y una separación estricta entre especificación, orquestación, interfaz e infraestructura.
 
-El objetivo verificable es que los cuatro casos de negocio —login exitoso, dos rechazos de login y compra de dos productos— se ejecuten en verde con:
+Cada escenario nace de una spec aprobada (`docs/specs/`), y la suite completa —escenarios E2E de login y compra más las pruebas unitarias de la lógica propia— se ejecuta con:
 
 ```bash
 ./mvnw clean test
 ```
 
 Selenium Manager resuelve el driver del navegador en tiempo de ejecución. No se descarga `chromedriver` manualmente, no se configura una ruta local y no se incorpora un gestor externo de drivers.
+
+## Inicio rápido (después de clonar)
+
+```bash
+# 1. Clonar
+git clone https://github.com/eavilac01/spec-driven-selenium-cucumber.git
+cd spec-driven-selenium-cucumber
+
+# 2. Comprobar JDK 17 (Maven no hace falta: el proyecto trae Maven Wrapper)
+java -version
+./mvnw -version
+
+# 3. Crear el archivo local de credenciales a partir de la plantilla
+cp .env.example .env
+chmod 600 .env
+
+# 4. Completar .env con las credenciales públicas de SauceDemo (ver la sección siguiente)
+
+# 5. Ejecutar la suite
+./mvnw clean test -Dheadless=true
+```
+
+Si el paso 5 termina en `BUILD SUCCESS`, el entorno está listo. Si falla con `La variable sensible obligatoria '...' no tiene valor`, falta completar esa variable en `.env` (el mensaje muestra solo el nombre, nunca el valor).
+
+## Credenciales de SauceDemo: cómo obtenerlas
+
+SauceDemo es un sitio público de práctica: **sus credenciales no son secretas y las publica en su propia página de inicio de sesión**. Aun así, este repositorio no las versiona: se tratan como cualquier secreto (`.env` local o *Secrets* de CI), para que el framework funcione igual con una aplicación real.
+
+1. Abre [https://www.saucedemo.com](https://www.saucedemo.com) en el navegador.
+2. Debajo del formulario de inicio de sesión hay dos recuadros:
+   - **"Accepted usernames are:"** — la lista de usuarios de prueba.
+   - **"Password for all users:"** — la contraseña común a todos ellos.
+3. Copia esos valores en tu `.env` según esta tabla:
+
+| Variable de `.env` | Qué valor poner |
+|---|---|
+| `TEST_USER_STANDARD_USERNAME` | El usuario **estándar** de la lista (el que empieza por `standard`) |
+| `TEST_USER_STANDARD_PASSWORD` | La contraseña común que muestra la página |
+| `TEST_LOGIN_CASES_LOCKED_USER_USERNAME` | El usuario **bloqueado** de la lista (el que contiene `locked_out`) |
+| `TEST_LOGIN_CASES_LOCKED_USER_PASSWORD` | La misma contraseña común |
+| `TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME` | El usuario estándar otra vez |
+| `TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD` | **Cualquier valor distinto** de la contraseña común (ver abajo cómo generarlo) |
+
+Para el caso de contraseña incorrecta conviene un valor aleatorio, así nunca coincide por accidente con la real:
+
+```bash
+openssl rand -hex 12
+```
+
+El resultado de `.env` tiene esta forma (los valores reales los copias tú de la página):
+
+```dotenv
+TEST_USER_STANDARD_USERNAME=<usuario estándar de la página>
+TEST_USER_STANDARD_PASSWORD=<contraseña común de la página>
+TEST_LOGIN_CASES_LOCKED_USER_USERNAME=<usuario bloqueado de la página>
+TEST_LOGIN_CASES_LOCKED_USER_PASSWORD=<contraseña común de la página>
+TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME=<usuario estándar de la página>
+TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD=<valor aleatorio, distinto de la contraseña común>
+```
+
+Reglas de seguridad que aplica el proyecto:
+
+- `.env` está en `.gitignore`; solo `.env.example` (sin valores) se versiona.
+- Ningún log, reporte ni mensaje de error imprime un valor de `.env`: los errores nombran la variable, nunca su contenido.
+- El objeto de credenciales se imprime enmascarado (`Credentials[username=***, password=***]`).
+- Nunca pegues las credenciales en `config.properties`, en una feature ni en el código.
+
+Si SauceDemo cambia sus usuarios o su contraseña, basta con actualizar `.env` (y los *Secrets* de CI): ningún archivo del repositorio cambia.
 
 ## Stack
 
@@ -36,52 +104,84 @@ Las versiones de Cucumber y JUnit se administran con sus respectivos BOM en `dep
 
 ## Arquitectura por capas
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ features/ · reglas y escenarios de negocio en Gherkin       │
-└─────────────────────────────┬───────────────────────────────┘
-                              │ enlazan con
-                              v
-┌─────────────────────────────────────────────────────────────┐
-│ steps/ · aserciones JUnit 5 y valores esperados             │
-└─────────────────────────────┬───────────────────────────────┘
-                              │ usan
-                              v
-┌─────────────────────────────────────────────────────────────┐
-│ actions/ · flujos de negocio entre páginas, sin aserciones  │
-└─────────────────────────────┬───────────────────────────────┘
-                              │ usan
-                              v
-┌─────────────────────────────────────────────────────────────┐
-│ pages/ · estado y localizadores (By) de cada vista          │
-└─────────────────────────────┬───────────────────────────────┘
-                              │ interactúan solo a través de
-                              v
-┌─────────────────────────────────────────────────────────────┐
-│ transport/ · Navegador: único dueño del WebDriver y esperas │
-└─────────────────────────────┬───────────────────────────────┘
-                              │ controla
-                              v
-┌─────────────────────────────────────────────────────────────┐
-│ Selenium WebDriver / navegador local o Selenium Grid        │
-└─────────────────────────────────────────────────────────────┘
+Cada flecha del diagrama es una **dependencia autorizada** por el [ADR-002](docs/adr/002-transport-and-business-actions.md). Cualquier otra —un step que importe una página, Selenium fuera de `transport`— la rechaza **CHK-17** en cada ejecución del CI.
 
-   hooks/ ── ciclo de vida y evidencia ──> transport/
-   utils/ (fachadas de configuración y secretos) ──> src/main (lógica pura)
+```mermaid
+flowchart TB
+    subgraph SDD["Especificación · SDD"]
+        direction TB
+        spec["<b>Spec aprobada</b><br/>criterios AC con su ID<br/>docs/specs"]
+        feat["<b>features</b><br/>Gherkin con @AC- y @tec-<br/>src/test/resources/features"]
+    end
+
+    runner["<b>runners · RunnerTest</b><br/>JUnit Platform Suite + Cucumber"]
+
+    subgraph CAPAS["Capas de ejecución · verificadas por CHK-17"]
+        direction TB
+        steps["<b>steps</b><br/>aserciones contra valores esperados"]
+        actions["<b>actions</b><br/>flujos de negocio, sin aserciones"]
+        pages["<b>pages</b><br/>estado y localizadores · solo By"]
+        transport["<b>transport · Navegador</b><br/>único dueño del WebDriver y de las esperas"]
+    end
+
+    selenium[("<b>Selenium WebDriver</b><br/>Chrome · Firefox · Grid")]
+
+    subgraph SOPORTE["Soporte"]
+        direction TB
+        utils["<b>utils · fachadas</b><br/>leen entorno, .env y config"]
+        pure["<b>src/main · lógica pura</b><br/>sin E/S ni Selenium · PIT 89/89"]
+        hooks["<b>hooks</b><br/>inician, capturan y cierran"]
+    end
+
+    spec -->|deriva| feat
+    feat ==>|enlaza| steps
+    runner -.->|descubre el glue| steps
+    steps ==>|usa| actions
+    actions ==>|orquesta| pages
+    pages ==>|solo vía Navegador| transport
+    transport ==>|controla| selenium
+    steps -.->|configura| utils
+    utils -.->|delega| pure
+    hooks -.->|ciclo de vida| transport
+
+    classDef layer fill:#FFFFFF,stroke:#1D4ED8,stroke-width:1.5px,color:#0F172A
+    classDef owner fill:#FFFFFF,stroke:#1D4ED8,stroke-width:3px,color:#0F172A
+    classDef neutral fill:#FFFFFF,stroke:#94A3B8,stroke-width:1px,color:#0F172A
+    classDef driver fill:#0F172A,stroke:#0F172A,color:#FFFFFF
+    class steps,actions,pages layer
+    class transport owner
+    class spec,feat,runner,utils,pure,hooks neutral
+    class selenium driver
+    style CAPAS fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+    style SDD fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+    style SOPORTE fill:#F5F6F8,stroke:#D5DAE1,color:#334155
 ```
 
-Reglas de dependencia:
+> Flechas gruesas: cadena de ejecución de un escenario. Flechas punteadas: soporte (descubrimiento, configuración y ciclo de vida).
 
-- Los `features` describen resultados observables en lenguaje de negocio y no conocen Selenium, selectores ni detalles visuales.
-- Los `steps` dependen solo de las acciones, de `utils` y de `data`. Las aserciones JUnit 5 y la lectura de valores esperados existen únicamente en esta capa.
-- Las acciones (`LoginActions`, `CompraActions`) agrupan páginas en flujos de negocio: reciben datos por parámetro, devuelven lo observado y no tienen aserciones ni leen esperados.
-- Las páginas exponen operaciones y estado; no contienen aserciones, no extienden ninguna clase y de Selenium solo usan `By`.
-- `Navegador` (`transport`) es el único dueño del `WebDriver` y el único punto para sincronizar e interactuar: visibilidad, clic, escritura, texto, invisibilidad, listas, URL y scroll.
-- `utils` concentra las fachadas de configuración y secretos y el estado por escenario; no depende de capas superiores.
-- Estas reglas (ADR-002, D4/D7) son comprobables con `git grep`, sin opinión de por medio.
-- La lógica pura de configuración, secretos y credenciales vive en `src/main/java` (`com.demo.config`, `com.demo.data`), sin E/S ni Selenium: las fachadas de `utils` leen el entorno y delegan en ella. Es el código que verifican las pruebas unitarias y PIT (ADR-001).
-- Los hooks administran el ciclo de vida y la evidencia, pero no implementan reglas de negocio.
-- No se admiten dependencias circulares ni saltos de capa, por ejemplo, un feature que codifique un selector o una página que invoque un step.
+### Responsabilidad de cada capa
+
+| Capa | Paquete | Responsabilidad | Puede depender de | Nunca |
+|---|---|---|---|---|
+| Especificación | `docs/specs`, `features` | Qué se espera del negocio, con criterios `AC-*` trazables | — | Selectores ni vocabulario de interfaz |
+| Steps | `com.demo.steps` | Aserciones JUnit 5 contra valores esperados de configuración | `actions`, `utils`, `data` | Importar páginas, `transport` ni Selenium |
+| Acciones | `com.demo.actions` | Flujos de negocio entre páginas; devuelven lo observado | `pages`, `data` | Aserciones ni lectura de valores esperados |
+| Páginas | `com.demo.pages` | Estado y localizadores de cada vista, por composición | `transport`, `ConfigReader` | Selenium distinto de `By`, aserciones, herencia |
+| Transporte | `com.demo.transport` | `Navegador`: único dueño del `WebDriver`, esperas explícitas y postcondiciones | `utils`, `config` | Lógica de negocio |
+| Fachadas | `com.demo.utils` | Leen entorno, `.env` y `config.properties`; delegan en `src/main` | `config`, `data` | Depender de capas superiores |
+| Lógica pura | `com.demo.config`, `com.demo.data` (`src/main`) | Resolución de configuración, secretos, credenciales y navegador | Solo entre sí | E/S, Selenium, Cucumber, JUnit |
+| Hooks | `com.demo.hooks` | Inician el navegador, adjuntan la captura si falla y lo cierran | `transport`, `utils` | Reglas de negocio |
+
+### Garantías automáticas
+
+| Comprobación | Qué impide | Dónde corre |
+|---|---|---|
+| **CHK-17** · `scripts/check-layers.sh` | Saltos de capa (reglas R1–R6), con autoprueba de 154 casos | CI (job `mutation`) y Jenkins |
+| **CHK-12** · `scripts/check-traceability.sh` | Escenarios sin spec aprobada o sin `@AC-`/`@tec-` | CI y Jenkins, antes de la suite |
+| **CHK-15/16** · `scripts/check-unit-purity.sh` | E/S o Selenium en `src/main`; pruebas unitarias acopladas | CI (job `mutation`) y Jenkins |
+| **CHK-11** · PIT + `scripts/check-mutation-report.sh` | Pruebas unitarias que no detectan defectos (umbral 80 %) | CI (job `mutation`) y Jenkins |
+
+Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-002](docs/adr/002-transport-and-business-actions.md); la decisión de mutar solo la lógica pura, en el [ADR-001](docs/adr/001-mutation-testing-pit.md).
 
 ## Estructura del proyecto
 
@@ -235,10 +335,16 @@ explicit.wait.seconds=10
 browser.window.width=1920
 browser.window.height=1080
 
+# Datos de entrada (no sensibles)
 test.purchase.products=Sauce Labs Backpack,Sauce Labs Bike Light
+test.purchase.single-product=Sauce Labs Backpack
 test.checkout.first-name=Ada
 test.checkout.last-name=Lovelace
 test.checkout.postal-code=01000
+
+# Valores esperados (salen de la spec; independientes de la entrada)
+cart.expected.count=2
+cart.expected.products=Sauce Labs Backpack,Sauce Labs Bike Light
 ```
 
 | Grupo | Propiedades | Responsabilidad |
@@ -247,23 +353,29 @@ test.checkout.postal-code=01000
 | Sincronización | `explicit.wait.seconds` | Límite común de esperas explícitas |
 | Ventana | `browser.window.width`, `browser.window.height` | Resolución headless |
 | Navegación | `route.*` | Rutas esperadas entre páginas |
-| UI esperada | `inventory.*`, `checkout.expected.confirmation` | Textos observables de la aplicación |
-| Credenciales | Variables `TEST_USER_*` y `TEST_LOGIN_CASES_*` | `.env` local o gestor de secretos de CI |
-| Casos negativos | `test.login.cases.<caso>.expected-error` | Resultado funcional esperado, no sensible |
-| Compra | `test.purchase.products`, `test.checkout.*` | Productos y datos de envío |
+| Sincronización de UI | `inventory.remove-button.text` | Postcondición de agregar un producto |
+| Datos de entrada | `test.purchase.*`, `test.checkout.*` | Productos y datos de envío que usan las acciones |
+| Valores esperados | `inventory.expected.title`, `cart.expected.*`, `checkout.expected.confirmation`, `test.login.cases.<caso>.expected-error` | Lo que la spec dice que debe observarse; los `Then` comparan solo contra estas claves |
+| Credenciales | Variables `TEST_USER_*` y `TEST_LOGIN_CASES_*` | `.env` local o *Secrets* de CI, nunca en este archivo |
 | Evidencia | `evidence.screenshot.*` | Tipo y nombre de capturas en fallos |
 
-### Credenciales locales
-
-El repositorio solo conserva `.env.example`, sin valores. Para desarrollo local:
+**Por qué los esperados van separados de la entrada:** si un `Then` comparara contra el mismo dato que usó el `When`, un defecto que cambiara ambos lados pasaría en verde. Con claves independientes, cualquier esperado se puede alterar desde la línea de comandos para comprobar que la prueba de verdad falla (control negativo):
 
 ```bash
-cp .env.example .env
+./mvnw test -Dheadless=true -Dcucumber.filter.tags="@AC-COMPRA-04" \
+  -Dcart.expected.single-product.count=2
+# Debe fallar en el Then: expected: <2> but was: <1>
 ```
 
-Completar `.env` con valores obtenidos del almacén seguro autorizado. `.gitignore` excluye `.env` y todas sus variantes, salvo la plantilla. El archivo no es cifrado ni constituye un gestor de secretos: evita su versionado accidental, mientras que los permisos del equipo y del sistema operativo siguen siendo necesarios.
+### Credenciales: local y CI
 
-Los nombres de `.env.example` se referencian de forma explícita en `CredentialsProvider`; no se transforman en claves de propiedades. En depuración, el flujo navegable es `step → CredentialsProvider → SecretReader → variable del sistema/.env`. En CI no se crea `.env`: el gestor de credenciales inyecta directamente las mismas variables de entorno.
+**Local.** El repositorio solo conserva `.env.example`, sin valores; la sección [Credenciales de SauceDemo](#credenciales-de-saucedemo-cómo-obtenerlas) explica cómo completarlo. `.gitignore` excluye `.env` y todas sus variantes, salvo la plantilla. El archivo no está cifrado ni es un gestor de secretos: evita su versionado accidental, y los permisos del sistema operativo (`chmod 600 .env`) siguen siendo necesarios.
+
+**GitHub Actions.** En el repositorio, `Settings → Secrets and variables → Actions → New repository secret`, crea un secret por cada variable de `.env.example`, con el mismo nombre y el mismo valor que en tu `.env`. El workflow verifica al inicio que estén los seis y falla con un mensaje claro si falta alguno.
+
+**Jenkins.** Las mismas credenciales se registran en el almacén de credenciales de Jenkins (ver [Jenkins](#jenkins)).
+
+Los nombres de `.env.example` se referencian de forma explícita en `CredentialsProvider`; no se transforman en claves de propiedades. En depuración, el flujo navegable es `step → CredentialsProvider → SecretReader → variable del sistema/.env`. En CI no se crea `.env`: el gestor de credenciales inyecta directamente las mismas variables de entorno, que tienen prioridad sobre `.env`.
 
 ## Requisitos previos
 
@@ -315,6 +427,35 @@ Las opciones se pueden combinar:
   -Dcucumber.filter.tags="@smoke"
 ```
 
+Un criterio de aceptación concreto (cada escenario lleva la etiqueta `@AC-<DOMINIO>-<NN>` de su spec):
+
+```bash
+./mvnw clean test -Dheadless=true -Dcucumber.filter.tags="@AC-LOGIN-02"
+```
+
+Solo las pruebas unitarias de la lógica propia (`src/main/java`), sin navegador:
+
+```bash
+./mvnw test -Dtest='com.demo.config.*Test,com.demo.data.*Test' -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+### Comprobaciones de calidad
+
+Las mismas que corre el CI, ejecutables en local:
+
+```bash
+bash scripts/check-traceability.sh   # CHK-12: cada escenario trazado a una spec aprobada
+bash scripts/check-layers.sh         # CHK-17: reglas de capas (Selenium solo en transport, etc.)
+bash scripts/check-unit-purity.sh    # CHK-15/16: src/main puro y pruebas unitarias aisladas
+
+# CHK-11: pruebas de mutación (umbral 80 %) con la guarda contra el "Skipping project" de PIT
+rm -rf target/pit-reports
+bash -c 'set -o pipefail; ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage 2>&1 | tee pit.log' \
+  && bash scripts/check-mutation-report.sh pit.log
+```
+
+El catálogo completo de comprobaciones (CHK-01…17) y sus comandos está en [`.claude/rules/04-quality-checks.md`](.claude/rules/04-quality-checks.md).
+
 ### Ejecución contra Selenium Grid
 
 Iniciar el hub y el nodo Chrome reales incluidos en este repositorio:
@@ -348,6 +489,7 @@ Después de `./mvnw clean test` se generan:
 - `target/cucumber-report.html`: reporte HTML de Cucumber.
 - `target/surefire-reports/*.xml`: resultados JUnit consumibles por CI.
 - `target/allure-results`: datos de entrada para Allure.
+- `target/pit-reports/index.html`: reporte de mutación, tras ejecutar CHK-11.
 
 Abrir un reporte Allure temporal:
 
@@ -363,21 +505,45 @@ Para comprobar la evidencia durante desarrollo, puede cambiarse temporalmente un
 
 ### GitHub Actions
 
-`.github/workflows/ci.yml` ejecuta la suite en headless en cada `push` y `pull request` a `main` (y manualmente con `workflow_dispatch`). Usa Temurin 17, la caché de Maven y el Chrome preinstalado del runner. Publica como artefactos el HTML de Cucumber, los XML de Surefire y los resultados Allure, incluso si hay fallos.
+`.github/workflows/ci.yml` corre en cada `push` y `pull request` a `main` (y manualmente con `workflow_dispatch`), con permisos mínimos (`contents: read`). Tiene cuatro jobs en paralelo:
 
-Las credenciales se leen de *Secrets* del repositorio (`Settings → Secrets and variables → Actions`) con los mismos nombres de `.env.example`:
+| Job | Qué hace | Secrets |
+|---|---|---|
+| `test` | CHK-12 (trazabilidad) y la suite completa en Chrome headless, sin `@quarantine` | Sí |
+| `e2e-firefox` | Los escenarios E2E en Firefox headless | Sí |
+| `e2e-grid` | Los escenarios E2E contra un Selenium Grid (`selenium/standalone-chrome`), con espera activa a que esté listo | Sí |
+| `mutation` | CHK-17 (capas) con su autoprueba, CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
 
-`TEST_USER_STANDARD_USERNAME`, `TEST_USER_STANDARD_PASSWORD`, `TEST_LOGIN_CASES_LOCKED_USER_USERNAME`, `TEST_LOGIN_CASES_LOCKED_USER_PASSWORD`, `TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME`, `TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD`.
+Cada job publica sus reportes como artefactos aunque falle. Los jobs con secrets los verifican al inicio con `scripts/check-required-secrets.sh`, que solo nombra las variables que faltan.
+
+Las credenciales se cargan como *Secrets* del repositorio (`Settings → Secrets and variables → Actions`), uno por variable de `.env.example` y con el mismo nombre: `TEST_USER_STANDARD_USERNAME`, `TEST_USER_STANDARD_PASSWORD`, `TEST_LOGIN_CASES_LOCKED_USER_USERNAME`, `TEST_LOGIN_CASES_LOCKED_USER_PASSWORD`, `TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME` y `TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD`.
+
+### Ejecución en paralelo
+
+Los escenarios corren en paralelo con 2 hilos (`src/test/resources/junit-platform.properties`), el mismo número de sesiones que admite el nodo del Grid. Es seguro porque PicoContainer crea un `Navegador` por escenario y no hay estado estático mutable. Para depurar en serie:
+
+```bash
+./mvnw clean test -Dcucumber.execution.parallel.enabled=false
+```
 
 ### Jenkins
 
-El `Jenkinsfile` declarativo contiene exactamente el flujo mínimo reproducible:
+El `Jenkinsfile` declarativo está listo para un servidor Jenkins, aunque todavía no se ha ejecutado en uno real. Reproduce los jobs `test` y `mutation` de GitHub Actions:
 
-1. `Checkout` obtiene el commit bajo prueba.
-2. `Test` obtiene tres pares de credenciales mediante `withCredentials`, valida Java/Maven y ejecuta `./mvnw -B -ntp clean test -Dheadless=true`.
-3. `post/always` publica XML de Surefire, resultados Allure y el HTML de Cucumber aun cuando una prueba falle.
+1. `Checkout` del commit bajo prueba.
+2. `Traceability SDD (CHK-12)` y `Capas (CHK-17)`.
+3. `Mutation (CHK-11)`: PIT con la guarda de reporte, sin credenciales.
+4. `Test`: la suite sin `@quarantine`; es la **única** etapa que recibe credenciales.
+5. `post`: publica JUnit y Allure, archiva los reportes y limpia el espacio de trabajo.
 
-El agente de Jenkins necesita JDK 17, Maven y Chrome. Jenkins requiere los plugins Pipeline, Credentials Binding, JUnit y Allure; el servidor también debe tener configurada una instalación de Allure Commandline. El almacén de Jenkins debe proporcionar credenciales de tipo usuario/contraseña con los IDs `saucedemo-standard-user`, `saucedemo-locked-user` y `saucedemo-invalid-login`.
+Incluye límites de tiempo globales y por etapa, descarte de builds antiguos, builds no concurrentes y `set -euo pipefail` en cada bloque de shell.
+
+**Para configurarlo:**
+
+1. **Plugins:** Pipeline (Declarative), Credentials Binding, Timestamper, JUnit, Workspace Cleanup y Allure (con una instalación de Allure Commandline en *Global Tool Configuration*).
+2. **Herramientas** (`Manage Jenkins → Tools`): un JDK llamado `jdk-17` (Temurin 17). Maven no hace falta: lo trae `./mvnw`.
+3. **Agente:** Linux con bash, git y Google Chrome.
+4. **Credenciales** (`Manage Jenkins → Credentials`): seis de tipo **Secret text**. El ID de cada una es exactamente el nombre de la variable en `.env.example`, y su valor es el mismo que en tu `.env` (ver [Credenciales de SauceDemo](#credenciales-de-saucedemo-cómo-obtenerlas)).
 
 ### Selenium Grid con Docker Compose
 
@@ -422,6 +588,10 @@ Lista de control antes de integrar cambios:
 ```
 
 ## Solución de problemas
+
+**`La variable sensible obligatoria '...' no tiene valor`.** Falta esa variable en `.env` (local) o en los *Secrets* (CI), o está vacía. Revisa la sección [Credenciales de SauceDemo](#credenciales-de-saucedemo-cómo-obtenerlas).
+
+**El login falla con credenciales que parecen correctas.** Vuelve a copiarlas desde [saucedemo.com](https://www.saucedemo.com): pueden haber cambiado. Comprueba también que no haya espacios ni comillas sobrantes en `.env`.
 
 **Selenium Manager no puede obtener un driver.** Verificar salida a Internet, navegador instalado y permisos de la caché de Selenium. No solucionar el problema agregando una ruta fija al driver.
 
