@@ -12,6 +12,9 @@
 # git grep (código > 1, p. ej. una raíz que no es un repositorio) también es 1.
 # Existe como script para que GitHub Actions y Jenkins ejecuten lo mismo sin
 # reescribir las expresiones regulares en YAML y en Groovy.
+# CHK-16 incluye transport y actions (ADR-002, "Cambios propuestos"): las
+# unitarias tampoco pueden nombrar las capas nuevas. Hasta que la Regla 04
+# recoja el cambio, este comando es más estricto que el de la regla.
 set -euo pipefail
 export LC_ALL=C
 
@@ -38,7 +41,7 @@ check_grep() {
 }
 
 check_grep CHK-15 -nE 'System\.(getenv|getProperty)|java\.nio\.file|java\.io\.File|getResource|org\.openqa|io\.cucumber|org\.junit' -- src/main/java
-check_grep CHK-16 -nE 'org\.openqa|io\.cucumber|com\.demo\.(utils|pages|steps|hooks|runners)|System\.getenv|"\.env"' -- src/test/java/com/demo/config src/test/java/com/demo/data
+check_grep CHK-16 -nE 'org\.openqa|io\.cucumber|com\.demo\.(utils|transport|pages|actions|steps|hooks|runners)|System\.getenv|"\.env"' -- src/test/java/com/demo/config src/test/java/com/demo/data
 
 listing="$(git ls-files src/test/java/com/demo/config src/test/java/com/demo/data)"
 extra="$(printf '%s\n' "$listing" | grep -v -e 'Test\.java$' -e '^$' || true)"

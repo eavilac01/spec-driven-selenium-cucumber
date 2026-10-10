@@ -19,6 +19,15 @@ pipeline {
             }
         }
 
+        // CHK-17 (ADR-002, D6): fuera de withCredentials, sin secrets ni navegador.
+        // La autoprueba crea su repositorio en un temporal fuera del workspace.
+        stage('Capas (CHK-17)') {
+            steps {
+                sh 'bash scripts/tests/check-layers-test.sh'
+                sh 'git --version && bash scripts/check-layers.sh'
+            }
+        }
+
         // CHK-11 (ADR-001, D5): fuera de withCredentials, sin secrets ni navegador.
         // Va antes de 'Test' porque `clean test` borra target/pit-reports.
         stage('Mutation (CHK-11)') {

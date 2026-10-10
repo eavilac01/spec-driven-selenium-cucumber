@@ -63,7 +63,10 @@ jobs:
             target/allure-results/
           if-no-files-found: warn
 
-  # CHK-11 (ADR-001, D5): en paralelo a `test`, sin secrets ni navegador.
+  # CHK-11 (ADR-001, D5) y CHK-17 (ADR-002, D6): en paralelo a `test`, sin
+  # secrets ni navegador. CHK-17 va aquí y no junto a CHK-12 porque `test`
+  # expone los secrets TEST_* a todos sus pasos (env a nivel de job), y ni la
+  # autoprueba ni el script los necesitan.
   mutation:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -71,6 +74,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Capas, autoprueba (CHK-17)
+        run: bash scripts/tests/check-layers-test.sh
+
+      - name: Capas (CHK-17)
+        run: |
+          git --version
+          bash scripts/check-layers.sh
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
