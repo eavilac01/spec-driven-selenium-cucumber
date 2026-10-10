@@ -166,10 +166,10 @@ jobs:
             target/allure-results/
           if-no-files-found: warn
 
-  # CHK-11 (ADR-001, D5) y CHK-17 (ADR-002, D6): en paralelo a `test`, sin
-  # secrets ni navegador. CHK-17 va aquí y no junto a CHK-12 porque `test`
-  # expone los secrets TEST_* a todos sus pasos (env a nivel de job), y ni la
-  # autoprueba ni el script los necesitan.
+  # CHK-11 (ADR-001, D5), CHK-14 (cuarentena) y CHK-17 (ADR-002, D6): en
+  # paralelo a `test`, sin secrets ni navegador. CHK-14 y CHK-17 van aquí y no
+  # junto a CHK-12 porque `test` expone los secrets TEST_* a todos sus pasos
+  # (env a nivel de job), y ni las autopruebas ni los scripts los necesitan.
   mutation:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -185,6 +185,14 @@ jobs:
         run: |
           git --version
           bash scripts/check-layers.sh
+
+      - name: Cuarentena, autoprueba (CHK-14)
+        run: bash scripts/tests/check-quarantine-test.sh
+
+      # Fecha del runner (UTC): una fila con el límite o la revisión vencidos
+      # rompe el CI aunque nadie haya tocado el código.
+      - name: Cuarentena reglada (CHK-14)
+        run: bash scripts/check-quarantine.sh
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
@@ -211,4 +219,106 @@ jobs:
         with:
           name: mutation-report
           path: target/pit-reports/
+          if-no-files-found: warn
+
+  # CHK-14: los escenarios @quarantine, solo para informar. `continue-on-error`
+  # hace que su fallo no rompa el workflow: un `inestable` puede fallar (es el
+  # motivo de su cuarentena) y un `defecto-sut` falla mientras el sistema bajo
+  # prueba no se corrija. Lo que se vigila es lo contrario: si alguno PASA, el
+  # resumen emite un aviso, porque un `defecto-sut` que pasa indica que el SUT
+  # cambió y hay que revisar la spec y la fila de docs/quarantine.md.
+  # Sin reintentos (CHK-02): una sola ejecución.
+  quarantine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    env:
+      TEST_USER_STANDARD_USERNAME: ${{ secrets.TEST_USER_STANDARD_USERNAME }}
+      TEST_USER_STANDARD_PASSWORD: ${{ secrets.TEST_USER_STANDARD_PASSWORD }}
+      TEST_LOGIN_CASES_LOCKED_USER_USERNAME: ${{ secrets.TEST_LOGIN_CASES_LOCKED_USER_USERNAME }}
+      TEST_LOGIN_CASES_LOCKED_USER_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_LOCKED_USER_PASSWORD }}
+      TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME }}
+      TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Sin escenarios en cuarentena no se arranca Maven ni el navegador: se
+      # informa y el resto de pasos se omite. Un rc de git grep >= 2 es un
+      # error, no "sin coincidencias".
+      - name: Detectar escenarios en cuarentena
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          rc=0
+          git grep -qE '(^|[[:space:]])@quarantine([[:space:]]|$)' -- src/test/resources/features || rc=$?
+          case "$rc" in
+            0) echo "present=true" >> "$GITHUB_OUTPUT" ;;
+            1) echo "present=false" >> "$GITHUB_OUTPUT"
+               echo "Sin escenarios con @quarantine: no hay nada que ejecutar." >> "$GITHUB_STEP_SUMMARY" ;;
+            *) echo "::error::git grep terminó con $rc"; exit 2 ;;
+          esac
+
+      - name: Set up JDK 17
+        if: steps.detect.outputs.present == 'true'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Verify required secrets
+        if: steps.detect.outputs.present == 'true'
+        run: bash scripts/check-required-secrets.sh
+
+      - name: Run @quarantine (headless Chrome)
+        id: run
+        if: steps.detect.outputs.present == 'true'
+        run: >-
+          ./mvnw -B -ntp clean test
+          -Dtest=RunnerTest -Dheadless=true
+          -Dcucumber.filter.tags="@quarantine"
+
+      # Solo cuenta resultados (atributos de <testsuite>); el detalle por
+      # escenario está en el artefacto.
+      - name: Resumen de cuarentena
+        if: always() && steps.detect.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          xml=target/surefire-reports/TEST-com.demo.runners.RunnerTest.xml
+          if [ ! -f "$xml" ]; then
+            echo "::error::La ejecución de @quarantine no produjo $xml"
+            exit 1
+          fi
+          suite="$(grep -o -m1 '<testsuite [^>]*>' "$xml")"
+          attr() { printf '%s\n' "$suite" | grep -oE " $1=\"[0-9]+\"" | grep -oE '[0-9]+'; }
+          tests="$(attr tests)"; failures="$(attr failures)"; errors="$(attr errors)"; skipped="$(attr skipped)"
+          # Cucumber cuenta como skipped los escenarios que el filtro excluye.
+          run=$((tests - skipped))
+          passed=$((run - failures - errors))
+          {
+            echo "### Escenarios en cuarentena (CHK-14)"
+            echo "| Ejecutados | Pasaron | Fallaron | Errores |"
+            echo "|---|---|---|---|"
+            echo "| $run | $passed | $failures | $errors |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$run" -eq 0 ]; then
+            echo "::warning::No se ejecutó ningún escenario @quarantine."
+          fi
+          if [ "$passed" -gt 0 ]; then
+            echo "::warning::$passed escenario(s) en cuarentena pasaron: revisar docs/quarantine.md. Un defecto-sut que pasa indica que el SUT cambió (revisar la spec); un inestable no sale de la cuarentena con un verde aislado."
+          fi
+
+      - name: Upload quarantine reports
+        if: always() && steps.detect.outputs.present == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: quarantine-reports
+          path: |
+            target/cucumber-report.html
+            target/surefire-reports/
+            target/allure-results/
           if-no-files-found: warn
