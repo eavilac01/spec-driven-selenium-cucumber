@@ -1,4 +1,4 @@
-package com.demo.utils;
+package com.demo.transport;
 
 import java.net.MalformedURLException;
 import java.net.URI;
@@ -11,22 +11,14 @@ import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.remote.RemoteWebDriver;
+import com.demo.utils.ConfigReader;
 
-public final class DriverFactory {
-
-    private static final ThreadLocal<WebDriver> DRIVER = new ThreadLocal<>();
+final class DriverFactory {
 
     private DriverFactory() {
     }
 
-    /**
-     * ThreadLocal aísla el navegador de cada escenario cuando Cucumber se ejecuta en paralelo.
-     */
-    public static void initDriver() {
-        if (DRIVER.get() != null) {
-            throw new IllegalStateException("Ya existe un WebDriver para el hilo actual");
-        }
-
+    static WebDriver crear() {
         String browser = ConfigReader.getRequired("browser")
                 .trim()
                 .toLowerCase(Locale.ROOT);
@@ -44,26 +36,7 @@ public final class DriverFactory {
         if (!headless) {
             driver.manage().window().maximize();
         }
-        DRIVER.set(driver);
-    }
-
-    public static WebDriver getDriver() {
-        WebDriver driver = DRIVER.get();
-        if (driver == null) {
-            throw new IllegalStateException("El WebDriver no fue inicializado para el hilo actual");
-        }
         return driver;
-    }
-
-    public static void quitDriver() {
-        WebDriver driver = DRIVER.get();
-        try {
-            if (driver != null) {
-                driver.quit();
-            }
-        } finally {
-            DRIVER.remove();
-        }
     }
 
     private static WebDriver createChromeDriver(String remoteUrl, boolean headless) {

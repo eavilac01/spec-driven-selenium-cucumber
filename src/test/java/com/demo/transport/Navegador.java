@@ -1,12 +1,13 @@
-package com.demo.pages;
+package com.demo.transport;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebDriverException;
 import org.openqa.selenium.WebElement;
@@ -17,7 +18,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.demo.utils.ConfigReader;
 
-public abstract class BasePage {
+/**
+ * Transporte del escenario: único dueño del WebDriver y del WebDriverWait (ADR-002, D1).
+ * PicoContainer crea una instancia por escenario y la comparte entre los hooks y las páginas.
+ * Su API pública recibe solo By y tipos de Java, y nunca devuelve tipos de Selenium.
+ * Ningún mensaje ni log incluye el texto escrito, que puede ser una contraseña.
+ */
+public final class Navegador {
 
     private static final Duration TIEMPO_MAXIMO_ESPERA =
             Duration.ofSeconds(ConfigReader.getPositiveInt("explicit.wait.seconds"));
@@ -30,43 +37,131 @@ public abstract class BasePage {
             elemento.dispatchEvent(new Event('change', { bubbles: true }));
             """;
 
-    protected final WebDriver driver;
-    protected final WebDriverWait wait;
-    protected final Logger logger;
+    private final Logger logger = LoggerFactory.getLogger(Navegador.class);
+    private WebDriver driver;
+    private WebDriverWait wait;
 
-    protected BasePage(WebDriver driver) {
-        this.driver = Objects.requireNonNull(driver, "El WebDriver de la página no puede ser nulo");
-        this.wait = new WebDriverWait(driver, TIEMPO_MAXIMO_ESPERA);
-        this.logger = LoggerFactory.getLogger(getClass());
+    public Navegador() {
     }
 
-    protected WebElement esperarVisible(By localizador) {
-        return wait.until(ExpectedConditions.visibilityOfElementLocated(localizador));
+    // --- Ciclo de vida (solo hooks) ---
+
+    public void iniciar() {
+        if (driver != null) {
+            throw new IllegalStateException("Ya existe un WebDriver para el escenario actual");
+        }
+        driver = DriverFactory.crear();
+        wait = new WebDriverWait(driver, TIEMPO_MAXIMO_ESPERA);
     }
 
-    protected void click(By localizador) {
+    public byte[] capturarPantalla() {
+        verificarIniciado();
+        return ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
+    }
+
+    public void cerrar() {
+        WebDriver actual = driver;
+        try {
+            if (actual != null) {
+                actual.quit();
+            }
+        } finally {
+            driver = null;
+            wait = null;
+        }
+    }
+
+    // --- Navegación ---
+
+    public void abrir(String url) {
+        verificarIniciado();
+        driver.navigate().to(url);
+    }
+
+    public void esperarUrlContiene(String fragmentoUrl) {
+        verificarIniciado();
+        wait.until(ExpectedConditions.urlContains(fragmentoUrl));
+    }
+
+    // --- Interacción con postcondición ---
+
+    public void click(By localizador) {
+        verificarIniciado();
         wait.until(ExpectedConditions.elementToBeClickable(localizador)).click();
     }
 
-    protected void clickYEsperarTexto(By localizador, String textoEsperado) {
+    public void clickYEsperarTexto(By localizador, String textoEsperado) {
+        verificarIniciado();
         clickHastaCumplir(localizador, ExpectedConditions.textToBePresentInElementLocated(
                 localizador,
                 textoEsperado));
     }
 
-    protected void clickYEsperarUrlContiene(By localizador, String fragmentoUrl) {
+    public void clickYEsperarUrlContiene(By localizador, String fragmentoUrl) {
+        verificarIniciado();
         clickHastaCumplir(localizador, ExpectedConditions.urlContains(fragmentoUrl));
     }
 
-    protected void escribir(By localizador, String texto) {
-        WebElement elemento = esperarVisible(localizador);
+    public void escribir(By localizador, String texto) {
+        verificarIniciado();
+        WebElement elemento = elementoVisible(localizador);
         elemento.clear();
         elemento.sendKeys(texto);
         esperarValorEstable(localizador, texto);
     }
 
-    protected String obtenerTexto(By localizador) {
-        return esperarVisible(localizador).getText();
+    public void desplazarA(By localizador) {
+        verificarIniciado();
+        WebElement elemento = elementoVisible(localizador);
+        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block: 'center'});", elemento);
+    }
+
+    // --- Lectura ---
+
+    public void esperarVisible(By localizador) {
+        verificarIniciado();
+        elementoVisible(localizador);
+    }
+
+    public String texto(By localizador) {
+        verificarIniciado();
+        return elementoVisible(localizador).getText();
+    }
+
+    public List<String> textos(By localizador) {
+        verificarIniciado();
+        return wait.until(ExpectedConditions.visibilityOfAllElementsLocatedBy(localizador)).stream()
+                .map(WebElement::getText)
+                .toList();
+    }
+
+    public boolean esVisible(By localizador) {
+        verificarIniciado();
+        try {
+            List<WebElement> elementos = driver.findElements(localizador);
+            return !elementos.isEmpty() && elementos.get(0).isDisplayed();
+        } catch (WebDriverException exception) {
+            logger.debug("El elemento {} no está visible", localizador, exception);
+            return false;
+        }
+    }
+
+    public void esperarInvisible(By localizador) {
+        verificarIniciado();
+        wait.until(ExpectedConditions.invisibilityOfElementLocated(localizador));
+    }
+
+    // --- Internos ---
+
+    private void verificarIniciado() {
+        if (driver == null) {
+            throw new IllegalStateException(
+                    "El navegador aún no fue iniciado para el escenario: llama a iniciar() antes de usarlo");
+        }
+    }
+
+    private WebElement elementoVisible(By localizador) {
+        return wait.until(ExpectedConditions.visibilityOfElementLocated(localizador));
     }
 
     private void clickHastaCumplir(By localizador, ExpectedCondition<Boolean> postcondicion) {
@@ -122,36 +217,5 @@ public abstract class BasePage {
                     textoEsperado);
             return false;
         });
-    }
-
-    protected boolean esVisible(By localizador) {
-        try {
-            List<WebElement> elementos = driver.findElements(localizador);
-            return !elementos.isEmpty() && elementos.get(0).isDisplayed();
-        } catch (WebDriverException exception) {
-            logger.debug("El elemento {} no está visible", localizador, exception);
-            return false;
-        }
-    }
-
-    protected void esperarInvisibilidad(By localizador) {
-        wait.until(ExpectedConditions.invisibilityOfElementLocated(localizador));
-    }
-
-    protected List<WebElement> obtenerTodos(By localizador) {
-        return wait.until(ExpectedConditions.visibilityOfAllElementsLocatedBy(localizador));
-    }
-
-    protected void esperarUrlContiene(String fragmentoUrl) {
-        wait.until(ExpectedConditions.urlContains(fragmentoUrl));
-    }
-
-    protected void scrollA(By localizador) {
-        WebElement elemento = esperarVisible(localizador);
-        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block: 'center'});", elemento);
-    }
-
-    protected void abrirUrl(String url) {
-        driver.navigate().to(url);
     }
 }

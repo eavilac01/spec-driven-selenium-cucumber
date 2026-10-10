@@ -1,11 +1,7 @@
 package com.demo.hooks;
 
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.TakesScreenshot;
-
-import com.demo.utils.DriverFactory;
+import com.demo.transport.Navegador;
 import com.demo.utils.ConfigReader;
-import com.demo.utils.TestContext;
 
 import io.cucumber.java.After;
 import io.cucumber.java.AfterStep;
@@ -15,22 +11,21 @@ import io.cucumber.java.Scenario;
 @SuppressWarnings("unused") // Cucumber invoca esta clase y sus hooks mediante reflexión.
 public final class Hooks {
 
-    private final TestContext testContext;
+    private final Navegador navegador;
 
-    public Hooks(TestContext testContext) {
-        this.testContext = testContext;
+    public Hooks(Navegador navegador) {
+        this.navegador = navegador;
     }
 
     @Before
     public void iniciarNavegador() {
-        DriverFactory.initDriver();
-        testContext.setDriver(DriverFactory.getDriver());
+        navegador.iniciar();
     }
 
     @AfterStep
     public void adjuntarEvidenciaSiFalla(Scenario scenario) {
         if (scenario.isFailed()) {
-            byte[] captura = ((TakesScreenshot) testContext.getDriver()).getScreenshotAs(OutputType.BYTES);
+            byte[] captura = navegador.capturarPantalla();
             scenario.attach(
                     captura,
                     ConfigReader.getRequired("evidence.screenshot.media-type"),
@@ -40,6 +35,6 @@ public final class Hooks {
 
     @After
     public void cerrarNavegador() {
-        DriverFactory.quitDriver();
+        navegador.cerrar();
     }
 }

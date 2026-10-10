@@ -1,49 +1,41 @@
 package com.demo.pages;
 
-import com.demo.utils.TestContext;
-
 /**
- * Punto único de acceso a los Page Objects del escenario.
- * PicoContainer crea una instancia por escenario y la comparte entre todas las clases de steps,
- * de modo que cada página se instancia una sola vez y siempre con el WebDriver del escenario actual.
+ * Punto único de acceso a los Page Objects del escenario (se retira en el paso 2 del ADR-002).
+ * PicoContainer crea una instancia por escenario y también las páginas, que comparten el
+ * {@code Navegador} del escenario actual.
  */
 public final class PageManager {
 
-    private final TestContext testContext;
-    private LoginPage loginPage;
-    private InventoryPage inventoryPage;
-    private CartPage cartPage;
-    private CheckoutPage checkoutPage;
+    private final LoginPage loginPage;
+    private final InventoryPage inventoryPage;
+    private final CartPage cartPage;
+    private final CheckoutPage checkoutPage;
 
-    public PageManager(TestContext testContext) {
-        this.testContext = testContext;
+    public PageManager(
+            LoginPage loginPage,
+            InventoryPage inventoryPage,
+            CartPage cartPage,
+            CheckoutPage checkoutPage) {
+        this.loginPage = loginPage;
+        this.inventoryPage = inventoryPage;
+        this.cartPage = cartPage;
+        this.checkoutPage = checkoutPage;
     }
 
     public LoginPage loginPage() {
-        if (loginPage == null) {
-            loginPage = new LoginPage(testContext.getDriver());
-        }
         return loginPage;
     }
 
     public InventoryPage inventoryPage() {
-        if (inventoryPage == null) {
-            inventoryPage = new InventoryPage(testContext.getDriver());
-        }
         return inventoryPage;
     }
 
     public CartPage cartPage() {
-        if (cartPage == null) {
-            cartPage = new CartPage(testContext.getDriver());
-        }
         return cartPage;
     }
 
     public CheckoutPage checkoutPage() {
-        if (checkoutPage == null) {
-            checkoutPage = new CheckoutPage(testContext.getDriver());
-        }
         return checkoutPage;
     }
 }
