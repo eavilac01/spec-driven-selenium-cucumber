@@ -39,24 +39,127 @@ jobs:
           cache: maven
 
       - name: Verify required secrets
-        run: |
-          missing=0
-          for name in $(grep -E '^[A-Z_]+=' .env.example | cut -d= -f1); do
-            if [ -z "${!name}" ]; then
-              echo "::error title=Secret faltante::Configura '$name' en Settings > Secrets and variables > Actions"
-              missing=1
-            fi
-          done
-          exit $missing
+        run: bash scripts/check-required-secrets.sh
 
+      # CHK-08: suite completa (unitarias y E2E) sin los escenarios en cuarentena.
       - name: Run tests (headless Chrome)
-        run: ./mvnw -B -ntp clean test -Dheadless=true
+        run: ./mvnw -B -ntp clean test -Dheadless=true -Dcucumber.filter.tags="not @quarantine"
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: test-reports
+          path: |
+            target/cucumber-report.html
+            target/surefire-reports/
+            target/allure-results/
+          if-no-files-found: warn
+
+  # ADR-002, R-6: ejercita la rama de Firefox de DriverFactory. Solo la suite
+  # E2E (RunnerTest): las unitarias ya corren en `test`. Sin
+  # -Dsurefire.failIfNoSpecifiedTests=false a propósito: si RunnerTest
+  # desaparece, el job falla en vez de quedar en verde sin pruebas.
+  e2e-firefox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TEST_USER_STANDARD_USERNAME: ${{ secrets.TEST_USER_STANDARD_USERNAME }}
+      TEST_USER_STANDARD_PASSWORD: ${{ secrets.TEST_USER_STANDARD_PASSWORD }}
+      TEST_LOGIN_CASES_LOCKED_USER_USERNAME: ${{ secrets.TEST_LOGIN_CASES_LOCKED_USER_USERNAME }}
+      TEST_LOGIN_CASES_LOCKED_USER_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_LOCKED_USER_PASSWORD }}
+      TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME }}
+      TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Verify required secrets
+        run: bash scripts/check-required-secrets.sh
+
+      # Firefox viene preinstalado en ubuntu-latest; Selenium Manager resuelve geckodriver.
+      - name: Firefox version
+        run: firefox --version
+
+      - name: Run E2E (headless Firefox)
+        run: >-
+          ./mvnw -B -ntp clean test
+          -Dtest=RunnerTest
+          -Dbrowser=firefox -Dheadless=true
+          -Dcucumber.filter.tags="not @quarantine"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-firefox
+          path: |
+            target/cucumber-report.html
+            target/surefire-reports/
+            target/allure-results/
+          if-no-files-found: warn
+
+  # ADR-002, R-6: ejercita la rama RemoteWebDriver contra un Grid real. La
+  # versión de la imagen coincide con selenium.version del pom y con
+  # docker-compose.yml; SE_NODE_MAX_SESSIONS = paralelismo de Cucumber.
+  e2e-grid:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TEST_USER_STANDARD_USERNAME: ${{ secrets.TEST_USER_STANDARD_USERNAME }}
+      TEST_USER_STANDARD_PASSWORD: ${{ secrets.TEST_USER_STANDARD_PASSWORD }}
+      TEST_LOGIN_CASES_LOCKED_USER_USERNAME: ${{ secrets.TEST_LOGIN_CASES_LOCKED_USER_USERNAME }}
+      TEST_LOGIN_CASES_LOCKED_USER_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_LOCKED_USER_PASSWORD }}
+      TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME }}
+      TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD }}
+    services:
+      selenium:
+        image: selenium/standalone-chrome:4.45.0
+        ports:
+          - 4444:4444
+        options: --shm-size=2g
+        env:
+          SE_NODE_MAX_SESSIONS: 2
+          SE_NODE_OVERRIDE_MAX_SESSIONS: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Verify required secrets
+        run: bash scripts/check-required-secrets.sh
+
+      # Sondeo de /status con plazo: si el Grid no queda listo, el job falla.
+      - name: Wait for Selenium Grid
+        run: bash scripts/wait-for-grid.sh http://localhost:4444 120
+
+      - name: Run E2E (Selenium Grid, Chrome)
+        run: >-
+          ./mvnw -B -ntp clean test
+          -Dtest=RunnerTest
+          -Dheadless=true -Dremote.url=http://localhost:4444
+          -Dcucumber.filter.tags="not @quarantine"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-grid
           path: |
             target/cucumber-report.html
             target/surefire-reports/
