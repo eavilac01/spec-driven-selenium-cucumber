@@ -9,8 +9,10 @@ La **spec es la fuente de verdad**. Las features y el código se derivan de ella
 | 1. Spec | Objetivo, reglas de negocio, criterios de aceptación (AC) con ID | `docs/specs/<dominio>.md` | `qa-test-designer` | **Usuario** |
 | 2. Diseño | ADR, solo si la spec exige estructura nueva | `docs/adr/NNN-*.md` | `qa-automation-architect` | Coordinador |
 | 3. Feature | Escenarios ejecutables con `@AC-` y `@tec-` | `src/test/resources/features/<dominio>.feature` | `qa-test-designer` | `qa-test-verifier` + CHK-12 |
-| 4. Acciones y steps | Vocabulario de negocio que ejecuta la feature. La lógica pura de esta capa (configuración, secretos, datos) vive en `src/main/java` (ADR-001) | `com.demo.actions`, `com.demo.steps`; `com.demo.config`, `com.demo.data` | `qa-automation-engineer` | `qa-test-verifier` |
+| 4. Acciones y steps | Vocabulario de negocio que ejecuta la feature. La lógica pura de esta capa (configuración, secretos, datos) vive en `src/main/java` (ADR-001) | `com.demo.actions`, `com.demo.steps`; `com.demo.config`, `com.demo.data`; `com.demo.utils` (fachadas de E/S y estado del escenario) | `qa-automation-engineer` | `qa-test-verifier` |
 | 5. Páginas y transporte | Interacción con la interfaz | `com.demo.pages`, `com.demo.transport` | `qa-automation-engineer` | `qa-test-verifier` |
+
+Las dependencias entre paquetes las fija el ADR-002 (D4, comprobadas por CHK-17). Los niveles SDD de esta tabla no son las capas del arquitecto.
 
 ## Reglas
 

@@ -28,8 +28,8 @@ Comprobaciones deterministas que los agentes citan por ID. Una CHK en rojo es un
 git grep -nP "Thread\.sleep|TimeUnit\.[A-Z]+\.sleep|implicitlyWait\((?!Duration\.ZERO)" -- src
 # CHK-02
 git grep -nE "rerunFailingTestsCount|rerun:" -- pom.xml src .github Jenkinsfile
-# CHK-03
-git grep -n "import org.openqa.selenium" -- src/test/java/com/demo/steps src/test/java/com/demo/actions
+# CHK-03 (detecta también `import static` y nombres calificados)
+git grep -nE 'org\.openqa' -- src/test/java/com/demo/steps src/test/java/com/demo/actions
 # CHK-04
 git grep -niE "\b(clic|click|botón|campo|input|xpath|css|selector)\b" -- src/test/resources/features
 # CHK-05

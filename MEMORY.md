@@ -41,8 +41,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 
 ## Próximos pasos
 1. Responder las preguntas Q-* de las specs (usuario).
-2. P2 de CI: `permissions: contents: read` en el workflow; Jenkinsfile sin validar (no hay Jenkins local).
-3. ADR-002: capa de transporte y de acciones de negocio (`qa-automation-architect`).
+2. P2 de CI: Jenkinsfile sin validar en un Jenkins real; stage `Test` sin timeout; filtro `not @quarantine` cuando exista la cuarentena. (`permissions: contents: read` hecho en `6c6b95b`, CI en verde.)
+3. ADR-002 aceptado (2026-10-09; paso 0 aplicado): 1 `Navegador` en `transport` (engineer) → 2 `actions` → 3 CHK-17 `check-layers.sh` + autoprueba (devops) → 4 verifier → 5 `BrowserSettings` en `src/main`. Los cambios a reglas y agentes de cada paso se aplican al cerrarlo.
 4. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05).
 5. Con las Q-* respondidas, cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.
 6. Paralelismo, solo después de confirmar la independencia de los escenarios.
