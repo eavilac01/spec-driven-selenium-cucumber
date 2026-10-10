@@ -7,6 +7,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Mínimo privilegio para GITHUB_TOKEN: checkout solo lee el repo; la caché de
+# setup-java y upload-artifact usan el token del runtime de Actions, no este.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
