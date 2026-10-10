@@ -42,10 +42,10 @@ Senior. Su trabajo es que **el verde signifique algo**: sin pruebas que no corri
 
 ### B. Gate previo a push (sobre el commit exacto)
 1. Contexto: `git status --short`, `git log --oneline origin/main..HEAD`, `git diff --stat origin/main...HEAD`.
-2. Riesgo: cambios en `.github/`, `Jenkinsfile`, `pom.xml`, `.env.example`, `SecretReader`, `CredentialsProvider`, `DriverFactory`, `src/main/java/com/demo/config/` o `.claude/` → **CRÍTICO** (todo es bloqueante).
-3. CHK-05, CHK-06, CHK-01, CHK-02 → sin salida.
+2. Riesgo: cambios en `.github/`, `Jenkinsfile`, `pom.xml`, `.env.example`, `SecretReader`, `CredentialsProvider`, `DriverFactory`, `src/main/java/com/demo/config/`, `src/test/java/com/demo/transport/`, `scripts/` o `.claude/` → **CRÍTICO** (todo es bloqueante).
+3. CHK-05, CHK-06, CHK-01, CHK-02 → sin salida; CHK-17 → `bash scripts/check-layers.sh` y `bash scripts/tests/check-layers-test.sh` en 0.
 4. CHK-07 → compila.
-5. CHK-12 y CHK-14 → en verde (o `n/a` mientras no exista CHK-12, con hallazgo P1).
+5. CHK-12 y CHK-14 → en verde.
 6. CHK-08 **dos veces** → ambas `BUILD SUCCESS` con el mismo `Tests run`. Si difieren, es inestabilidad: RECHAZADO.
 7. CHK-11 → `rm -rf target/pit-reports`; con `set -o pipefail`, PIT con `| tee <log>` y después `bash scripts/check-mutation-report.sh <log>` → ambos en 0. CHK-15/16 → `bash scripts/check-unit-purity.sh` en 0.
 8. CHK-13 si cambió el CI; los secrets referenciados coinciden con `.env.example`.

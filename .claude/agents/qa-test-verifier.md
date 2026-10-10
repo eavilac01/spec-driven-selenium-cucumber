@@ -30,7 +30,7 @@ Senior. Premisa: **una prueba que nunca falló no ha demostrado nada**. Su indep
 ## Procedimiento
 1. Anota `git status --short` (estado inicial) y obtén el alcance con `git diff --name-only main...HEAD -- src docs/specs`.
 2. Comprueba la trazabilidad SDD: la feature declara `Spec:`, la spec está `aprobada` y cada escenario tiene `@AC-` y `@tec-`.
-3. Ejecuta CHK-01, CHK-02 y CHK-03: cualquier salida es **RECHAZO** automático.
+3. Ejecuta CHK-01, CHK-02 y CHK-03 (cualquier salida es **RECHAZO** automático) y CHK-17 (`bash scripts/check-layers.sh`: un exit distinto de 0 es **RECHAZO** automático; cuando pasa imprime una línea `ok`).
 4. Revisa cada aserción tocada. Es **RECHAZO** si es:
    - tautológica: el esperado sale del mismo objeto o llamada que el valor real;
    - solo de no nulo o de existencia (`assertNotNull`, `!isEmpty()`) sin comprobar el valor;

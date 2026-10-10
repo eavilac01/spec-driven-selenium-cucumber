@@ -138,11 +138,10 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
   - **Riesgo residual aceptado:** firmas partidas en varias líneas, reflexión y código dentro de cadenas.
 - **Convenciones del script.** Son las de `scripts/check-unit-purity.sh`:
   - `set -euo pipefail` y `LC_ALL=C`;
-  - imprime `REGLA archivo:línea`;
-  - falla cerrado si `git grep` termina con más de 1;
-  - termina con 2 ante un error de uso.
+  - imprime `archivo:línea: R<n>: motivo`;
+  - falla cerrado: si `git grep` termina con más de 1 o escribe en stderr, o ante un error de uso, termina con 2 (D7, *Nota de ejecución*).
 - **Además, el script:**
-  - Busca con `--untracked`, para que el engineer vea una violación antes del commit, porque `git grep` ignora lo no versionado.
+  - Busca en dos pasadas (D7, *Nota de ejecución*). Con `--untracked`, para que el engineer vea una violación antes del commit, porque `git grep` ignora lo no versionado. Y sin él, porque `--untracked` omite los archivos versionados que coinciden con `.gitignore`.
   - **Falla si falta un directorio de capa versionado** (`transport`, `pages`, `actions`, `steps`). Si no, un directorio renombrado pasaría sin salida, y la comprobación fallaría abierta.
   - Excluye `runners` de R6, porque declara el glue como texto.
   - Cuenta los comentarios como texto: un comentario que nombra otra capa incumple la regla y no se trata como falso positivo.
@@ -150,14 +149,19 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
     - Sus Javadoc nombran `SecretReader` y `CredentialsProvider` precisamente para declarar que no los usan (`SecretResolverTest.java:15`, `CredentialsTest.java:10`).
     - El uso real ya lo rechaza CHK-16, porque exigiría importar `com.demo.utils`.
     - Es un falso positivo hallado al probar los comandos, y se corrige aquí, no en el script.
+- **Implementación normativa.** `scripts/check-layers.sh` es la implementación normativa de CHK-17, y D7 transcribe sus comandos.
+  - Si D7 y el script difieren, CHK-17 es lo que ejecuta el script, y la diferencia se corrige con una enmienda de este ADR.
+  - Cambiar una expresión del script exige enmendar D7 en el mismo cambio. Nunca se relaja una regla para que un cambio pase.
 - **Autoprueba versionada** (`scripts/tests/check-layers-test.sh`). Crea un repositorio temporal (`mktemp -d`) con un árbol mínimo válido y exige:
-  - exit 0 sobre ese árbol;
-  - exit 1 con una violación por cada comando de D7, tanto versionada como sin versionar;
-  - exit 1 con un directorio de capa ausente.
+  - exit 0 sobre ese árbol y sobre las casi-violaciones permitidas (por ejemplo, un constructor de acciones con páginas);
+  - exit 1 con al menos una violación por cada comando de D7, tanto versionada como sin versionar, y con una versionada que coincide con `.gitignore`;
+  - exit 1 con cada directorio de capa ausente;
+  - exit 2 con cada error de evaluación de la *Nota de ejecución* de D7.
 
-  Así, una expresión regular rota no deja pasar todo en silencio.
+  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica).
 - **Dónde corren el script y la autoprueba:**
-  - GitHub Actions y Jenkins, antes de la suite, como CHK-12 (`ci.yml:26-27`, `Jenkinsfile:16-18`);
+  - GitHub Actions: job `mutation`, en paralelo a la suite y sin secrets (`ci.yml:66-84`);
+  - Jenkins: etapa `Capas (CHK-17)`, antes de la suite y fuera de `withCredentials` (`Jenkinsfile:22-29`);
   - el gate local de devops;
   - la autoverificación del engineer.
 - **Disparador para reconsiderar ArchUnit:** una evasión real que el texto no detecte, un segundo módulo Maven o más de unos 10 paquetes. Las reglas equivalentes quedan escritas en D7.
@@ -168,13 +172,13 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
 |---|---|---|
 | R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;`; tipos de Selenium (salvo `By`) en firmas públicas del transporte; `By` en firmas públicas de páginas | `noClasses().that().resideOutsideOfPackages("..transport..", "..pages..").should().dependOnClassesThat().resideInAPackage("org.openqa..")`; para `..pages..`, lo mismo con `.and(not(equivalentTo(By.class)))` |
 | R2 | Selenium en `steps` o `actions` (incluida en R1; CHK-03 es su subconjunto rápido) | `noClasses().that().resideInAnyPackage("..steps..", "..actions..").should().dependOnClassesThat().resideInAPackage("org.openqa..")` |
-| R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas públicas | `noClasses().that().resideInAPackage("..steps..").should().dependOnClassesThat().resideInAnyPackage("..pages..", "..transport..")` |
+| R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas públicas, como tipo de retorno o como parámetro (los constructores sí las reciben, D3) | `noClasses().that().resideInAPackage("..steps..").should().dependOnClassesThat().resideInAnyPackage("..pages..", "..transport..")` |
 | R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions` | `noClasses().that().resideInAnyPackage("..transport..", "..pages..", "..actions..").should().dependOnClassesThat().resideInAnyPackage("org.junit..", "io.cucumber..")` |
 | R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase | `noClasses().that().resideOutsideOfPackage("..transport..").should().callMethodWhere(target(owner(assignableTo(SearchContext.class).or(assignableTo(JavascriptExecutor.class)))))` |
 | R6 | Nombrar un paquete fuera de su fila de D4; secretos fuera de `utils` y `steps` (las unitarias, por CHK-16) | `layeredArchitecture().consideringOnlyDependenciesInLayers()` con las filas de D4 (`whereLayer(…).mayOnlyBeAccessedByLayers(…)`) y `slices().matching("com.demo.(*)..").should().beFreeOfCycles()` |
 | R7 | Vocabulario de interfaz en las features | No aplica (Gherkin): CHK-04, sin cambios |
 
-Comandos de CHK-17. Cada uno pasa **sin salida**. Usan `-P`, como CHK-01, y son la especificación del script:
+Comandos de CHK-17, transcritos de `scripts/check-layers.sh` (la implementación normativa, D6). Cada uno pasa **sin salida** y usa `-P`, como CHK-01:
 
 ```bash
 T=src/test/java/com/demo
@@ -186,7 +190,10 @@ git grep --untracked -nP '^\s*public\b.*\b(Web[A-Z]\w*|SearchContext|JavascriptE
 git grep --untracked -nP '^\s*public\b.*\bBy\b' -- "$T/pages"
 # R3: steps sin páginas ni transporte; acciones sin páginas en sus firmas públicas
 git grep --untracked -nP 'com\.demo\.(pages|transport)\b' -- "$T/steps"
+#   … página como tipo de retorno
 git grep --untracked -nP '^\s*public\b[^(]*\b\w+Page\b[^(]*\(' -- "$T/actions"
+#   … página como parámetro (constructores exceptuados)
+git grep --untracked -nP '^\s*public\b(?!\s+\w+\s*\()[^(]*\(.*\b[A-Z]\w*Page\b' -- "$T/actions"
 # R4: JUnit, Cucumber y esperados en su sitio
 git grep --untracked -nP 'org\.junit' -- src ":!$T/steps" ":!$T/runners" ":!$T/config" ":!$T/data"
 git grep --untracked -nP 'io\.cucumber' -- src ":!$T/steps" ":!$T/hooks" ":!$T/runners"
@@ -206,6 +213,24 @@ git grep --untracked -nP '\b(SecretReader|CredentialsProvider)\b' -- src ":!$T/u
 # Directorios de capa presentes (cada uno debe listar al menos un archivo)
 git ls-files "$T/transport" "$T/pages" "$T/actions" "$T/steps"
 ```
+
+**R3 en acciones.** La expresión del tipo de retorno se detiene en el primer `(`, así que no ve `public void usar(LoginPage pagina) {` (P2 del verifier). La de parámetros busca un tipo `*Page` después del `(` de un método público:
+- `(?!\s+\w+\s*\()` excluye los constructores, que sí reciben páginas (D3). Un constructor es el único miembro con un solo identificador entre `public` y `(`; un método lleva además el tipo de retorno.
+- `[A-Z]` exige un nombre de tipo, para no confundirlo con un nombre de variable.
+- Busca hasta el final de la línea, así que una anotación con argumentos no oculta el parámetro. A cambio, una línea con cuerpo que crea una página da un falso positivo, que falla cerrado.
+- Las firmas partidas en varias líneas siguen siendo riesgo residual aceptado (D6, R-5).
+
+**Nota de ejecución** (`scripts/check-layers.sh:10-38`, `:93-118`):
+- **Dos pasadas por comando.** Cada `git grep` corre con `--untracked` (lo no versionado, respetando `.gitignore`) y sin él (los archivos del índice), y los resultados se unen sin duplicados. Motivo: con git 2.53, `--untracked` recorre el árbol de trabajo sin leer el índice y omite los archivos versionados que coinciden con `.gitignore`.
+- **stderr es error.** Con un archivo ilegible, `git grep` imprime "failed to stat" y aun así termina con 0 o 1. Por eso cualquier texto en su stderr da 2.
+- **Códigos de salida:**
+  - 0: sin violaciones;
+  - 1: violaciones, una por línea, como `archivo:línea: R<n>: motivo`. Un directorio de capa sin archivos versionados se imprime como `directorio:0: D6: motivo`: es una violación de la estructura, no un error de la herramienta;
+  - 2: no se pudo evaluar (falla cerrado). Ocurre con argumentos de más, una raíz que no es un directorio o no es la raíz de un repositorio, `git grep` con rc ≥ 2 o con texto en stderr, o un error de `git ls-files`.
+- **21 comprobaciones:**
+  - los 19 `git grep` originales de D7 (`D7-01`…`D7-19` en la autoprueba);
+  - el de R3 para parámetros (`R3-param`);
+  - el `git ls-files` de directorios (`D7-20`).
 
 ### D8. Configuración pura del navegador en `src/main` (paso independiente)
 
@@ -284,10 +309,10 @@ Cada paso deja la suite en verde. Cada paso del engineer pasa por el verifier y 
 
 | Paso | Dueño | Qué | Verde si | Estado |
 |---|---|---|---|---|
-| 0 | Usuario, vía coordinador | Aprueba el ADR y los cambios a reglas y agentes | — | Pendiente |
-| 1 | `qa-automation-engineer` | Transporte (D1, D2): `Navegador`; `DriverFactory` en `transport`, sin `ThreadLocal`; páginas por composición; se retira `BasePage`; `Hooks` y `TestContext` sin Selenium. `PageManager` recibe `Navegador`, y **los steps no cambian** | CHK-01, 03 y 07; CHK-08 ×2 con el mismo `Tests run` que antes del paso; CHK-09 y CHK-10 de regresión en los 7 AC; comandos R1, R4, R5 y R6 de D7 para `transport`, `pages`, `hooks` y `utils`; diff de movimiento. Gate CRÍTICO (`DriverFactory`) | Pendiente |
-| 2 | `qa-automation-engineer` | Acciones (D3): `LoginActions` y `CompraActions`; steps solo con acciones; se retira `PageManager` | Lo mismo que el paso 1, más R3 y las filas de R6 de `actions` y `steps`; sin cambios en `src/test/resources` | Pendiente |
-| 3 | `devops-engineer` | CHK-17 (D6): script y autoprueba; GitHub Actions y Jenkins antes de la suite; gate. Puede prepararse en paralelo a los pasos 1 y 2, pero se conecta al CI cuando HEAD pasa | El script da 0 sobre HEAD; la autoprueba da 0 con todos sus casos negativos en 1; CHK-13 | Pendiente. Prerrequisito: CHK-17 en la Regla 04 |
+| 0 | Usuario, vía coordinador | Aprueba el ADR y los cambios a reglas y agentes | — | Hecho (`4159952`) |
+| 1 | `qa-automation-engineer` | Transporte (D1, D2): `Navegador`; `DriverFactory` en `transport`, sin `ThreadLocal`; páginas por composición; se retira `BasePage`; `Hooks` y `TestContext` sin Selenium. `PageManager` recibe `Navegador`, y **los steps no cambian** | CHK-01, 03 y 07; CHK-08 ×2 con el mismo `Tests run` que antes del paso; CHK-09 y CHK-10 de regresión en los 7 AC; comandos R1, R4, R5 y R6 de D7 para `transport`, `pages`, `hooks` y `utils`; diff de movimiento. Gate CRÍTICO (`DriverFactory`) | Hecho (`0aa3a02`) |
+| 2 | `qa-automation-engineer` | Acciones (D3): `LoginActions` y `CompraActions`; steps solo con acciones; se retira `PageManager` | Lo mismo que el paso 1, más R3 y las filas de R6 de `actions` y `steps`; sin cambios en `src/test/resources` | Hecho (`475651f`) |
+| 3 | `devops-engineer` | CHK-17 (D6): script y autoprueba; GitHub Actions y Jenkins antes de la suite; gate. Puede prepararse en paralelo a los pasos 1 y 2, pero se conecta al CI cuando HEAD pasa | El script da 0 sobre HEAD; la autoprueba da 0 con todos sus casos negativos en 1; CHK-13 | Hecho (`f7f7a13`) |
 | 4 | `qa-test-verifier` | Criterio de verificación completo | APROBADO | Pendiente |
 | 5 | `qa-automation-engineer` | `BrowserSettings` (D8) con pruebas unitarias; `DriverFactory` solo traduce | CHK-07, 08, 15, 16 y 17; CHK-11 ≥ 80 % con la guarda en 0; D6 del ADR-001 sigue en `BUILD FAILURE`; APROBADO del verifier; gate CRÍTICO (`src/main/java/com/demo/config/`) | Pendiente. Independiente de los pasos 2 a 4 |
 
@@ -327,15 +352,41 @@ git diff --stat <base>..HEAD -- src/test/resources
 
 ## Riesgos
 
-Este ADR se escribió sin ejecutar nada: solo se leyeron archivos y se buscó con `git grep` (B-01).
+Este ADR se escribió sin ejecutar nada: solo se leyeron archivos y se buscó con `git grep` (B-01). R-1, R-2, R-4 y R-7 reflejan los pasos 1 a 3 (*Enmiendas*).
 
 | # | Supuesto | Lo confirma | Si es falso |
 |---|---|---|---|
-| R-1 | Pico construye `Navegador`, páginas y acciones de forma transitiva, con una instancia por escenario compartida por `Hooks` y las acciones. Hoy ya lo hace con `TestContext` y `PageManager` | engineer, paso 1: CHK-08 | Falla de forma visible al empezar el escenario. Se conserva una fábrica por escenario al estilo `PageManager`, por enmienda |
-| R-2 | Mover `BasePage.java:72-125` sin cambios conserva la estabilidad en Chrome y React | verifier: diff de movimiento y CHK-09; devops: CHK-08 ×2 | Se revierte el paso y se diagnostica; nunca se agregan reintentos ni esperas fijas (CHK-01, CHK-02) |
+| R-1 | Pico construye `Navegador`, páginas y acciones de forma transitiva, con una instancia por escenario compartida por `Hooks` y las acciones. Hoy ya lo hace con `TestContext` y `PageManager` | engineer, paso 1: CHK-08. **Confirmado** (pasos 1 y 2): Pico construye `Navegador` (`Navegador.java:44`), las páginas (`LoginPage.java:19`), las acciones (`LoginActions.java:18`, `CompraActions.java:20`) y `Hooks` (`Hooks.java:16`) con el glue sin cambios (`RunnerTest.java:15`), y la suite queda en verde. Si la instancia no fuera compartida, las páginas fallarían con `IllegalStateException` por usarse antes de `iniciar()` (`Navegador.java:156-160`) | Falla de forma visible al empezar el escenario. Se conserva una fábrica por escenario al estilo `PageManager`, por enmienda |
+| R-2 | Mover `BasePage.java:72-125` sin cambios conserva la estabilidad en Chrome y React | verifier: diff de movimiento y CHK-09; devops: CHK-08 ×2. **Confirmado** (pasos 1 y 2): CHK-08 ×2 y los 7 AC en verde por separado en el paso 1 (`0aa3a02`), y CI en verde sobre `475651f`, según el usuario | Se revierte el paso y se diagnostica; nunca se agregan reintentos ni esperas fijas (CHK-01, CHK-02) |
 | R-3 | Sin `ThreadLocal`, el aislamiento depende de que cada escenario corra en un hilo con su propio contenedor. Es cierto en serie, que es el modo actual | devops, en el paso de paralelismo (`MEMORY.md`, *Próximos pasos*) | Se reintroduce el aislamiento dentro de `Navegador`, por enmienda |
-| R-4 | Las expresiones de D7 funcionan con `git grep -P` y `--untracked`, con exclusiones `:!`, en local, GitHub Actions y Jenkins. CHK-01 ya usa `-P` | **Parcial (arquitecto, git local, 2026-10-09).** La sintaxis es válida. Sobre el árbol actual, los comandos solo marcan la deuda que resuelven los pasos 1 y 2: Selenium en `hooks` y `utils`, imports de `BasePage` y las páginas, `executeScript` y `findElements` en `BasePage`, `extends BasePage`, `PageManager` en los steps y `TestContext` en `PageManager`. Una ruta inexistente da rc=1 sin salida, y por eso D6 exige los directorios. Falta confirmarlo en GitHub Actions y Jenkins (devops, paso 3) | Se ajusta la sintaxis en el script; la autoprueba es la especificación ejecutable |
+| R-4 | Las expresiones de D7 funcionan con `git grep -P` y `--untracked`, con exclusiones `:!`, en local, GitHub Actions y Jenkins. CHK-01 ya usa `-P` | **Confirmado solo en local (paso 3, git 2.53.0, 2026-10-10).** El 2026-10-09 los comandos solo marcaban la deuda que resolvieron los pasos 1 y 2. Una ruta inexistente da rc=1 sin salida, y por eso D6 exige los directorios. Ahora, en local: devops informa la autoprueba con exit 0 en sus 81 casos y el script con 0 sobre HEAD. El arquitecto ejecutó los 20 `git grep` sobre `f7f7a13`, con `--untracked` y con `--cached`: todos dan rc=1, sin salida, y cada directorio de capa lista archivos. Hallazgo: con git 2.53, `--untracked` omite los archivos versionados que coinciden con `.gitignore`, de ahí la doble pasada (D7, *Nota de ejecución*). **Pendiente:** el primer run de GitHub Actions y de Jenkins, que imprime `git --version` (`ci.yml:83`, `Jenkinsfile:27`) | Se ajusta la sintaxis en el script; la autoprueba es la especificación ejecutable |
 | R-5 | Las firmas públicas ocupan una línea, como en el estilo actual (`CheckoutPage.java:21`) | Revisión del verifier | Una firma partida evade la regla de firmas, lo que activa el disparador de ArchUnit (D6) |
 | R-6 | Las ramas de Firefox y Grid se mueven sin cambios en el paso 1, aunque CI no las ejecuta | D8 cubre la parte pura; la traducción a `Options` queda sin verificar | Prueba manual opcional de devops, con `-Dbrowser=firefox` y `docker compose` |
-| R-7 | Los reportes de Cucumber, Allure y Surefire no cambian, porque el glue no cambia | devops: CHK-08 y artefactos | Se diagnostica antes de continuar |
+| R-7 | Los reportes de Cucumber, Allure y Surefire no cambian, porque el glue no cambia | devops: CHK-08 y artefactos. **Confirmado** (pasos 1 y 2): `git diff --stat 4159952 HEAD -- src/test/resources src/test/java/com/demo/runners pom.xml` no tiene salida. La captura ante un fallo pasa por `Navegador.capturarPantalla()` y se adjunta como antes (`Hooks.java:25-34`); el paso 1 la comprobó intacta (`0aa3a02`) | Se diagnostica antes de continuar |
 | R-8 | Los 15 AC pendientes caben en las dos clases de acciones, como mucho con una página nueva (menú o cierre de sesión) | Al responder las Q-* | Se agrega una clase de acciones por flujo; el diseño no cambia |
+
+## Enmiendas
+
+### 2026-10-10 — Pasos 1 a 3 (commits `0aa3a02`, `475651f` y `f7f7a13`)
+
+Las decisiones de fondo y el estado no cambian.
+- **Pasos 1 y 2** (`qa-automation-engineer`):
+  - `Navegador` es el único dueño del `WebDriver`, y las páginas lo componen e importan solo `By`.
+  - `LoginActions` y `CompraActions` quedan entre los steps y las páginas.
+  - Se retiran `BasePage` y `PageManager`.
+  - R-1, R-2 y R-7 quedan confirmados (*Riesgos*).
+- **Paso 3** (`devops-engineer`):
+  - `scripts/check-layers.sh` y su autoprueba, con 81 casos.
+  - CHK-16 suma `transport` y `actions` en `scripts/check-unit-purity.sh`.
+  - El control negativo sobre `0aa3a02`, anterior a las acciones, da rc=1: marca R3 en los dos steps y `actions:0: D6`.
+- **D7 se alinea con el script**, que iba más allá de la redacción original:
+  - R3 también rechaza páginas como parámetro de los métodos públicos de `actions`, con los constructores exceptuados (P2 del verifier).
+  - Se documentan la doble pasada, stderr como error y los códigos 0, 1 y 2 (*Nota de ejecución*).
+  - D6 declara el script como implementación normativa.
+- **Ubicación en CI (corrige D6):**
+  - En GitHub Actions, CHK-17 corre en el job `mutation`, en paralelo a la suite, porque el job `test` expone los secrets `TEST_*` a todos sus pasos (`ci.yml:66-69`).
+  - En Jenkins corre antes de la suite.
+- **Pendientes:**
+  - el primer run remoto, que cierra R-4;
+  - el paso 4 (verifier) y el paso 5;
+  - los cambios a reglas y agentes. Los programados hasta el paso 3 están en `4159952` y `475651f`, o en el árbol de trabajo sin commit al escribir esta enmienda. Quedan los del cierre del paso 4.

@@ -20,6 +20,7 @@ Comprobaciones deterministas que los agentes citan por ID. Una CHK en rojo es un
 | CHK-14 | Cuarentena reglada | Cada `@quarantine` tiene su fila en `docs/quarantine.md` con dueño y fecha no vencida | devops |
 | CHK-15 | `src/main/java` puro: sin entorno, archivos, Selenium, Cucumber ni JUnit (ADR-001) | Sin salida | engineer, verifier, devops |
 | CHK-16 | Pruebas unitarias aisladas: sin Selenium, Cucumber, capas de prueba, entorno ni `.env` real, y solo `*Test.java` en sus directorios (ADR-001) | Sin salida | engineer, verifier |
+| CHK-17 | Capas (ADR-002): R1–R6 de D7, incluidas páginas como parámetro en acciones; falla cerrado (directorios de capa, `git grep` con rc ≥ 2 o con stderr) | Exit 0 en el script y en su autoprueba | engineer, verifier, devops |
 
 ## Comandos (copiar tal cual)
 
@@ -54,10 +55,13 @@ python3 -c "import yaml,sys;[yaml.safe_load(open(f)) for f in sys.argv[1:]]" .gi
 # CHK-15
 git grep -nE 'System\.(getenv|getProperty)|java\.nio\.file|java\.io\.File|getResource|org\.openqa|io\.cucumber|org\.junit' -- src/main/java
 # CHK-16 (dos comandos; ambos sin salida)
-git grep -nE 'org\.openqa|io\.cucumber|com\.demo\.(utils|pages|steps|hooks|runners)|System\.getenv|"\.env"' -- src/test/java/com/demo/config src/test/java/com/demo/data
+git grep -nE 'org\.openqa|io\.cucumber|com\.demo\.(utils|transport|pages|actions|steps|hooks|runners)|System\.getenv|"\.env"' -- src/test/java/com/demo/config src/test/java/com/demo/data
 git ls-files src/test/java/com/demo/config src/test/java/com/demo/data | grep -v 'Test\.java$'
 # CHK-15 y CHK-16 juntas, como en CI y Jenkins (exit 0 = sin salida; falla cerrado si git grep da error)
 bash scripts/check-unit-purity.sh
+# CHK-17 (capas, ADR-002) y su autoprueba (temporal fuera del repo)
+bash scripts/check-layers.sh
+bash scripts/tests/check-layers-test.sh
 ```
 
 Control negativo de CHK-11 (ADR-001, D6): con menos pruebas, el umbral **debe** fallar (`BUILD FAILURE`).
@@ -66,6 +70,6 @@ Control negativo de CHK-11 (ADR-001, D6): con menos pruebas, el umbral **debe** 
 ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage -Dpit.targetTests='com.demo.data.*Test'
 ```
 
-**Estado actual:** CHK-12 está activa en `scripts/check-traceability.sh` y corre en GitHub Actions y Jenkins antes de la suite. CHK-11, CHK-15 y CHK-16 están activas (ADR-001): job `mutation` en GitHub Actions y etapa `Mutation (CHK-11)` en Jenkins, sin secrets ni navegador (`90687f4`), con `scripts/check-mutation-report.sh` contra el fallo abierto de PIT.
+**Estado actual:** CHK-12 está activa en `scripts/check-traceability.sh` y corre en GitHub Actions y Jenkins antes de la suite. CHK-11, CHK-15 y CHK-16 están activas (ADR-001): job `mutation` en GitHub Actions y etapa `Mutation (CHK-11)` en Jenkins, sin secrets ni navegador (`90687f4`), con `scripts/check-mutation-report.sh` contra el fallo abierto de PIT. CHK-17 está activa (ADR-002): `scripts/check-layers.sh` y su autoprueba corren en el job `mutation` de GitHub Actions y en la etapa `Capas (CHK-17)` de Jenkins, sin secrets (`f7f7a13`).
 
 La cobertura de líneas **no** es una CHK: mide qué código se ejecutó, no qué se verificó.
