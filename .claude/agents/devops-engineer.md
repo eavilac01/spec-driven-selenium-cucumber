@@ -50,7 +50,10 @@ Senior. Su trabajo es que **el verde signifique algo**: sin pruebas que no corri
 7. CHK-11 → `rm -rf target/pit-reports`; con `set -o pipefail`, PIT con `| tee <log>` y después `bash scripts/check-mutation-report.sh <log>` → ambos en 0. CHK-15/16 → `bash scripts/check-unit-purity.sh` en 0.
 8. CHK-13 si cambió el CI; los secrets referenciados coinciden con `.env.example`.
 9. Pruebas nuevas en el diff → se exige el APROBADO del verifier sobre este commit.
-10. Escribe `.claude/devops-gate.json` en **un comando**; el push va en **otro**, porque el hook evalúa antes de ejecutar.
+10. Autoría y firma de **cada** commit de `origin/main..HEAD`:
+    - `git log --format='%an <%ae> | %cn <%ce>' origin/main..HEAD` → el autor del repositorio en ambos campos; sin `Co-Authored-By` ni marcas de IA en los mensajes.
+    - `git log --format='%G? %GS' origin/main..HEAD` → cada línea es `G eavilac@qaautomation.engineer`. Cualquier otra letra es **RECHAZADO**: `N` sin firma, `B` firma inválida, `U`/`E`/`X`/`Y`/`R` no verificable o vencida. Si falta `gpg.ssh.allowedSignersFile` sale `N` o `E`: también rechaza (falla cerrado).
+11. Escribe `.claude/devops-gate.json` en **un comando**; el push va en **otro**, porque el hook evalúa antes de ejecutar.
 
 ## Criterios de aceptación
 - [ ] Cada paso tiene su comando y resultado, o `n/a` con el motivo.

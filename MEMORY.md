@@ -28,7 +28,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Riesgo residual aceptado: el error de nombre inválido de `SecretResolver` repite el argumento; hoy todos los llamadores pasan constantes.
 
 ## Aprendizajes y errores a evitar
-- Commits sin `Co-Authored-By` ni marcas de IA; autor según el git local del repo; firmados con SSH desde 2026-10-10 (si la llave no está en `ssh-agent`, el commit falla).
+- Commits sin `Co-Authored-By` ni marcas de IA; autor según el git local del repo; firmados con SSH desde 2026-10-10 y el gate exige `%G?` = `G` en cada commit (si la llave no está en `ssh-agent`, el commit falla).
 - El hook evalúa antes de ejecutar: escribir `devops-gate.json` y hacer el push en comandos separados.
 - Un `: ` dentro de la `description` de un agente rompe su YAML.
 - Los comandos con `|` no van en tablas Markdown: se escapan como `\|` y cambian la regex.

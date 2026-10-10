@@ -406,11 +406,11 @@ Las decisiones de fondo y el estado no cambian. Con este cierre, el ADR queda **
   - CHK-17 da 1 sobre `0aa3a02` (R3).
   - CHK-16, ya ampliada, tiene su control negativo.
   - PIT da 73/73.
-- **Paso 5** (D8, pendiente de commit):
+- **Paso 5** (D8, `32f5b36`):
   - `BrowserSettings` está en `src/main/java/com/demo/config/`, con 27 pruebas unitarias, y `DriverFactory` solo traduce.
   - PIT da 89/89, y D6 del ADR-001 sigue en `BUILD FAILURE`. Los 4 `requireNonNull`, que PIT no muta, se validaron con control negativo manual.
 - **Reglas y agentes:** todos los cambios están aplicados (*Cambios propuestos*).
-- **Abiertos (P2):** R-3 (paralelismo), R-4 (primer run remoto), R-6 (Firefox y Grid sin CI) y R-8 (Q-*).
+- **Abiertos (P2):** R-3 (paralelismo), R-4 (solo Jenkins), R-6 (Firefox y Grid sin CI) y R-8 (Q-*).
 
 ### 2026-10-10 — R-4 confirmado en GitHub Actions
 
