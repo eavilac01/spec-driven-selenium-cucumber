@@ -204,11 +204,20 @@ Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-00
 ├── .gitignore
 ├── docker-compose.yml
 ├── docs
-│   ├── adr/001-mutation-testing-pit.md
+│   ├── adr
+│   │   ├── 001-mutation-testing-pit.md
+│   │   └── 002-transport-and-business-actions.md
 │   └── specs/           # _plantilla.md, login.md, compra.md
 ├── mvnw / mvnw.cmd
 ├── pom.xml
-├── scripts/check-traceability.sh
+├── scripts
+│   ├── check-layers.sh            # CHK-17: reglas de capas
+│   ├── check-mutation-report.sh   # CHK-11: guarda del reporte de PIT
+│   ├── check-required-secrets.sh  # CI/Jenkins: nombra los secrets que faltan
+│   ├── check-traceability.sh      # CHK-12: escenario → spec aprobada
+│   ├── check-unit-purity.sh       # CHK-15/16: src/main puro y unitarias aisladas
+│   ├── wait-for-grid.sh           # espera activa a que el Grid esté listo
+│   └── tests/check-layers-test.sh # autoprueba de CHK-17
 ├── src/main/java/com/demo      # lógica pura, sin E/S (ADR-001)
 │   ├── config
 │   │   ├── BrowserSettings.java
@@ -243,9 +252,10 @@ Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-00
     │       └── TestContext.java
     └── resources
         ├── config.properties
-        ├── features
-        │   ├── compra_e2e.feature
-        │   └── login.feature
+        ├── junit-platform.properties   # paralelismo por escenario (2 hilos)
+        └── features
+            ├── compra_e2e.feature
+            └── login.feature
 ```
 
 ## Decisiones de arquitectura
@@ -534,9 +544,9 @@ El `Jenkinsfile` declarativo está listo para un servidor Jenkins, aunque todav�
 2. `Traceability SDD (CHK-12)` y `Capas (CHK-17)`.
 3. `Mutation (CHK-11)`: PIT con la guarda de reporte, sin credenciales.
 4. `Test`: la suite sin `@quarantine`; es la **única** etapa que recibe credenciales.
-5. `post`: publica JUnit y Allure, archiva los reportes y limpia el espacio de trabajo.
+5. `post` de `Test`: publica JUnit y Allure y archiva los reportes, aunque una prueba falle. `Mutation` archiva su reporte y `pit.log`. El `post` global limpia el espacio de trabajo.
 
-Incluye límites de tiempo globales y por etapa, descarte de builds antiguos, builds no concurrentes y `set -euo pipefail` en cada bloque de shell.
+Incluye límites de tiempo globales y por etapa, descarte de builds antiguos y builds no concurrentes. Los bloques de shell de varias órdenes corren en bash con `set -euo pipefail`, y todos usan comillas simples para que Groovy no interpole ningún valor.
 
 **Para configurarlo:**
 
