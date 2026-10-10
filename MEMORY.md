@@ -28,7 +28,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Riesgo residual aceptado: el error de nombre inválido de `SecretResolver` repite el argumento; hoy todos los llamadores pasan constantes.
 
 ## Aprendizajes y errores a evitar
-- Commits sin `Co-Authored-By` ni marcas de IA; autor según el git local del repo.
+- Commits sin `Co-Authored-By` ni marcas de IA; autor según el git local del repo; firmados con SSH desde 2026-10-10 (si la llave no está en `ssh-agent`, el commit falla).
 - El hook evalúa antes de ejecutar: escribir `devops-gate.json` y hacer el push en comandos separados.
 - Un `: ` dentro de la `description` de un agente rompe su YAML.
 - Los comandos con `|` no van en tablas Markdown: se escapan como `\|` y cambian la regex.
@@ -44,7 +44,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 ## Próximos pasos
 1. Responder las preguntas Q-* de las specs (usuario).
 2. P2 de CI: Jenkinsfile sin validar en un Jenkins real; stage `Test` sin timeout; filtro `not @quarantine` cuando exista la cuarentena. (`permissions: contents: read` hecho en `6c6b95b`, CI en verde.)
-3. ADR-002, P2 abiertos: R-3 (sin `ThreadLocal`, `Navegador` solo vale en serie → resolver antes del paralelismo), R-4 (confirmar CHK-17 en el run remoto), R-6 (Firefox y Grid sin ejecutar en CI); `BrowserSettingsTest` `:235`/`:252` verifican solo el tipo de la causa.
+3. ADR-002, P2 abiertos: R-3 (sin `ThreadLocal`, `Navegador` solo vale en serie → resolver antes del paralelismo), R-6 (Firefox y Grid sin ejecutar en CI); R-4 confirmado en Actions (`257baaa`, verde); `BrowserSettingsTest` `:235`/`:252` verifican solo el tipo de la causa.
 4. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05).
 5. Con las Q-* respondidas, cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.
 6. Paralelismo, solo después de confirmar la independencia de los escenarios.
