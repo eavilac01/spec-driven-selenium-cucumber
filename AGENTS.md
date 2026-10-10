@@ -25,7 +25,7 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 - `docs/specs/` — specs de negocio (fuente de verdad, SDD) y su plantilla `_plantilla.md`
 - `docs/adr/` — decisiones de arquitectura (ADR-001: mutación con PIT; ADR-002: transporte, acciones y capas)
 - `src/test/resources/features/` — escenarios Gherkin con tags `@AC-` y `@tec-`
-- `src/main/java/com/demo/config/` y `data/` — lógica pura del framework (configuración, secretos, credenciales): sin E/S, Selenium ni Cucumber; es lo que muta PIT
+- `src/main/java/com/demo/config/` y `data/` — lógica pura del framework (configuración, secretos, credenciales, configuración del navegador): sin E/S, Selenium ni Cucumber; es lo que muta PIT
 - `src/test/java/com/demo/config/` y `data/` — pruebas unitarias JUnit 5 de esa lógica, aisladas (solo `*Test.java`)
 - `src/test/java/com/demo/steps/` — step definitions: aserciones y valores esperados; solo usan acciones, sin Selenium
 - `src/test/java/com/demo/actions/` — acciones de negocio (`LoginActions`, `CompraActions`): flujos entre páginas, sin aserciones

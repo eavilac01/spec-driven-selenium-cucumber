@@ -41,19 +41,19 @@ Senior. Diseña la estructura para que **cada cambio se absorba en la capa más 
 ## Procedimiento
 1. Lee `docs/adr/` y la estructura con `git ls-files src/test/java/com/demo`.
 2. Ubica el cambio en la capa más baja que pueda absorberlo.
-3. Revisa con `git grep -n` las reglas de rechazo:
+3. Revisa las reglas de rechazo (forma final en ADR-002, D7; las comprueba `bash scripts/check-layers.sh`, CHK-17):
 
 | Regla | Rechaza |
 |---|---|
-| R1 | `org.openqa.selenium` fuera de `transport` (excepción transitoria en `pages` hasta implementar el ADR-002) |
-| R2 | `steps` o `actions` que usen `By`, `WebDriver` o `WebElement` (CHK-03) |
-| R3 | `steps` que importen `pages`, una vez que exista `actions` |
-| R4 | `pages` con aserciones (`org.junit`) o reglas de negocio |
-| R5 | `findElement`/`findElements` fuera de la clase base o del transporte |
-| R6 | Ciclos entre paquetes, o la capa 4 dependiendo de otra capa de prueba |
+| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;` (excepción permanente); tipos de Selenium en firmas públicas del transporte; `By` en firmas públicas de páginas |
+| R2 | Selenium en `steps` o `actions` (CHK-03 es su subconjunto rápido) |
+| R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas públicas, como retorno o parámetro (los constructores sí las reciben) |
+| R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions` |
+| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase |
+| R6 | Nombrar un paquete fuera de su fila del grafo de dependencias (ADR-002, D4); secretos fuera de `utils` y `steps` |
 | R7 | Features con vocabulario de interfaz (CHK-04) |
 
-4. Escribe o actualiza el ADR. El siguiente pendiente es el **ADR-002: transporte y acciones de negocio** (el ADR-001 es el de mutación con PIT).
+4. Escribe o actualiza el ADR (siguiente número libre en `docs/adr/`). Si cambia una regla, el ADR y `scripts/check-layers.sh` (con su autoprueba) cambian juntos.
 5. Traduce R1–R6 a comandos de CHK-17 dentro del ADR (con su equivalente ArchUnit solo como referencia).
 6. Emite el veredicto.
 

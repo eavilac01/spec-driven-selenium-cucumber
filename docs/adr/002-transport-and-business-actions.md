@@ -283,25 +283,27 @@ Cierra el otro pendiente heredado del ADR-001.
   - POM;
   - pruebas unitarias y configuración de PIT del ADR-001.
 
-## Cambios propuestos a reglas y agentes (no aplicados)
+## Cambios propuestos a reglas y agentes (aplicados)
 
-| Archivo | Cambio | Cuándo |
-|---|---|---|
-| `.claude/rules/04-quality-checks.md` (tabla tras `:22`, comandos tras `:60`, *Estado actual* `:69`) | CHK-17 "Capas (ADR-002): R1–R6": `bash scripts/check-layers.sh` y `bash scripts/tests/check-layers-test.sh`. Pasa con exit 0; la ejecutan engineer, verifier y devops | Antes del paso 3 |
-| `.claude/rules/04-quality-checks.md:9`, `:32` | CHK-03 busca `org\.openqa` (`git grep -nE`) en lugar de `import org.openqa.selenium`, para detectar `import static` y los nombres calificados | Con el paso 0 |
-| `.claude/rules/04-quality-checks.md:57` y `scripts/check-unit-purity.sh:41` (devops) | CHK-16 agrega `transport` y `actions` a la lista de paquetes `com.demo.*` prohibidos: las unitarias tampoco pueden nombrar las capas nuevas | Antes del paso 3 |
-| `.claude/rules/01-spec-driven-development.md:12-13` | Agregar `com.demo.utils` (fachadas de E/S y estado del escenario) al nivel 4, y una nota: "las dependencias entre paquetes las fija el ADR-002 (CHK-17); los niveles SDD no son las capas del arquitecto" | Con el paso 0 |
-| `.claude/rules/02-agent-permissions.md:11` | El verifier también ejecuta `scripts/check-layers.sh` y su autoprueba, que solo escribe en un directorio temporal fuera del repo | Antes del paso 4 |
-| `.claude/agents/qa-automation-architect.md:3`, `:22`, `:38-39`, `:57`, `:62`, `:67`, `:69` | Cambiar "reglas ArchUnit" por "CHK-17 (`git grep`), con ArchUnit solo como equivalente documentado (ADR-002, D6)" | Con el paso 0 |
-| `.claude/agents/qa-automation-architect.md:28-34` | Columna *Depende de* según D4; `utils` en la capa 4 | Con el paso 0 |
-| `.claude/agents/qa-automation-architect.md:48-54`, `:56` | R1–R7 en su forma de D7, con la excepción de `By` permanente; retirar "el siguiente pendiente es el ADR-002" | Al cerrar el paso 4 |
-| `.claude/agents/qa-automation-engineer.md:22`, `:34`, `:39` | Quitar ArchUnit; "toda interacción pasa por `Navegador`"; CHK-17 en la autoverificación | `:22` con el paso 0; el resto al cerrar el paso 3 |
-| `.claude/agents/qa-test-verifier.md:33` | CHK-17 junto a CHK-01/02/03 (rechazo automático) | Al cerrar el paso 3 |
-| `.claude/agents/devops-engineer.md:45`, `:46` | Rutas CRÍTICAS: agregar `src/test/java/com/demo/transport/` (escribe credenciales y ejecuta scripts) y `scripts/check-layers.sh`; CHK-17 en el paso 3 del gate | Al cerrar el paso 3 |
-| `.claude/agents/README.md:5`, `:16`, `:34`, `:52` | Cambiar "ArchUnit" por "CHK-17"; "CHK-01…17"; deuda de `WebDriver` cerrada | Al cerrar el paso 4 |
-| `AGENTS.md:22`, `:26`, `:30-32`, `:43`, `:45` | "CHK-01…17"; ADR-002; estructura con `transport/` y `actions/`, sin `BasePage` ni `PageManager`; "los steps solo usan acciones; las páginas solo interactúan a través de `Navegador`" | Al cerrar el paso 2 |
-| `CLAUDE.md:19` | "CHK-01…17" | Antes del paso 3 |
-| `README.md:37-81`, `:83-142`, `:146-162`, `:170`, `:394`, `:406`, `:437` | Diagrama, estructura, decisiones (`ThreadLocal`, `PageManager`, esperas en `Navegador`) y lista de revisión. No tiene dueño en la matriz (igual que en el ADR-001): el usuario designa quién lo edita | Al cerrar el paso 2 |
+Todos están aplicados al cierre; no queda ninguno pendiente. Las líneas de la columna *Archivo* son las del 2026-10-09. *Estado* cita el commit que aplicó cada cambio, o "pendiente de commit" si al escribir el cierre solo estaba en el árbol de trabajo.
+
+| Archivo | Cambio | Cuándo | Estado |
+|---|---|---|---|
+| `.claude/rules/04-quality-checks.md` (tabla tras `:22`, comandos tras `:60`, *Estado actual* `:69`) | CHK-17 "Capas (ADR-002): R1–R6": `bash scripts/check-layers.sh` y `bash scripts/tests/check-layers-test.sh`. Pasa con exit 0; la ejecutan engineer, verifier y devops | Antes del paso 3 | Aplicado (`709c81d`) |
+| `.claude/rules/04-quality-checks.md:9`, `:32` | CHK-03 busca `org\.openqa` (`git grep -nE`) en lugar de `import org.openqa.selenium`, para detectar `import static` y los nombres calificados | Con el paso 0 | Aplicado (`4159952`) |
+| `.claude/rules/04-quality-checks.md:57` y `scripts/check-unit-purity.sh:41` (devops) | CHK-16 agrega `transport` y `actions` a la lista de paquetes `com.demo.*` prohibidos: las unitarias tampoco pueden nombrar las capas nuevas | Antes del paso 3 | Aplicado (script en `f7f7a13`; regla en `709c81d`) |
+| `.claude/rules/01-spec-driven-development.md:12-13` | Agregar `com.demo.utils` (fachadas de E/S y estado del escenario) al nivel 4, y una nota: "las dependencias entre paquetes las fija el ADR-002 (CHK-17); los niveles SDD no son las capas del arquitecto" | Con el paso 0 | Aplicado (`4159952`) |
+| `.claude/rules/02-agent-permissions.md:11` | El verifier también ejecuta `scripts/check-layers.sh` y su autoprueba, que solo escribe en un directorio temporal fuera del repo | Antes del paso 4 | Aplicado (`709c81d`) |
+| `.claude/agents/qa-automation-architect.md:3`, `:22`, `:38-39`, `:57`, `:62`, `:67`, `:69` | Cambiar "reglas ArchUnit" por "CHK-17 (`git grep`), con ArchUnit solo como equivalente documentado (ADR-002, D6)" | Con el paso 0 | Aplicado (`4159952`) |
+| `.claude/agents/qa-automation-architect.md:28-34` | Columna *Depende de* según D4; `utils` en la capa 4 | Con el paso 0 | Aplicado (`4159952`) |
+| `.claude/agents/qa-automation-architect.md:48-54`, `:56` | R1–R7 en su forma de D7, con la excepción de `By` permanente; retirar "el siguiente pendiente es el ADR-002" | Al cerrar el paso 4 | Aplicado, pendiente de commit |
+| `.claude/agents/qa-automation-engineer.md:22`, `:34`, `:39` | Quitar ArchUnit; "toda interacción pasa por `Navegador`"; CHK-17 en la autoverificación | `:22` con el paso 0; el resto al cerrar el paso 3 | Aplicado (`4159952`, `475651f` y `709c81d`) |
+| `.claude/agents/qa-test-verifier.md:33` | CHK-17 junto a CHK-01/02/03 (rechazo automático) | Al cerrar el paso 3 | Aplicado (`709c81d`) |
+| `.claude/agents/devops-engineer.md:45`, `:46` | Rutas CRÍTICAS: agregar `src/test/java/com/demo/transport/` (escribe credenciales y ejecuta scripts) y `scripts/check-layers.sh`; CHK-17 en el paso 3 del gate | Al cerrar el paso 3 | Aplicado (`709c81d`) |
+| `.claude/agents/README.md:5`, `:16`, `:34`, `:52` | Cambiar "ArchUnit" por "CHK-17"; "CHK-01…17"; deuda de `WebDriver` cerrada | Al cerrar el paso 4 | Aplicado (`:16` en `709c81d`; `:5`, `:34` y `:52`, pendientes de commit) |
+| `AGENTS.md:22`, `:26`, `:30-32`, `:43`, `:45` | "CHK-01…17"; ADR-002; estructura con `transport/` y `actions/`, sin `BasePage` ni `PageManager`; "los steps solo usan acciones; las páginas solo interactúan a través de `Navegador`" | Al cerrar el paso 2 | Aplicado (`475651f` y `709c81d`) |
+| `CLAUDE.md:19` | "CHK-01…17" | Antes del paso 3 | Aplicado (`709c81d`) |
+| `README.md:37-81`, `:83-142`, `:146-162`, `:170`, `:394`, `:406`, `:437` | Diagrama, estructura, decisiones (`ThreadLocal`, `PageManager`, esperas en `Navegador`) y lista de revisión. No tiene dueño en la matriz (igual que en el ADR-001): el usuario designa quién lo edita | Al cerrar el paso 2 | Aplicado (`475651f` y `709c81d`) |
 
 ## Plan de implementación
 
@@ -313,8 +315,8 @@ Cada paso deja la suite en verde. Cada paso del engineer pasa por el verifier y 
 | 1 | `qa-automation-engineer` | Transporte (D1, D2): `Navegador`; `DriverFactory` en `transport`, sin `ThreadLocal`; páginas por composición; se retira `BasePage`; `Hooks` y `TestContext` sin Selenium. `PageManager` recibe `Navegador`, y **los steps no cambian** | CHK-01, 03 y 07; CHK-08 ×2 con el mismo `Tests run` que antes del paso; CHK-09 y CHK-10 de regresión en los 7 AC; comandos R1, R4, R5 y R6 de D7 para `transport`, `pages`, `hooks` y `utils`; diff de movimiento. Gate CRÍTICO (`DriverFactory`) | Hecho (`0aa3a02`) |
 | 2 | `qa-automation-engineer` | Acciones (D3): `LoginActions` y `CompraActions`; steps solo con acciones; se retira `PageManager` | Lo mismo que el paso 1, más R3 y las filas de R6 de `actions` y `steps`; sin cambios en `src/test/resources` | Hecho (`475651f`) |
 | 3 | `devops-engineer` | CHK-17 (D6): script y autoprueba; GitHub Actions y Jenkins antes de la suite; gate. Puede prepararse en paralelo a los pasos 1 y 2, pero se conecta al CI cuando HEAD pasa | El script da 0 sobre HEAD; la autoprueba da 0 con todos sus casos negativos en 1; CHK-13 | Hecho (`f7f7a13`) |
-| 4 | `qa-test-verifier` | Criterio de verificación completo | APROBADO | Pendiente |
-| 5 | `qa-automation-engineer` | `BrowserSettings` (D8) con pruebas unitarias; `DriverFactory` solo traduce | CHK-07, 08, 15, 16 y 17; CHK-11 ≥ 80 % con la guarda en 0; D6 del ADR-001 sigue en `BUILD FAILURE`; APROBADO del verifier; gate CRÍTICO (`src/main/java/com/demo/config/`) | Pendiente. Independiente de los pasos 2 a 4 |
+| 4 | `qa-test-verifier` | Criterio de verificación completo | APROBADO | Hecho (APROBADO sobre `f7f7a13`; sus P1 de la autoprueba, cerrados en `bb7f145`) |
+| 5 | `qa-automation-engineer` | `BrowserSettings` (D8) con pruebas unitarias; `DriverFactory` solo traduce | CHK-07, 08, 15, 16 y 17; CHK-11 ≥ 80 % con la guarda en 0; D6 del ADR-001 sigue en `BUILD FAILURE`; APROBADO del verifier; gate CRÍTICO (`src/main/java/com/demo/config/`) | Hecho, pendiente de commit |
 
 ## Criterio de verificación
 
@@ -352,18 +354,18 @@ git diff --stat <base>..HEAD -- src/test/resources
 
 ## Riesgos
 
-Este ADR se escribió sin ejecutar nada: solo se leyeron archivos y se buscó con `git grep` (B-01). R-1, R-2, R-4 y R-7 reflejan los pasos 1 a 3 (*Enmiendas*).
+Este ADR se escribió sin ejecutar nada: solo se leyeron archivos y se buscó con `git grep` (B-01). El estado de R-1 a R-8 refleja el cierre, tras los pasos 1 a 5 (*Enmiendas*). Siguen abiertos como P2 R-3, R-4 (solo la parte remota), R-6 y R-8.
 
 | # | Supuesto | Lo confirma | Si es falso |
 |---|---|---|---|
-| R-1 | Pico construye `Navegador`, páginas y acciones de forma transitiva, con una instancia por escenario compartida por `Hooks` y las acciones. Hoy ya lo hace con `TestContext` y `PageManager` | engineer, paso 1: CHK-08. **Confirmado** (pasos 1 y 2): Pico construye `Navegador` (`Navegador.java:44`), las páginas (`LoginPage.java:19`), las acciones (`LoginActions.java:18`, `CompraActions.java:20`) y `Hooks` (`Hooks.java:16`) con el glue sin cambios (`RunnerTest.java:15`), y la suite queda en verde. Si la instancia no fuera compartida, las páginas fallarían con `IllegalStateException` por usarse antes de `iniciar()` (`Navegador.java:156-160`) | Falla de forma visible al empezar el escenario. Se conserva una fábrica por escenario al estilo `PageManager`, por enmienda |
-| R-2 | Mover `BasePage.java:72-125` sin cambios conserva la estabilidad en Chrome y React | verifier: diff de movimiento y CHK-09; devops: CHK-08 ×2. **Confirmado** (pasos 1 y 2): CHK-08 ×2 y los 7 AC en verde por separado en el paso 1 (`0aa3a02`), y CI en verde sobre `475651f`, según el usuario | Se revierte el paso y se diagnostica; nunca se agregan reintentos ni esperas fijas (CHK-01, CHK-02) |
-| R-3 | Sin `ThreadLocal`, el aislamiento depende de que cada escenario corra en un hilo con su propio contenedor. Es cierto en serie, que es el modo actual | devops, en el paso de paralelismo (`MEMORY.md`, *Próximos pasos*) | Se reintroduce el aislamiento dentro de `Navegador`, por enmienda |
-| R-4 | Las expresiones de D7 funcionan con `git grep -P` y `--untracked`, con exclusiones `:!`, en local, GitHub Actions y Jenkins. CHK-01 ya usa `-P` | **Confirmado solo en local (paso 3, git 2.53.0, 2026-10-10).** El 2026-10-09 los comandos solo marcaban la deuda que resolvieron los pasos 1 y 2. Una ruta inexistente da rc=1 sin salida, y por eso D6 exige los directorios. Ahora, en local: devops informa la autoprueba con exit 0 en sus 81 casos y el script con 0 sobre HEAD. El arquitecto ejecutó los 20 `git grep` sobre `f7f7a13`, con `--untracked` y con `--cached`: todos dan rc=1, sin salida, y cada directorio de capa lista archivos. Hallazgo: con git 2.53, `--untracked` omite los archivos versionados que coinciden con `.gitignore`, de ahí la doble pasada (D7, *Nota de ejecución*). **Pendiente:** el primer run de GitHub Actions y de Jenkins, que imprime `git --version` (`ci.yml:83`, `Jenkinsfile:27`) | Se ajusta la sintaxis en el script; la autoprueba es la especificación ejecutable |
-| R-5 | Las firmas públicas ocupan una línea, como en el estilo actual (`CheckoutPage.java:21`) | Revisión del verifier | Una firma partida evade la regla de firmas, lo que activa el disparador de ArchUnit (D6) |
-| R-6 | Las ramas de Firefox y Grid se mueven sin cambios en el paso 1, aunque CI no las ejecuta | D8 cubre la parte pura; la traducción a `Options` queda sin verificar | Prueba manual opcional de devops, con `-Dbrowser=firefox` y `docker compose` |
+| R-1 | Pico construye `Navegador`, páginas y acciones de forma transitiva, con una instancia por escenario compartida por `Hooks` y las acciones. Hoy ya lo hace con `TestContext` y `PageManager` | engineer, paso 1: CHK-08. **Confirmado** (pasos 1 y 2): Pico construye `Navegador` (`Navegador.java:44`), las páginas (`LoginPage.java:19`), las acciones (`LoginActions.java:18`, `CompraActions.java:20`) y `Hooks` (`Hooks.java:16`) con el glue sin cambios (`RunnerTest.java:15`), y la suite queda en verde. Lo ratifica la verificación completa (paso 4). Si la instancia no fuera compartida, las páginas fallarían con `IllegalStateException` por usarse antes de `iniciar()` (`Navegador.java:156-160`) | Falla de forma visible al empezar el escenario. Se conserva una fábrica por escenario al estilo `PageManager`, por enmienda |
+| R-2 | Mover `BasePage.java:72-125` sin cambios conserva la estabilidad en Chrome y React | verifier: diff de movimiento y CHK-09; devops: CHK-08 ×2. **Confirmado** (pasos 1 y 2): CHK-08 ×2 y los 7 AC en verde por separado en el paso 1 (`0aa3a02`), y CI en verde sobre `475651f`, según el usuario. Paso 4: los 7 AC en verde por separado y los 8 controles negativos en rojo en el `Then` | Se revierte el paso y se diagnostica; nunca se agregan reintentos ni esperas fijas (CHK-01, CHK-02) |
+| R-3 | Sin `ThreadLocal`, el aislamiento depende de que cada escenario corra en un hilo con su propio contenedor. Es cierto en serie, que es el modo actual | devops, en el paso de paralelismo (`MEMORY.md`, *Próximos pasos*). **Abierto (P2):** sin `ThreadLocal`, el diseño solo vale en serie hasta que se adopte el paralelismo | Se reintroduce el aislamiento dentro de `Navegador`, por enmienda |
+| R-4 | Las expresiones de D7 funcionan con `git grep -P` y `--untracked`, con exclusiones `:!`, en local, GitHub Actions y Jenkins. CHK-01 ya usa `-P` | **Confirmado solo en local (paso 3, git 2.53.0, 2026-10-10).** El 2026-10-09 los comandos solo marcaban la deuda que resolvieron los pasos 1 y 2. Una ruta inexistente da rc=1 sin salida, y por eso D6 exige los directorios. Ahora, en local: devops informa la autoprueba con exit 0 en sus 81 casos (154 desde `bb7f145`) y el script con 0 sobre HEAD. El arquitecto ejecutó los 20 `git grep` sobre `f7f7a13`, con `--untracked` y con `--cached`: todos dan rc=1, sin salida, y cada directorio de capa lista archivos. Hallazgo: con git 2.53, `--untracked` omite los archivos versionados que coinciden con `.gitignore`, de ahí la doble pasada (D7, *Nota de ejecución*). Al cierre, el arquitecto repitió los 20 `git grep` de D7 con las dos pasadas sobre el árbol de trabajo del paso 5: todos dan rc=1, sin salida. **Abierto (P2), solo la parte remota:** el primer run de GitHub Actions y de Jenkins, que imprime `git --version` (`ci.yml:83`, `Jenkinsfile:27`) | Se ajusta la sintaxis en el script; la autoprueba es la especificación ejecutable |
+| R-5 | Las firmas públicas ocupan una línea, como en el estilo actual (`CheckoutPage.java:21`) | Revisión del verifier. **Se cumple hoy** (paso 4); sigue como riesgo residual aceptado (D6) | Una firma partida evade la regla de firmas, lo que activa el disparador de ArchUnit (D6) |
+| R-6 | Las ramas de Firefox y Grid se mueven sin cambios en el paso 1, aunque CI no las ejecuta | D8 cubre la parte pura: `BrowserSettings`, con 27 pruebas unitarias y PIT (paso 5). **Abierto (P2):** la traducción a `Options` en `DriverFactory` sigue sin ejecutarse, porque CI no corre Firefox ni el Grid. La revisión del paso 5 ya halló un desvío en esa traducción: Firefox sin headless enviaba `args=[]`, y se restauraron sus capacidades | Prueba manual opcional de devops, con `-Dbrowser=firefox` y `docker compose` |
 | R-7 | Los reportes de Cucumber, Allure y Surefire no cambian, porque el glue no cambia | devops: CHK-08 y artefactos. **Confirmado** (pasos 1 y 2): `git diff --stat 4159952 HEAD -- src/test/resources src/test/java/com/demo/runners pom.xml` no tiene salida. La captura ante un fallo pasa por `Navegador.capturarPantalla()` y se adjunta como antes (`Hooks.java:25-34`); el paso 1 la comprobó intacta (`0aa3a02`) | Se diagnostica antes de continuar |
-| R-8 | Los 15 AC pendientes caben en las dos clases de acciones, como mucho con una página nueva (menú o cierre de sesión) | Al responder las Q-* | Se agrega una clase de acciones por flujo; el diseño no cambia |
+| R-8 | Los 15 AC pendientes caben en las dos clases de acciones, como mucho con una página nueva (menú o cierre de sesión) | Al responder las Q-*. **Abierto (P2):** pendiente de las Q-* | Se agrega una clase de acciones por flujo; el diseño no cambia |
 
 ## Enmiendas
 
@@ -390,3 +392,22 @@ Las decisiones de fondo y el estado no cambian.
   - el primer run remoto, que cierra R-4;
   - el paso 4 (verifier) y el paso 5;
   - los cambios a reglas y agentes. Los programados hasta el paso 3 están en `4159952` y `475651f`, o en el árbol de trabajo sin commit al escribir esta enmienda. Quedan los del cierre del paso 4.
+
+### 2026-10-10 — Pasos 4 y 5 y cierre
+
+Las decisiones de fondo y el estado no cambian. Con este cierre, el ADR queda **completamente implementado**.
+- **Autoprueba corregida** (`bb7f145`):
+  - Las dos mutantes que el paso 3 dio por equivalentes fallaban abierto. Sin la rama `rc >= 2`, un `git grep` que muere por señal sin escribir en stderr daba `ok`. Sin la comprobación de raíz, una subcarpeta con su propio árbol de capas daba `ok`.
+  - Ahora la autoprueba tiene 154 casos. Suma un shim de `git` (SIGKILL y `exit 2` sin stderr), el mensaje exacto en los casos de exit 2, el caso anidado y un caso por alternativa de cada expresión, incluidos los 33 paquetes de R6.
+  - Un sabotaje con 67 mutantes no dejó ninguna sobreviviente.
+  - El script y D7 no cambian: la corrección está solo en la autoprueba.
+- **Paso 4** (`qa-test-verifier`): APROBADO sobre `f7f7a13`, con sus P1 cerrados en `bb7f145`.
+  - Los 7 AC dan verde por separado, y los 8 controles negativos fallan en el `Then`.
+  - CHK-17 da 1 sobre `0aa3a02` (R3).
+  - CHK-16, ya ampliada, tiene su control negativo.
+  - PIT da 73/73.
+- **Paso 5** (D8, pendiente de commit):
+  - `BrowserSettings` está en `src/main/java/com/demo/config/`, con 27 pruebas unitarias, y `DriverFactory` solo traduce.
+  - PIT da 89/89, y D6 del ADR-001 sigue en `BUILD FAILURE`. Los 4 `requireNonNull`, que PIT no muta, se validaron con control negativo manual.
+- **Reglas y agentes:** todos los cambios están aplicados (*Cambios propuestos*).
+- **Abiertos (P2):** R-3 (paralelismo), R-4 (primer run remoto), R-6 (Firefox y Grid sin CI) y R-8 (Q-*).

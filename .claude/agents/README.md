@@ -2,7 +2,7 @@
 
 Equipo de subagentes de Claude Code para evolucionar el framework con **criterio de arquitectura, trazabilidad y gobierno de calidad**. Este archivo no tiene frontmatter: Claude Code lo trata como documentación.
 
-**Principio:** el modelo propone y el código dispone. Toda salida generada pasa por una verificación determinista (CHK, ArchUnit, hook de push, aprobación humana de specs).
+**Principio:** el modelo propone y el código dispone. Toda salida generada pasa por una verificación determinista (CHK, incluida la comprobación de capas CHK-17, hook de push, aprobación humana de specs).
 
 ## Estructura
 
@@ -31,7 +31,7 @@ Usuario → designer: spec (borrador) → Usuario aprueba → designer: feature
 | Agente | Rol | Escribe en | model / effort | Rúbrica I/R/V/C | Motivo |
 |---|---|---|---|---|---|
 | *Sesión principal* | Coordinador: descompone, delega, verifica el cierre y mantiene el estado. No implementa | Lista de tareas | sesión | — | Un subagente no puede delegar en otros |
-| `qa-automation-architect` | Capas, reglas R1–R7, ADRs, ArchUnit | `docs/adr/` | opus / xhigh | 2/2/2/2 = 8 | Pocas invocaciones que deciden la estructura de todo |
+| `qa-automation-architect` | Capas, reglas R1–R7, ADRs, especificación de CHK-17 | `docs/adr/` | opus / xhigh | 2/2/2/2 = 8 | Pocas invocaciones que deciden la estructura de todo |
 | `qa-test-designer` | Specs, features, técnicas formales, trazabilidad | `docs/specs/`, `features/` | sonnet / high | 1/1/0/2 = 4 | Procedimiento con patrón y volumen alto; el error lo cubren el verifier y CHK-12 |
 | `qa-automation-engineer` | Código Java de pruebas, fábricas, unit tests | `src/test/java/` | sonnet / high | 1/1/0/1 = 3 | Volumen alto con patrones fijados por ADR |
 | `qa-test-verifier` | Veredicto independiente de aceptación | **nada** | opus / high | 1/2/1/2 = 6 | Un falso APROBADO deja una prueba que nunca detecta |
@@ -49,7 +49,7 @@ Rúbrica (0–2 por eje): **I**mpacto, **R**azonamiento, **V**olumen (invertido)
 
 ## Supuestos
 1. **Mutación con SUT externo:** PIT se aplica sobre la lógica propia del framework; los escenarios E2E demuestran que fallan con el control negativo (CHK-10), comprobado.
-2. **Deuda:** las páginas reciben `WebDriver` (ADR-002 pendiente). Las features ya tienen spec aprobada (SDD). Todo lo nuevo cumple las reglas.
+2. **Sin deuda de capas:** el ADR-002 dejó Selenium confinado a `transport` (`Navegador`), las páginas por composición y los steps sobre acciones; CHK-17 lo comprueba en cada ejecución del CI. Las features tienen spec aprobada (SDD).
 3. **CHK-12 en rojo al crearse:** es intencional; hace visible la deuda.
 
 ## Uso

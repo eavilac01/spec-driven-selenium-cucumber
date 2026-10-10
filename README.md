@@ -111,6 +111,7 @@ Reglas de dependencia:
 ├── scripts/check-traceability.sh
 ├── src/main/java/com/demo      # lógica pura, sin E/S (ADR-001)
 │   ├── config
+│   │   ├── BrowserSettings.java
 │   │   ├── ConfigResolver.java
 │   │   ├── DotEnvParser.java
 │   │   └── SecretResolver.java

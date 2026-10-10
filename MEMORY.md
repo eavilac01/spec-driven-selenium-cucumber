@@ -3,13 +3,14 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-- Suite 5/5 en verde (local): login exitoso, 2 rechazos de login, compra E2E y carrito con 1 producto (AC-COMPRA-04).
+- Suite 122 en verde (local): 5 E2E (login exitoso, 2 rechazos, compra, carrito con 1 producto) + 117 unitarias.
 - Specs `docs/specs/login.md` y `compra.md` aprobadas (2026-10-09); features con `Spec:`, `@AC-` y `@tec-`.
 - CHK-10 demostrado en los 7 AC verificables: cada control negativo falla en el `Then`.
-- Package `com.demo`, Maven Wrapper, `PageManager`, reportes Allure y HTML de Cucumber.
-- Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…16).
-- ADR-001 (mutación con PIT) implementado completo: `src/main` con `ConfigResolver`, `DotEnvParser`, `SecretResolver` y `Credentials`; 90 unitarias (suite 95); PIT 73/73; job `mutation` en CI y etapa en Jenkins (`90687f4`) con guarda de reporte; run remoto en verde.
-- CHK-01…16 todas activas; las de CI: CHK-12 antes de la suite y CHK-11/15/16 en el job `mutation`.
+- Package `com.demo`, Maven Wrapper, reportes Allure y HTML de Cucumber.
+- Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…17).
+- ADR-001 (mutación con PIT) completo: `src/main` puro (`ConfigResolver`, `DotEnvParser`, `SecretResolver`, `BrowserSettings`, `Credentials`); PIT 89/89; job `mutation` con guarda de reporte.
+- ADR-002 (capas) completo: steps → actions → pages → transport (`Navegador`, único dueño del `WebDriver`); CHK-17 `check-layers.sh` con autoprueba de 154 casos.
+- CHK-01…17 activas; en CI: CHK-12 antes de la suite; CHK-11/15/16/17 en el job `mutation`.
 - Hooks activos: gate DevOps y protección de `.claude/**`, `CLAUDE.md`, `MEMORY.md` y `AGENTS.md` (56/56 casos).
 - `AGENTS.md` en la raíz, para cualquier agente de código; bajo `ask`.
 - Repo renombrado a `spec-driven-selenium-cucumber` en GitHub y en local (`~/repo/`), con la memoria de Claude Code migrada.
@@ -37,12 +38,13 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - En SauceDemo (SPA) la URL cambia antes que el DOM: esperar un contenedor propio de la página, no solo la URL.
 - PIT 1.30.0 sin `target/classes` dice "Skipping project" y da `BUILD SUCCESS` (falla abierto): CI y gate deben exigir `target/pit-reports/mutations.xml`.
 - PIT no muta `requireNonNull` ni los accesores de un record: esas pruebas se validan con control negativo manual en una copia aislada (sin `.env`).
+- Una mutante declarada "equivalente" se demuestra, no se supone: en CHK-17 dos lo parecían y fallaban abierto.
 - No existe la CLI `gh` en esta máquina: las operaciones de GitHub (renombrar, settings) las hace el usuario en la web.
 
 ## Próximos pasos
 1. Responder las preguntas Q-* de las specs (usuario).
 2. P2 de CI: Jenkinsfile sin validar en un Jenkins real; stage `Test` sin timeout; filtro `not @quarantine` cuando exista la cuarentena. (`permissions: contents: read` hecho en `6c6b95b`, CI en verde.)
-3. ADR-002 aceptado (2026-10-09). Hechos: paso 1 (`Navegador` único dueño del `WebDriver`, sin `BasePage` ni `ThreadLocal`) y paso 2 (`LoginActions`/`CompraActions`, sin `PageManager`; steps solo usan acciones). P2 para el paso 3: la regex R3 de firmas de acciones no detecta páginas como parámetro → 3 CHK-17 `check-layers.sh` + autoprueba (devops) → 4 verifier → 5 `BrowserSettings` en `src/main`. Los cambios a reglas y agentes de cada paso se aplican al cerrarlo.
+3. ADR-002, P2 abiertos: R-3 (sin `ThreadLocal`, `Navegador` solo vale en serie → resolver antes del paralelismo), R-4 (confirmar CHK-17 en el run remoto), R-6 (Firefox y Grid sin ejecutar en CI); `BrowserSettingsTest` `:235`/`:252` verifican solo el tipo de la causa.
 4. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05).
 5. Con las Q-* respondidas, cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.
 6. Paralelismo, solo después de confirmar la independencia de los escenarios.
