@@ -21,6 +21,9 @@
 #     índice corrupto y configuración inválida (git grep rc >= 2), git grep que
 #     termina con rc >= 2 sin escribir en stderr (shim de git en el PATH) y
 #     archivo ilegible (stderr de git grep).
+# Antes de copiar el repo base, exige que git no lance mantenimiento ni gc
+# automáticos (config efectiva, traza del commit con un control positivo, sin
+# archivos efímeros) y que un cp que pierde un archivo efímero salga con 2.
 # Así una expresión regular rota no deja pasar todo en silencio. Cada
 # alternativa de una expresión regular de D7 tiene su caso negativo: quitar una
 # alternativa hace fallar al menos un caso.
@@ -42,9 +45,26 @@ fi
 # Git aislado de la configuración del usuario y del sistema (hooks, firma,
 # grep.*, color) y de variables que redirigen el repositorio.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
-  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_COMMON_DIR
+  GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_COMMON_DIR \
+  GIT_CONFIG_PARAMETERS GIT_TRACE
 export GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL=/dev/null
+# Sin mantenimiento ni gc automáticos. Tras un commit, git lanza
+# "git maintenance run --auto --detach" en segundo plano (también git 2.53);
+# ese proceso crea y borra .git/objects/maintenance.lock mientras cp copia el
+# repositorio base (falló en CI con git 2.55: "cp: cannot stat …lock").
+# Por entorno (GIT_CONFIG_COUNT) y no con "git config" en el repo base:
+#   - vale para todo git que lance la autoprueba (también check-layers.sh y el
+#     shim), antes de "git init" y en los casos que rompen o borran .git;
+#   - tiene prioridad de línea de comandos: la config local de un caso no lo
+#     reactiva, y no se copia como parte del árbol que se evalúa.
+# Los autoDetach=false hacen que, si algo lo lanzara igualmente, corra en
+# primer plano y no en paralelo con la copia.
+export GIT_CONFIG_COUNT=4
+export GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false
+export GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0
+export GIT_CONFIG_KEY_2=maintenance.autoDetach GIT_CONFIG_VALUE_2=false
+export GIT_CONFIG_KEY_3=gc.autoDetach GIT_CONFIG_VALUE_3=false
 export GIT_AUTHOR_NAME=autoprueba GIT_AUTHOR_EMAIL=autoprueba@localhost
 export GIT_COMMITTER_NAME=autoprueba GIT_COMMITTER_EMAIL=autoprueba@localhost
 
@@ -274,7 +294,8 @@ mkdir -p "$base"
     '}'
 
   git add -A
-  git -c commit.gpgsign=false commit -q -m base
+  # La traza registra cada proceso que lanza el commit (caso de aislamiento).
+  GIT_TRACE="$tmp/base-commit.trace" git -c commit.gpgsign=false commit -q -m base
 ) || { echo "check-layers-test: no se pudo crear el repositorio base" >&2; exit 2; }
 
 # ------------------------------------------------------------------- arnés
@@ -286,10 +307,15 @@ dir=""
 rc=0
 out=""
 
+# Copia con cp -a (todo el árbol, versionado o no, y .git tal cual). Un fallo de
+# copia es un error de preparación: 2, nunca un caso en verde.
 new_case() {
   n=$((n + 1))
   dir="$tmp/case-$n"
-  cp -a "$base" "$dir"
+  cp -a "$base" "$dir" || {
+    echo "check-layers-test: no se pudo copiar el repositorio base al caso $n" >&2
+    exit 2
+  }
 }
 
 run_script() {
@@ -350,6 +376,56 @@ allowed() {
 }
 
 # ------------------------------------------------------------------- casos
+# Aislamiento del mantenimiento de git (regresión de git 2.55). Van antes de la
+# primera copia: si fallan, la autoprueba sale con 2 sin copiar nada.
+for kv in maintenance.auto=false gc.auto=0 maintenance.autoDetach=false gc.autoDetach=false; do
+  rc=0
+  out="$(git -C "$base" config --show-scope --get "${kv%%=*}" 2>&1)" || rc=$?
+  expect "aislamiento: $kv en el repo base (ámbito command)" 0 \
+    "$(printf 'command\t%s' "${kv#*=}")"
+done
+# GIT_TRACE registra "run_command: git maintenance run --auto …" (o gc --auto)
+# cuando el commit lo lanza. grep: 1 = no lo lanzó; 2 = sin traza (falla).
+maint_re='run_command: git (maintenance run|gc)( .*)? --auto'
+rc=0
+out="$(grep -E -- "$maint_re" "$tmp/base-commit.trace" 2>&1)" || rc=$?
+expect "aislamiento: el commit del repo base no lanza mantenimiento ni gc" 1
+# Control: con -c maintenance.auto=true (precede al entorno) el mismo commit sí
+# lo lanza, así que el caso anterior no pasa por una traza vacía. En primer
+# plano (autoDetach=false del entorno) y en un repo que no se copia.
+ctl="$tmp/control-mantenimiento"
+mkdir -p "$ctl"
+(
+  cd "$ctl"
+  git init -q .
+  put f.txt 'control'
+  git add -A
+  GIT_TRACE="$tmp/control-commit.trace" \
+    git -c commit.gpgsign=false -c maintenance.auto=true commit -q -m control
+) || { echo "check-layers-test: no se pudo crear el repositorio de control" >&2; exit 2; }
+rc=0
+out="$(grep -E -- "$maint_re" "$tmp/control-commit.trace" 2>&1)" || rc=$?
+expect "control: con maintenance.auto=true el commit sí lanza mantenimiento" 0
+# Ningún archivo efímero de git en el repo base antes de copiarlo.
+rc=0
+out="$(find "$base/.git" \( -name '*.lock' -o -name gc.pid -o -name 'tmp_*' \
+  -o -name 'incoming-*' \) -print 2>&1)" || rc=$?
+[ -z "$out" ] || rc=1
+expect "aislamiento: repo base sin archivos efímeros (*.lock, gc.pid, tmp_*)" 0
+# Un cp que pierde un archivo efímero (lo que pasó en CI) falla cerrado con 2.
+mkdir -p "$tmp/shim-cp"
+printf '#!/usr/bin/env bash\necho "cp: cannot stat %s: No such file or directory" >&2\nexit 1\n' \
+  "'$base/.git/objects/maintenance.lock'" > "$tmp/shim-cp/cp"
+chmod +x "$tmp/shim-cp/cp"
+rc=0
+out="$( (PATH="$tmp/shim-cp:$PATH"; new_case) 2>&1)" || rc=$?
+expect "regresión: cp pierde maintenance.lock durante la copia (sale con 2)" 2 \
+  're:^check-layers-test: no se pudo copiar el repositorio base al caso [0-9]+$'
+if [ "$fails" -ne 0 ]; then
+  echo "check-layers-test: git no quedó aislado del mantenimiento automático; no se copia el repo base" >&2
+  exit 2
+fi
+
 # Árbol válido
 new_case
 run_script "$dir"
@@ -503,7 +579,10 @@ expect "error: la raíz es un subdirectorio del repositorio" 2 \
 # con una violación fuera de él: evaluar solo el subdirectorio daría 0.
 new_case
 mkdir -p "$dir/proj"
-cp -a "$base/src" "$dir/proj/src"
+cp -a "$base/src" "$dir/proj/src" || {
+  echo "check-layers-test: no se pudo copiar src al subdirectorio del caso $n" >&2
+  exit 2
+}
 put "$dir/$T/steps/Bad.java" 'package com.demo.prueba;' 'import org.openqa.selenium.WebDriver;'
 git -C "$dir" add -A
 run_script "$dir/proj"
