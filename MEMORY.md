@@ -3,18 +3,19 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-- Suite 122 en verde (local): 5 E2E (login exitoso, 2 rechazos, compra, carrito con 1 producto) + 117 unitarias.
-- Specs `docs/specs/login.md` y `compra.md` aprobadas (2026-10-09); features con `Spec:`, `@AC-` y `@tec-`.
-- CHK-10 demostrado en los 7 AC verificables: cada control negativo falla en el `Then`.
+- Suite 146 en verde (local, `not @quarantine`): 21 E2E (22 AC de login y compra) + 125 unitarias; PIT 91/91.
+- Specs `docs/specs/login.md` y `compra.md` con todos sus AC verificables y cubiertos (valores ratificados tras exploración, 2026-10-10).
+- CHK-10 demostrado en cada AC: cada control negativo falla en el `Then`.
+- AC-COMPRA-09 en cuarentena `defecto-sut` (SauceDemo deja comprar con carrito vacío); CHK-14 y job `quarantine` informativo.
 - Package `com.demo`, Maven Wrapper, reportes Allure y HTML de Cucumber.
 - Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…17).
 - ADR-001 (mutación con PIT) completo: `src/main` puro (`ConfigResolver`, `DotEnvParser`, `SecretResolver`, `BrowserSettings`, `Credentials`); PIT 89/89; job `mutation` con guarda de reporte.
 - ADR-002 (capas) completo: steps → actions → pages → transport (`Navegador`, único dueño del `WebDriver`); CHK-17 `check-layers.sh` con autoprueba de 162 casos.
-- CHK-01…17 activas; en CI: CHK-12 antes de la suite; CHK-11/15/16/17 en el job `mutation`.
+- CHK-01…17 activas; en CI: CHK-12 antes de la suite; CHK-11/14/15/16/17 en el job `mutation`.
 - Hooks activos: gate DevOps y protección de `.claude/**`, `CLAUDE.md`, `MEMORY.md` y `AGENTS.md` (56/56 casos).
 - `AGENTS.md` en la raíz, para cualquier agente de código; bajo `ask`.
 - Repo renombrado a `spec-driven-selenium-cucumber` en GitHub y en local (`~/repo/`), con la memoria de Claude Code migrada.
-- CI con 4 jobs (`test`, `e2e-firefox`, `e2e-grid`, `mutation`) y paralelismo por escenario (2 hilos); Jenkinsfile endurecido (6 Secret text = nombres de `.env.example`), sin servidor real.
+- CI con 5 jobs (`test`, `e2e-firefox`, `e2e-grid`, `mutation`, `quarantine`) y paralelismo por escenario (2 hilos); Jenkinsfile endurecido (6 Secret text = nombres de `.env.example`), sin servidor real.
 
 ## Decisiones (y por qué)
 - El coordinador es la sesión principal, porque un subagente no puede delegar en otros.
@@ -41,10 +42,10 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Una mutante declarada "equivalente" se demuestra, no se supone: en CHK-17 dos lo parecían y fallaban abierto.
 - git hace mantenimiento automático en segundo plano tras un commit: un script que copia un repo debe desactivar `maintenance.auto`/`gc.auto` (en el runner rompió la autoprueba).
 - Firefox local es de snap: en local necesita `-Dwebdriver.gecko.driver=/snap/bin/geckodriver`; en CI no.
+- Un "no pasa X" que se verifica solo por ausencia da verde falso cuando falla la observación: exigir prueba positiva del estado contrario (AC-COMPRA-09).
 - No existe la CLI `gh` en esta máquina: las operaciones de GitHub (renombrar, settings) las hace el usuario en la web.
 
 ## Próximos pasos
-1. Specs con valores ratificados (exploración 2026-10-10) en `en-cambio` → aprobación del usuario → features y steps de AC-LOGIN-04…09 y AC-COMPRA-05…13.
-2. AC-COMPRA-09 es defecto conocido del SUT (permite comprar con carrito vacío): `@quarantine` tipo `defecto-sut` + `docs/quarantine.md` + script de CHK-14 (devops).
-3. ADR-002: R-3 (paralelismo) y R-6 (Firefox y Grid) cerrados con el run verde de `a66e8ce`; R-4 sigue abierto solo para Jenkins (sin servidor).
-4. P2: el entorno puede sobrescribir claves `*.expected*`; `BrowserSettingsTest` `:235`/`:252` verifican solo el tipo de la causa.
+1. P1 (engineer): `Navegador.abrir` debe fallar al instante ante una página de error de Chrome (`net::ERR_*`); probar `--disable-component-update`. Flake solo bajo carga (PIT en paralelo).
+2. P2: API nueva de `Navegador` en la tabla del ADR-002; `XPathLiteral` sin pruebas; `clickHastaCumplir` sin acotar; lecturas inmediatas de "no se muestra"; AC-COMPRA-09 si el SUT deshabilita el botón; naming `long` de Cucumber.
+3. P2: el entorno puede sobrescribir claves `*.expected*`; R-4 abierto solo para Jenkins (sin servidor).

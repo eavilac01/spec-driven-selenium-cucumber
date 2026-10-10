@@ -17,7 +17,7 @@ Comprobaciones deterministas que los agentes citan por ID. Una CHK en rojo es un
 | CHK-11 | Mutación (alcance del ADR-001: todo `src/main/java`) | Puntaje ≥ 80 % en la ejecución y la guarda en 0 (`mutations.xml` presente, sin `Skipping project`); cada mutante sobreviviente de las clases tocadas, justificado | verifier, devops |
 | CHK-12 | Trazabilidad SDD: `Spec:` hacia una spec `aprobada`, `@AC-` y `@tec-` en cada escenario, cada `@AC-` existe en la spec y cada AC verificable tiene escenario | Exit 0; con exit 1 imprime `archivo:línea: motivo` | designer, devops |
 | CHK-13 | Pipelines válidos | Sin error | devops |
-| CHK-14 | Cuarentena reglada, con dos tipos | Cada `@quarantine` tiene su fila en `docs/quarantine.md` con su tipo: `inestable` (dueño, ingreso, issue, diagnóstico y límite ≤ 14 días, no vencido) o `defecto-sut` (dueño, referencia al defecto en la spec según SDD-08, comportamiento esperado frente a observado y próxima revisión ≤ 90 días, no vencida); ninguna fila sin escenario | devops |
+| CHK-14 | Cuarentena reglada, con dos tipos | Cada `@quarantine` tiene su fila en `docs/quarantine.md` con su tipo: `inestable` (dueño, ingreso, issue, diagnóstico y límite ≤ 14 días, no vencido) o `defecto-sut` (dueño, referencia al defecto en la spec según SDD-08, comportamiento esperado frente a observado y próxima revisión ≤ 90 días, no vencida); una fila por cada `@AC-` en cuarentena (propia o heredada) y ninguna fila sin escenario. Exit 0 en el script y en su autoprueba; con exit 1 imprime `archivo:línea: motivo` | devops |
 | CHK-15 | `src/main/java` puro: sin entorno, archivos, Selenium, Cucumber ni JUnit (ADR-001) | Sin salida | engineer, verifier, devops |
 | CHK-16 | Pruebas unitarias aisladas: sin Selenium, Cucumber, capas de prueba, entorno ni `.env` real, y solo `*Test.java` en sus directorios (ADR-001) | Sin salida | engineer, verifier |
 | CHK-17 | Capas (ADR-002): R1–R6 de D7, incluidas páginas como parámetro en acciones; falla cerrado (directorios de capa, `git grep` con rc ≥ 2 o con stderr) | Exit 0 en el script y en su autoprueba | engineer, verifier, devops |
@@ -52,6 +52,9 @@ bash -c 'set -o pipefail; ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mu
 bash scripts/check-traceability.sh
 # CHK-13
 python3 -c "import yaml,sys;[yaml.safe_load(open(f)) for f in sys.argv[1:]]" .github/workflows/*.yml
+# CHK-14 (dos comandos; ambos en 0)
+bash scripts/tests/check-quarantine-test.sh
+bash scripts/check-quarantine.sh
 # CHK-15
 git grep -nE 'System\.(getenv|getProperty)|java\.nio\.file|java\.io\.File|getResource|org\.openqa|io\.cucumber|org\.junit' -- src/main/java
 # CHK-16 (dos comandos; ambos sin salida)
@@ -70,6 +73,6 @@ Control negativo de CHK-11 (ADR-001, D6): con menos pruebas, el umbral **debe** 
 ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage -Dpit.targetTests='com.demo.data.*Test'
 ```
 
-**Estado actual:** CHK-12 está activa en `scripts/check-traceability.sh` y corre en GitHub Actions y Jenkins antes de la suite. CHK-11, CHK-15 y CHK-16 están activas (ADR-001): job `mutation` en GitHub Actions y etapa `Mutation (CHK-11)` en Jenkins, sin secrets ni navegador (`90687f4`), con `scripts/check-mutation-report.sh` contra el fallo abierto de PIT. CHK-17 está activa (ADR-002): `scripts/check-layers.sh` y su autoprueba corren en el job `mutation` de GitHub Actions y en la etapa `Capas (CHK-17)` de Jenkins, sin secrets (`f7f7a13`).
+**Estado actual:** CHK-12 está activa en `scripts/check-traceability.sh` y corre en GitHub Actions y Jenkins antes de la suite. CHK-11, CHK-15 y CHK-16 están activas (ADR-001): job `mutation` en GitHub Actions y etapa `Mutation (CHK-11)` en Jenkins, sin secrets ni navegador (`90687f4`), con `scripts/check-mutation-report.sh` contra el fallo abierto de PIT. CHK-17 está activa (ADR-002): `scripts/check-layers.sh` y su autoprueba corren en el job `mutation` de GitHub Actions y en la etapa `Capas (CHK-17)` de Jenkins, sin secrets (`f7f7a13`). CHK-14 está activa: `scripts/check-quarantine.sh` y su autoprueba corren en el job `mutation` y en Jenkins; el job `quarantine` ejecuta solo los escenarios en cuarentena sin bloquear el pipeline y avisa si alguno pasa.
 
 La cobertura de líneas **no** es una CHK: mide qué código se ejecutó, no qué se verificó.

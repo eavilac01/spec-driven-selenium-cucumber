@@ -180,6 +180,7 @@ flowchart TB
 | **CHK-12** · `scripts/check-traceability.sh` | Escenarios sin spec aprobada o sin `@AC-`/`@tec-` | CI y Jenkins, antes de la suite |
 | **CHK-15/16** · `scripts/check-unit-purity.sh` | E/S o Selenium en `src/main`; pruebas unitarias acopladas | CI (job `mutation`) y Jenkins |
 | **CHK-11** · PIT + `scripts/check-mutation-report.sh` | Pruebas unitarias que no detectan defectos (umbral 80 %) | CI (job `mutation`) y Jenkins |
+| **CHK-14** · `scripts/check-quarantine.sh` | Pruebas en cuarentena sin registro, sin dueño o con plazo vencido | CI (job `mutation`) y Jenkins |
 
 Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-002](docs/adr/002-transport-and-business-actions.md); la decisión de mutar solo la lógica pura, en el [ADR-001](docs/adr/001-mutation-testing-pit.md).
 
@@ -457,6 +458,7 @@ Las mismas que corre el CI, ejecutables en local:
 bash scripts/check-traceability.sh   # CHK-12: cada escenario trazado a una spec aprobada
 bash scripts/check-layers.sh         # CHK-17: reglas de capas (Selenium solo en transport, etc.)
 bash scripts/check-unit-purity.sh    # CHK-15/16: src/main puro y pruebas unitarias aisladas
+bash scripts/check-quarantine.sh     # CHK-14: cada @quarantine registrado en docs/quarantine.md
 
 # CHK-11: pruebas de mutación (umbral 80 %) con la guarda contra el "Skipping project" de PIT
 rm -rf target/pit-reports
@@ -522,7 +524,8 @@ Para comprobar la evidencia durante desarrollo, puede cambiarse temporalmente un
 | `test` | CHK-12 (trazabilidad) y la suite completa en Chrome headless, sin `@quarantine` | Sí |
 | `e2e-firefox` | Los escenarios E2E en Firefox headless | Sí |
 | `e2e-grid` | Los escenarios E2E contra un Selenium Grid (`selenium/standalone-chrome`), con espera activa a que esté listo | Sí |
-| `mutation` | CHK-17 (capas) con su autoprueba, CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
+| `mutation` | CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
+| `quarantine` | Solo los escenarios `@quarantine`, de forma **informativa** (`continue-on-error`): no bloquea el pipeline y avisa si alguno empieza a pasar | Sí |
 
 Cada job publica sus reportes como artefactos aunque falle. Los jobs con secrets los verifican al inicio con `scripts/check-required-secrets.sh`, que solo nombra las variables que faltan.
 
@@ -541,10 +544,11 @@ Los escenarios corren en paralelo con 2 hilos (`src/test/resources/junit-platfor
 El `Jenkinsfile` declarativo está listo para un servidor Jenkins, aunque todavía no se ha ejecutado en uno real. Reproduce los jobs `test` y `mutation` de GitHub Actions:
 
 1. `Checkout` del commit bajo prueba.
-2. `Traceability SDD (CHK-12)` y `Capas (CHK-17)`.
+2. `Traceability SDD (CHK-12)`, `Capas (CHK-17)` y `Cuarentena reglada (CHK-14)`.
 3. `Mutation (CHK-11)`: PIT con la guarda de reporte, sin credenciales.
-4. `Test`: la suite sin `@quarantine`; es la **única** etapa que recibe credenciales.
-5. `post` de `Test`: publica JUnit y Allure y archiva los reportes, aunque una prueba falle. `Mutation` archiva su reporte y `pit.log`. El `post` global limpia el espacio de trabajo.
+4. `Test`: la suite sin `@quarantine`; recibe credenciales.
+5. `Cuarentena (informativa)`: solo los escenarios `@quarantine`; si fallan, la etapa queda inestable sin romper el build. También recibe credenciales.
+6. `post` de `Test`: publica JUnit y Allure y archiva los reportes, aunque una prueba falle. `Mutation` archiva su reporte y `pit.log`. El `post` global limpia el espacio de trabajo.
 
 Incluye límites de tiempo globales y por etapa, descarte de builds antiguos y builds no concurrentes. Los bloques de shell de varias órdenes corren en bash con `set -euo pipefail`, y todos usan comillas simples para que Groovy no interpole ningún valor.
 
@@ -597,7 +601,20 @@ Lista de control antes de integrar cambios:
 [ ] un fallo conserva captura y los hooks cierran el navegador
 ```
 
+## Cuarentena y defectos conocidos
+
+Una prueba nunca se desactiva ni se borra para que el pipeline pase. La única vía es la **cuarentena reglada**: la etiqueta `@quarantine` en el escenario más una fila en [`docs/quarantine.md`](docs/quarantine.md), que CHK-14 valida en cada ejecución.
+
+| Tipo | Cuándo | Plazo | Cómo sale |
+|---|---|---|---|
+| `inestable` | Una prueba falla de forma intermitente sin cambios de código | Máximo 14 días | Se corrige la causa raíz |
+| `defecto-sut` | La aplicación incumple la spec (defecto conocido del sistema bajo prueba) | Revisión cada 90 días | La aplicación se corrige: el escenario pasa y se quita la etiqueta |
+
+Hoy hay un caso: **AC-COMPRA-09**. La regla de negocio dice que no se puede comprar con el carrito vacío, pero SauceDemo lo permite. La prueba exige la regla, así que falla y deja el defecto visible en el job `quarantine` sin bloquear el resto del pipeline.
+
 ## Solución de problemas
+
+**Un escenario falla al abrir la página con una página de error de Chrome (`ERR_CONNECTION_CLOSED`, `ERR_CERT_VERIFIER_CHANGED`).** Suele ocurrir con la máquina saturada, por ejemplo con PIT corriendo a la vez que la suite. Ejecuta la suite y las pruebas de mutación por separado. La captura del escenario en `target/cucumber-report.html` muestra el error real.
 
 **`La variable sensible obligatoria '...' no tiene valor`.** Falta esa variable en `.env` (local) o en los *Secrets* (CI), o está vacía. Revisa la sección [Credenciales de SauceDemo](#credenciales-de-saucedemo-cómo-obtenerlas).
 
