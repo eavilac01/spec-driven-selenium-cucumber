@@ -53,18 +53,11 @@ public final class ConfigResolver {
     }
 
     public int getPositiveInt(String key) {
-        String value = getRequired(key).trim();
-        try {
-            int parsedValue = Integer.parseInt(value);
-            if (parsedValue <= 0) {
-                throw new IllegalArgumentException(
-                        "La configuración '%s' debe ser mayor que cero, pero fue '%s'".formatted(key, value));
-            }
-            return parsedValue;
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException(
-                    "La configuración '%s' debe ser un entero, pero fue '%s'".formatted(key, value), exception);
-        }
+        return getIntAtLeast(key, 1, "mayor que cero");
+    }
+
+    public int getNonNegativeInt(String key) {
+        return getIntAtLeast(key, 0, "mayor o igual que cero");
     }
 
     public List<String> getList(String key) {
@@ -76,6 +69,21 @@ public final class ConfigResolver {
                     "La configuración '%s' contiene un elemento vacío".formatted(key));
         }
         return values;
+    }
+
+    private int getIntAtLeast(String key, int minimum, String requirement) {
+        String value = getRequired(key).trim();
+        try {
+            int parsedValue = Integer.parseInt(value);
+            if (parsedValue < minimum) {
+                throw new IllegalArgumentException(
+                        "La configuración '%s' debe ser %s, pero fue '%s'".formatted(key, requirement, value));
+            }
+            return parsedValue;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    "La configuración '%s' debe ser un entero, pero fue '%s'".formatted(key, value), exception);
+        }
     }
 
     private String resolve(String key) {

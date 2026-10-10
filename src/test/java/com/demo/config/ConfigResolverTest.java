@@ -290,6 +290,83 @@ class ConfigResolverTest {
                 assertThrows(IllegalArgumentException.class, () -> resolver.getPositiveInt("over")).getCause());
     }
 
+    @Test
+    void getPositiveIntRejectsZeroNamingKeyAndValue() {
+        file.setProperty("n", "0");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> resolver.getPositiveInt("n"));
+
+        assertEquals("La configuración 'n' debe ser mayor que cero, pero fue '0'", exception.getMessage());
+    }
+
+    // --- getNonNegativeInt ---
+
+    @Test
+    void getNonNegativeIntAcceptsZeroOneAndPaddedSix() {
+        file.setProperty("cero", "0");
+        file.setProperty("uno", "1");
+        file.setProperty("seis", " 6 ");
+
+        assertEquals(0, resolver.getNonNegativeInt("cero"));
+        assertEquals(1, resolver.getNonNegativeInt("uno"));
+        assertEquals(6, resolver.getNonNegativeInt("seis"));
+    }
+
+    @Test
+    void getNonNegativeIntRejectsMinusOneNamingKeyAndValue() {
+        file.setProperty("n", "-1");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> resolver.getNonNegativeInt("n"));
+
+        assertEquals("La configuración 'n' debe ser mayor o igual que cero, pero fue '-1'",
+                exception.getMessage());
+        assertNull(exception.getCause());
+    }
+
+    @Test
+    void getNonNegativeIntRejectsTextKeepingNumberFormatExceptionAsCause() {
+        file.setProperty("n", "abc");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> resolver.getNonNegativeInt("n"));
+
+        assertEquals("La configuración 'n' debe ser un entero, pero fue 'abc'", exception.getMessage());
+        assertInstanceOf(NumberFormatException.class, exception.getCause());
+    }
+
+    @Test
+    void getNonNegativeIntRejectsMissingAndBlankValues() {
+        file.setProperty("vacio", "   ");
+
+        IllegalStateException missing = assertThrows(IllegalStateException.class,
+                () -> resolver.getNonNegativeInt("ausente"));
+        IllegalStateException blank = assertThrows(IllegalStateException.class,
+                () -> resolver.getNonNegativeInt("vacio"));
+
+        assertEquals("La configuración obligatoria 'ausente' no tiene valor", missing.getMessage());
+        assertEquals("La configuración obligatoria 'vacio' no tiene valor", blank.getMessage());
+    }
+
+    @Test
+    void getNonNegativeIntAcceptsMaximumIntAndRejectsOverflow() {
+        file.setProperty("max", "2147483647");
+        file.setProperty("over", "2147483648");
+
+        assertEquals(Integer.MAX_VALUE, resolver.getNonNegativeInt("max"));
+        assertInstanceOf(NumberFormatException.class,
+                assertThrows(IllegalArgumentException.class, () -> resolver.getNonNegativeInt("over")).getCause());
+    }
+
+    @Test
+    void getNonNegativeIntFollowsTheSamePrecedenceAsOtherGetters() {
+        file.setProperty("n", "3");
+        system.put("n", "0");
+
+        assertEquals(0, resolver.getNonNegativeInt("n"));
+    }
+
     // --- getList ---
 
     @Test

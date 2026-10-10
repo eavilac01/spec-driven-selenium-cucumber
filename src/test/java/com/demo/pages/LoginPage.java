@@ -25,10 +25,24 @@ public final class LoginPage {
         navegador.esperarVisible(CAMPO_USUARIO);
     }
 
+    /** Un usuario o una contraseña vacíos no escriben nada en su campo. */
     public void iniciarSesion(String usuario, String contrasena) {
-        navegador.escribir(CAMPO_USUARIO, usuario);
-        navegador.escribir(CAMPO_CONTRASENA, contrasena);
+        Objects.requireNonNull(usuario, "El usuario no puede ser null");
+        Objects.requireNonNull(contrasena, "La contraseña no puede ser null");
+        if (!usuario.isEmpty()) {
+            navegador.escribir(CAMPO_USUARIO, usuario);
+        }
+        if (!contrasena.isEmpty()) {
+            navegador.escribir(CAMPO_CONTRASENA, contrasena);
+        }
         navegador.click(BOTON_INICIAR_SESION);
+    }
+
+    /** Observa, dentro del tiempo máximo, si se muestra el inicio de sesión fuera de la ruta del catálogo. */
+    public boolean seMuestraInicioSesion() {
+        return navegador.apareceEnTiempoMaximo(CAMPO_USUARIO)
+                && navegador.esVisible(BOTON_INICIAR_SESION)
+                && !navegador.urlContiene(ConfigReader.getRequired("route.inventory"));
     }
 
     public String obtenerMensajeError() {
@@ -36,6 +50,6 @@ public final class LoginPage {
     }
 
     public boolean seMuestraMensajeError() {
-        return navegador.esVisible(MENSAJE_ERROR);
+        return navegador.apareceEnTiempoMaximo(MENSAJE_ERROR);
     }
 }

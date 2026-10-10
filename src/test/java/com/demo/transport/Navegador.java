@@ -8,6 +8,7 @@ import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebDriverException;
 import org.openqa.selenium.WebElement;
@@ -83,11 +84,67 @@ public final class Navegador {
         wait.until(ExpectedConditions.urlContains(fragmentoUrl));
     }
 
+    /** Lectura inmediata, sin espera: indica si la URL actual contiene el fragmento. */
+    public boolean urlContiene(String fragmentoUrl) {
+        verificarIniciado();
+        String urlActual = driver.getCurrentUrl();
+        return urlActual != null && urlActual.contains(fragmentoUrl);
+    }
+
     // --- Interacción con postcondición ---
 
     public void click(By localizador) {
         verificarIniciado();
         wait.until(ExpectedConditions.elementToBeClickable(localizador)).click();
+    }
+
+    /** Resultado de {@link #clickYObservarUrlContiene}: la URL esperada se alcanzó o no, con clics efectivos. */
+    public enum ResultadoClic {
+        AVANZO,
+        NO_AVANZO
+    }
+
+    /**
+     * Hace clic en el control, con el mismo respaldo de clic repetido que {@link #clickYEsperarUrlContiene},
+     * hasta que la URL contenga el fragmento o se agote el tiempo máximo. Distingue tres estados:
+     * {@link ResultadoClic#AVANZO}; {@link ResultadoClic#NO_AVANZO} con al menos un clic efectivo (el control
+     * estuvo clicable y se pulsó); y control no disponible (nunca clicable, ningún clic), que lanza
+     * {@link IllegalStateException} porque no prueba nada y no debe leerse como "no avanza".
+     * Registra a nivel INFO el número de clics efectivos, nunca datos del escenario.
+     */
+    public ResultadoClic clickYObservarUrlContiene(By localizador, String fragmentoUrl) {
+        verificarIniciado();
+        AtomicInteger clicsEfectivos = new AtomicInteger();
+        ExpectedCondition<Boolean> urlEsperada = ExpectedConditions.urlContains(fragmentoUrl);
+        try {
+            wait.until(webDriver -> {
+                if (Boolean.TRUE.equals(urlEsperada.apply(webDriver))) {
+                    return true;
+                }
+                WebElement elemento = ExpectedConditions.elementToBeClickable(localizador).apply(webDriver);
+                if (elemento == null) {
+                    return false;
+                }
+                if (clicsEfectivos.getAndIncrement() == 0) {
+                    elemento.click();
+                } else {
+                    ((JavascriptExecutor) webDriver).executeScript("arguments[0].click();", elemento);
+                }
+                return Boolean.TRUE.equals(urlEsperada.apply(webDriver));
+            });
+            logger.info("El clic en {} avanzó con {} clic(s) efectivo(s)", localizador, clicsEfectivos.get());
+            return ResultadoClic.AVANZO;
+        } catch (TimeoutException exception) {
+            int clics = clicsEfectivos.get();
+            logger.info("El clic en {} no avanzó; clics efectivos: {}", localizador, clics);
+            if (clics == 0) {
+                throw new IllegalStateException(
+                        "El control %s no estuvo disponible para hacer clic: la observación no es válida"
+                                .formatted(localizador),
+                        exception);
+            }
+            return ResultadoClic.NO_AVANZO;
+        }
     }
 
     public void clickYEsperarTexto(By localizador, String textoEsperado) {
@@ -100,6 +157,27 @@ public final class Navegador {
     public void clickYEsperarUrlContiene(By localizador, String fragmentoUrl) {
         verificarIniciado();
         clickHastaCumplir(localizador, ExpectedConditions.urlContains(fragmentoUrl));
+    }
+
+    public void clickYEsperarVisible(By localizador, By esperado) {
+        verificarIniciado();
+        ExpectedCondition<Boolean> esperadoVisible =
+                webDriver -> ExpectedConditions.visibilityOfElementLocated(esperado).apply(webDriver) != null;
+        clickHastaCumplir(localizador, esperadoVisible);
+    }
+
+    /** La postcondición es cualquiera de las dos salidas observables: el elemento visible o la URL esperada. */
+    public void clickYEsperarVisibleOUrlContiene(By localizador, By esperado, String fragmentoUrl) {
+        verificarIniciado();
+        ExpectedCondition<Boolean> alguna = webDriver ->
+                ExpectedConditions.visibilityOfElementLocated(esperado).apply(webDriver) != null
+                        || Boolean.TRUE.equals(ExpectedConditions.urlContains(fragmentoUrl).apply(webDriver));
+        clickHastaCumplir(localizador, alguna);
+    }
+
+    public void clickYEsperarInvisible(By localizador) {
+        verificarIniciado();
+        clickHastaCumplir(localizador, ExpectedConditions.invisibilityOfElementLocated(localizador));
     }
 
     public void escribir(By localizador, String texto) {
@@ -144,6 +222,24 @@ public final class Navegador {
             logger.debug("El elemento {} no está visible", localizador, exception);
             return false;
         }
+    }
+
+    /** Observa si el elemento llega a ser visible dentro del tiempo máximo; no falla si no llega. */
+    public boolean apareceEnTiempoMaximo(By localizador) {
+        verificarIniciado();
+        try {
+            wait.until(ExpectedConditions.visibilityOfElementLocated(localizador));
+            return true;
+        } catch (TimeoutException exception) {
+            logger.debug("El elemento {} no apareció dentro del tiempo máximo", localizador);
+            return false;
+        }
+    }
+
+    /** Lectura inmediata, sin espera: cuenta los elementos presentes que coinciden. */
+    public int contar(By localizador) {
+        verificarIniciado();
+        return driver.findElements(localizador).size();
     }
 
     public void esperarInvisible(By localizador) {

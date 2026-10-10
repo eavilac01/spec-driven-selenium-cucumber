@@ -35,15 +35,69 @@ public final class CompraActions {
         return inventoryPage.obtenerCantidadProductosEnCarrito();
     }
 
+    public boolean seMuestraContadorCarrito() {
+        return inventoryPage.seMuestraContadorCarrito();
+    }
+
     public List<String> revisarCarrito() {
         inventoryPage.abrirCarrito();
         return cartPage.obtenerNombresProductos();
     }
 
+    public int contarProductosEnCarrito() {
+        inventoryPage.abrirCarrito();
+        return cartPage.contarProductos();
+    }
+
+    public void quitarProductoDelCarrito(String producto) {
+        inventoryPage.abrirCarrito();
+        cartPage.quitarProducto(producto);
+    }
+
+    public List<String> consultarProductosDelCatalogo() {
+        inventoryPage.solicitarDirectamente();
+        return inventoryPage.obtenerNombresCatalogo();
+    }
+
+    public int contarProductosDelCatalogoPorAgregar() {
+        inventoryPage.solicitarDirectamente();
+        return inventoryPage.contarProductosPorAgregar();
+    }
+
     public void tramitarCompra(String nombre, String apellido, String codigoPostal) {
+        inventoryPage.abrirCarrito();
         cartPage.iniciarCheckout();
         checkoutPage.completarInformacionEnvio(nombre, apellido, codigoPostal);
         checkoutPage.finalizarCompra();
+    }
+
+    /** Un dato vacío no se escribe: así el escenario omite ese dato de envío. */
+    public void intentarTramitarCompra(String nombre, String apellido, String codigoPostal) {
+        inventoryPage.abrirCarrito();
+        cartPage.iniciarCheckout();
+        checkoutPage.intentarContinuarConInformacionEnvio(nombre, apellido, codigoPostal);
+    }
+
+    public void intentarTramitarCompraConCarritoSinProductos() {
+        inventoryPage.abrirCarrito();
+        cartPage.intentarIniciarCheckout();
+    }
+
+    /** "No avanza" exige permanecer en el carrito de forma observable; en cualquier otro caso se considera avance. */
+    public boolean avanzaADatosDeEnvio() {
+        return !cartPage.permaneceEnCarrito() || checkoutPage.estaEnDatosEnvio();
+    }
+
+    public boolean estaEnDatosDeEnvio() {
+        return checkoutPage.estaEnDatosEnvio();
+    }
+
+    public boolean seMuestraErrorDeEnvio() {
+        return checkoutPage.seMuestraMensajeError();
+    }
+
+    public String obtenerMensajeErrorDeEnvio() {
+        return checkoutPage.obtenerMensajeError();
     }
 
     public String obtenerMensajeConfirmacion() {

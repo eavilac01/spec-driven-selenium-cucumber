@@ -35,6 +35,10 @@ public final class ConfigReader {
         return RESOLVER.getPositiveInt(key);
     }
 
+    public static int getNonNegativeInt(String key) {
+        return RESOLVER.getNonNegativeInt(key);
+    }
+
     public static List<String> getList(String key) {
         return RESOLVER.getList(key);
     }

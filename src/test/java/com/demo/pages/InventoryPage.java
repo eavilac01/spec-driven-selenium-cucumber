@@ -1,5 +1,6 @@
 package com.demo.pages;
 
+import java.util.List;
 import java.util.Objects;
 
 import org.openqa.selenium.By;
@@ -15,6 +16,8 @@ public final class InventoryPage {
     private static final By TITULO = By.cssSelector("[data-test='title']");
     private static final By INSIGNIA_CARRITO = By.cssSelector("[data-test='shopping-cart-badge']");
     private static final By ENLACE_CARRITO = By.cssSelector("[data-test='shopping-cart-link']");
+    private static final By NOMBRES_CATALOGO = By.cssSelector("[data-test='inventory-item-name']");
+    private static final By BOTONES_AGREGAR = By.cssSelector("button[data-test^='add-to-cart']");
 
     private final Navegador navegador;
 
@@ -27,8 +30,26 @@ public final class InventoryPage {
         return navegador.texto(TITULO);
     }
 
+    /** Solicita la ruta del catálogo por URL, sin pasar por la interfaz; no espera a que cargue su contenido. */
+    public void solicitarDirectamente() {
+        String base = ConfigReader.getRequired("base.url");
+        String baseSinBarraFinal = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
+        navegador.abrir(baseSinBarraFinal + "/" + ConfigReader.getRequired("route.inventory"));
+    }
+
+    public List<String> obtenerNombresCatalogo() {
+        navegador.esperarUrlContiene(ConfigReader.getRequired("route.inventory"));
+        return navegador.textos(NOMBRES_CATALOGO);
+    }
+
+    public int contarProductosPorAgregar() {
+        navegador.esperarUrlContiene(ConfigReader.getRequired("route.inventory"));
+        navegador.esperarVisible(NOMBRES_CATALOGO);
+        return navegador.contar(BOTONES_AGREGAR);
+    }
+
     public void agregarProductoAlCarrito(String nombreProducto) {
-        By botonAgregar = By.xpath(XPATH_BOTON_AGREGAR.formatted(literalXPath(nombreProducto)));
+        By botonAgregar = By.xpath(XPATH_BOTON_AGREGAR.formatted(XPathLiteral.de(nombreProducto)));
         navegador.desplazarA(botonAgregar);
         navegador.clickYEsperarTexto(botonAgregar, ConfigReader.getRequired("inventory.remove-button.text"));
     }
@@ -37,17 +58,13 @@ public final class InventoryPage {
         return Integer.parseInt(navegador.texto(INSIGNIA_CARRITO));
     }
 
-    public void abrirCarrito() {
-        navegador.clickYEsperarUrlContiene(ENLACE_CARRITO, ConfigReader.getRequired("route.cart"));
+    /** Indica si la insignia del carrito está visible, una vez que el encabezado de la página está listo. */
+    public boolean seMuestraContadorCarrito() {
+        navegador.esperarVisible(ENLACE_CARRITO);
+        return navegador.esVisible(INSIGNIA_CARRITO);
     }
 
-    private String literalXPath(String valor) {
-        if (!valor.contains("'")) {
-            return "'" + valor + "'";
-        }
-        if (!valor.contains("\"")) {
-            return "\"" + valor + "\"";
-        }
-        return "concat('" + valor.replace("'", "', \"'\", '") + "')";
+    public void abrirCarrito() {
+        navegador.clickYEsperarUrlContiene(ENLACE_CARRITO, ConfigReader.getRequired("route.cart"));
     }
 }

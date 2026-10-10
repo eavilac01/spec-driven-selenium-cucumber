@@ -31,8 +31,17 @@ public final class LoginSteps {
 
     @When("intenta iniciar sesión con el caso configurado {word}")
     public void intentarIniciarSesion(String caso) {
-        CasoLogin casoLogin = obtenerCasoLogin(caso);
-        login.iniciarSesion(casoLogin.credentials());
+        login.iniciarSesion(obtenerCredencialesDelCaso(caso));
+    }
+
+    @When("solicita directamente el catálogo")
+    public void solicitarCatalogoDirectamente() {
+        login.solicitarCatalogoDirectamente();
+    }
+
+    @When("cierra la sesión")
+    public void cerrarSesion() {
+        login.cerrarSesion();
     }
 
     @Then("accede al inventario")
@@ -43,29 +52,47 @@ public final class LoginSteps {
                 "El usuario autenticado debería acceder al inventario");
     }
 
+    @Then("vuelve al inicio de sesión")
+    public void validarRegresoAlInicioSesion() {
+        assertTrue(
+                login.seMuestraInicioSesion(),
+                "El cliente debería volver al inicio de sesión");
+    }
+
     @Then("el acceso es rechazado con el mensaje configurado para {word}")
     public void validarAccesoRechazado(String caso) {
         assertTrue(
                 login.seMuestraRechazo(),
                 "El rechazo de autenticación debería mostrar un mensaje de error");
         assertEquals(
-                obtenerCasoLogin(caso).mensajeErrorEsperado(),
+                obtenerMensajeErrorEsperado(caso),
                 login.obtenerMensajeRechazo(),
                 "El rechazo de autenticación debería informar el motivo exacto");
     }
 
-    private CasoLogin obtenerCasoLogin(String caso) {
+    private Credentials obtenerCredencialesDelCaso(String caso) {
         return switch (caso) {
-            case "locked-user" -> new CasoLogin(
-                    CredentialsProvider.lockedUser(),
-                    ConfigReader.getRequired("test.login.cases.locked-user.expected-error"));
-            case "invalid-password" -> new CasoLogin(
-                    CredentialsProvider.invalidPassword(),
-                    ConfigReader.getRequired("test.login.cases.invalid-password.expected-error"));
-            default -> throw new IllegalArgumentException("Caso de login no configurado: " + caso);
+            case "locked-user" -> CredentialsProvider.lockedUser();
+            case "invalid-password" -> CredentialsProvider.invalidPassword();
+            case "nonexistent-user" -> CredentialsProvider.nonexistentUser();
+            case "empty-username" -> CredentialsProvider.emptyUsername();
+            case "empty-password" -> CredentialsProvider.emptyPassword();
+            case "empty-both" -> CredentialsProvider.emptyBoth();
+            default -> throw new IllegalArgumentException("Caso de login sin credenciales configuradas: " + caso);
         };
     }
 
-    private record CasoLogin(Credentials credentials, String mensajeErrorEsperado) {
+    private String obtenerMensajeErrorEsperado(String caso) {
+        String clave = switch (caso) {
+            case "locked-user" -> "test.login.cases.locked-user.expected-error";
+            case "invalid-password" -> "test.login.cases.invalid-password.expected-error";
+            case "nonexistent-user" -> "test.login.cases.nonexistent-user.expected-error";
+            case "empty-username" -> "test.login.cases.empty-username.expected-error";
+            case "empty-password" -> "test.login.cases.empty-password.expected-error";
+            case "empty-both" -> "test.login.cases.empty-both.expected-error";
+            case "anonymous-access" -> "test.login.cases.anonymous-access.expected-error";
+            default -> throw new IllegalArgumentException("Caso de login sin mensaje configurado: " + caso);
+        };
+        return ConfigReader.getRequired(clave);
     }
 }

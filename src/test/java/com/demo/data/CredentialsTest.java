@@ -52,4 +52,21 @@ class CredentialsTest {
         assertEquals("usuario-sintetico-2", credentials.username());
         assertEquals("clave-sintetica-2", credentials.password());
     }
+
+    @Test
+    void emptyValuesAreAcceptedKeptAsEmptyAndStillMasked() {
+        Credentials emptyUsername = new Credentials("", PASSWORD);
+        Credentials emptyPassword = new Credentials(USERNAME, "");
+        Credentials emptyBoth = new Credentials("", "");
+
+        assertEquals("", emptyUsername.username());
+        assertEquals(PASSWORD, emptyUsername.password());
+        assertEquals(USERNAME, emptyPassword.username());
+        assertEquals("", emptyPassword.password());
+        assertEquals("", emptyBoth.username());
+        assertEquals("", emptyBoth.password());
+        assertEquals("Credentials[username=***, password=***]", emptyBoth.toString());
+        assertFalse(emptyUsername.toString().contains(PASSWORD));
+        assertFalse(emptyPassword.toString().contains(USERNAME));
+    }
 }
