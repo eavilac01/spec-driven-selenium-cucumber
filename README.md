@@ -43,22 +43,22 @@ Las versiones de Cucumber y JUnit se administran con sus respectivos BOM en `dep
                               │ enlazan con
                               v
 ┌─────────────────────────────────────────────────────────────┐
-│ steps/ · orquestación y aserciones JUnit 5                  │
+│ steps/ · aserciones JUnit 5 y valores esperados             │
 └─────────────────────────────┬───────────────────────────────┘
                               │ usan
                               v
 ┌─────────────────────────────────────────────────────────────┐
-│ pages/ · acciones, estado y localizadores de cada vista     │
+│ actions/ · flujos de negocio entre páginas, sin aserciones  │
 └─────────────────────────────┬───────────────────────────────┘
-                              │ extienden
+                              │ usan
                               v
 ┌─────────────────────────────────────────────────────────────┐
-│ BasePage · interacción y esperas explícitas centralizadas   │
+│ pages/ · estado y localizadores (By) de cada vista          │
 └─────────────────────────────┬───────────────────────────────┘
-                              │ recibe infraestructura de
+                              │ interactúan solo a través de
                               v
 ┌─────────────────────────────────────────────────────────────┐
-│ utils/ · driver · configuración · secretos · contexto        │
+│ transport/ · Navegador: único dueño del WebDriver y esperas │
 └─────────────────────────────┬───────────────────────────────┘
                               │ controla
                               v
@@ -66,16 +66,19 @@ Las versiones de Cucumber y JUnit se administran con sus respectivos BOM en `dep
 │ Selenium WebDriver / navegador local o Selenium Grid        │
 └─────────────────────────────────────────────────────────────┘
 
-              hooks/ ── ciclo de vida y evidencia ──> utils/
+   hooks/ ── ciclo de vida y evidencia ──> transport/
+   utils/ (fachadas de configuración y secretos) ──> src/main (lógica pura)
 ```
 
 Reglas de dependencia:
 
 - Los `features` describen resultados observables en lenguaje de negocio y no conocen Selenium, selectores ni detalles visuales.
-- Los `steps` dependen de las páginas y del contexto del escenario. Las aserciones JUnit 5 existen únicamente en esta capa.
-- Las páginas exponen acciones y estado; no contienen aserciones, no comparten estado global y nunca invocan `driver.findElement` directamente.
-- `BasePage` es el único punto para sincronizar e interactuar: visibilidad, clic, escritura, texto, invisibilidad, listas, URL y scroll.
-- `utils` concentra configuración, creación/liberación del driver y estado por escenario; no depende de capas superiores.
+- Los `steps` dependen solo de las acciones, de `utils` y de `data`. Las aserciones JUnit 5 y la lectura de valores esperados existen únicamente en esta capa.
+- Las acciones (`LoginActions`, `CompraActions`) agrupan páginas en flujos de negocio: reciben datos por parámetro, devuelven lo observado y no tienen aserciones ni leen esperados.
+- Las páginas exponen operaciones y estado; no contienen aserciones, no extienden ninguna clase y de Selenium solo usan `By`.
+- `Navegador` (`transport`) es el único dueño del `WebDriver` y el único punto para sincronizar e interactuar: visibilidad, clic, escritura, texto, invisibilidad, listas, URL y scroll.
+- `utils` concentra las fachadas de configuración y secretos y el estado por escenario; no depende de capas superiores.
+- Estas reglas (ADR-002, D4/D7) son comprobables con `git grep`, sin opinión de por medio.
 - La lógica pura de configuración, secretos y credenciales vive en `src/main/java` (`com.demo.config`, `com.demo.data`), sin E/S ni Selenium: las fachadas de `utils` leen el entorno y delegan en ella. Es el código que verifican las pruebas unitarias y PIT (ADR-001).
 - Los hooks administran el ciclo de vida y la evidencia, pero no implementan reglas de negocio.
 - No se admiten dependencias circulares ni saltos de capa, por ejemplo, un feature que codifique un selector o una página que invoque un step.
@@ -116,22 +119,25 @@ Reglas de dependencia:
     ├── java/com/demo
     │   ├── config/      # pruebas unitarias de src/main/.../config
     │   ├── data/        # pruebas unitarias de src/main/.../data
+    │   ├── actions
+    │   │   ├── CompraActions.java
+    │   │   └── LoginActions.java
     │   ├── hooks/Hooks.java
     │   ├── pages
-    │   │   ├── BasePage.java
     │   │   ├── CartPage.java
     │   │   ├── CheckoutPage.java
     │   │   ├── InventoryPage.java
-    │   │   ├── LoginPage.java
-    │   │   └── PageManager.java
+    │   │   └── LoginPage.java
     │   ├── runners/RunnerTest.java
     │   ├── steps
     │   │   ├── CompraSteps.java
     │   │   └── LoginSteps.java
+    │   ├── transport
+    │   │   ├── DriverFactory.java
+    │   │   └── Navegador.java
     │   └── utils
     │       ├── ConfigReader.java
     │       ├── CredentialsProvider.java
-    │       ├── DriverFactory.java
     │       ├── SecretReader.java
     │       └── TestContext.java
     └── resources
@@ -143,21 +149,21 @@ Reglas de dependencia:
 
 ## Decisiones de arquitectura
 
-### `ThreadLocal<WebDriver>`
+### `Navegador`: un dueño del `WebDriver` por escenario (ADR-002)
 
-Cada hilo de ejecución recibe su propia instancia de `WebDriver`. Esto evita que dos escenarios paralelos naveguen, cierren o lean la misma sesión. `quitDriver()` cierra la sesión en un bloque de salida seguro y ejecuta `ThreadLocal.remove()` para que el hilo reutilizado no conserve referencias. El driver no es un singleton global: solo el contenedor `ThreadLocal` es compartido.
+`com.demo.transport.Navegador` es el único dueño del `WebDriver` y del `WebDriverWait`. PicoContainer crea una instancia por escenario, compartida por `Hooks` y las páginas; `Hooks` lo inicia, adjunta la captura si el escenario falla y lo cierra de forma idempotente. No hay `ThreadLocal` ni estado estático: el aislamiento lo da el contenedor por escenario. Su API solo recibe `By` y tipos de Java y nunca devuelve tipos de Selenium, de modo que Selenium queda confinado a `transport`.
 
 ### PicoContainer y `TestContext`
 
-Cucumber crea un grafo de objetos nuevo para cada escenario. PicoContainer inyecta por constructor el mismo `TestContext` en steps y hooks de ese escenario, sin campos estáticos ni service locator. Así, el driver y la selección temporal de productos tienen un dueño y un alcance explícitos; al comenzar el siguiente escenario se construye otro contexto limpio. La lista procede de `test.purchase.products` y se reutiliza para contrastar que el contenido real del carrito corresponda exactamente con lo configurado.
+Cucumber crea un grafo de objetos nuevo para cada escenario. PicoContainer construye por constructor, de forma transitiva, `Navegador`, las páginas, las acciones, `TestContext` y los steps de ese escenario, sin campos estáticos ni service locator. `TestContext` solo guarda el estado de los steps (qué juego de valores esperados del carrito aplica); al comenzar el siguiente escenario se construye otro grafo limpio.
 
-### `PageManager`
+### Acciones de negocio en lugar de `PageManager`
 
-Los steps no instancian páginas. Reciben por constructor un `PageManager` (también inyectado por PicoContainer, uno por escenario) que crea cada Page Object de forma perezosa con el driver del escenario. Así, `LoginSteps` y `CompraSteps` comparten exactamente las mismas instancias de página, se elimina código duplicado y agregar una página nueva implica tocar un único punto.
+Los steps no conocen las páginas: reciben por constructor `LoginActions` y `CompraActions`, que PicoContainer construye con las páginas del escenario. Las acciones expresan el flujo de negocio (iniciar sesión, agregar productos, tramitar la compra) y devuelven lo observado; los steps comparan contra los valores esperados de la configuración. Así cada capa tiene una sola razón para cambiar y no hace falta un registro de páginas aparte.
 
 ### Esperas centralizadas
 
-La espera implícita se establece en `Duration.ZERO` y `BasePage` concentra las esperas explícitas con el límite definido en `explicit.wait.seconds`. Esto evita combinar dos modelos de espera —una fuente común de tiempos impredecibles— y permite que todas las interacciones sigan la misma política. Las pausas fijas no forman parte de la estrategia porque retrasan siempre y no expresan la condición que se espera.
+La espera implícita se establece en `Duration.ZERO` y `Navegador` concentra las esperas explícitas con el límite definido en `explicit.wait.seconds`. Esto evita combinar dos modelos de espera —una fuente común de tiempos impredecibles— y permite que todas las interacciones sigan la misma política. Las pausas fijas no forman parte de la estrategia porque retrasan siempre y no expresan la condición que se espera.
 
 Las acciones sensibles esperan además una postcondición observable: el botón de producto adopta el texto configurado en `inventory.remove-button.text`, la ruta avanza al siguiente paso o el valor de un input permanece estable en dos sondeos. El intento inicial siempre usa las APIs nativas de WebDriver. Solo si Chrome pierde ese evento se reubica el elemento y se usa un respaldo JavaScript acotado; en inputs controlados se invoca el setter nativo y se emiten eventos `input/change` para que React actualice su estado. El respaldo también queda sujeto a la misma postcondición, por lo que no convierte un fallo real en un falso positivo.
 
@@ -167,7 +173,7 @@ El plugin Maven requerido se conserva en `maven-surefire-plugin:3.5.3`. Esa vers
 
 ### `By` frente a PageFactory y `@FindBy`
 
-Se usan constantes privadas `By` porque hacen visible cuándo y cómo se localiza un elemento, funcionan de manera natural con los wrappers de `BasePage` y permiten construir localizadores dinámicos sin proxies. PageFactory no aporta valor aquí: sus proxies posponen la búsqueda, pueden ocultar el momento de una excepción y no resuelven por sí mismos sincronización ni elementos dinámicos.
+Se usan constantes privadas `By` porque hacen visible cuándo y cómo se localiza un elemento, funcionan de manera natural con la API de `Navegador` y permiten construir localizadores dinámicos sin proxies. PageFactory no aporta valor aquí: sus proxies posponen la búsqueda, pueden ocultar el momento de una excepción y no resuelven por sí mismos sincronización ni elementos dinámicos.
 
 ### Configuración y secretos
 
@@ -391,8 +397,8 @@ Al agregar una funcionalidad:
 1. Escribir primero un escenario independiente, observable y con vocabulario del dominio.
 2. Reutilizar steps cuando expresen exactamente la misma intención; no reutilizarlos solo porque hacen clic en el mismo elemento.
 3. Añadir el localizador privado a la página dueña de esa vista.
-4. Implementar la interacción mediante un wrapper de `BasePage`; si falta una operación genérica, agregarla allí en vez de acceder al driver desde la página.
-5. Orquestar páginas y realizar la aserción descriptiva en el step.
+4. Implementar la interacción con la API de `Navegador`; si falta una operación genérica, agregarla allí en vez de acceder al driver desde la página.
+5. Orquestar páginas en una acción de negocio y realizar la aserción descriptiva en el step, contra un valor esperado de configuración.
 6. Ejecutar tanto el nuevo escenario como la suite completa.
 
 Lista de control antes de integrar cambios:
@@ -403,7 +409,8 @@ Lista de control antes de integrar cambios:
 [ ] los escenarios no comparten estado
 [ ] no hay pausas fijas ni esperas implícitas
 [ ] no hay assert en pages
-[ ] no hay driver.findElement fuera de BasePage
+[ ] no hay Selenium fuera de transport (en pages, solo By) ni findElement fuera de Navegador
+[ ] los steps no importan pages ni transport
 [ ] no hay XPath absoluto ni índice posicional frágil
 [ ] no hay catch vacío
 [ ] no hay variables, parámetros, campos privados ni métodos privados sin uso

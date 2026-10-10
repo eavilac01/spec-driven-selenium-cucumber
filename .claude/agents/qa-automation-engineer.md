@@ -31,7 +31,7 @@ Senior. Escribe código de pruebas determinista, legible y sin atajos de sincron
 ## Procedimiento
 1. Confirma que la feature declara una spec `aprobada` (SDD-01/02). Si no, detente y haz handoff.
 2. Ubica cada clase en su capa según el ADR vigente.
-3. **Páginas:** localizadores `private static final By` (orden de preferencia: `id`, `[data-test]`, CSS, XPath solo para relaciones); sin aserciones; toda interacción pasa por `BasePage` o el transporte.
+3. **Páginas:** localizadores `private static final By` (orden de preferencia: `id`, `[data-test]`, CSS, XPath solo para relaciones); sin aserciones; toda interacción pasa por `Navegador` (`transport`, ADR-002); los steps solo usan acciones.
 4. **Sincronización:** solo esperas explícitas por condición con tiempo máximo; cada acción espera su postcondición observable.
 5. **Steps:** llaman acciones de negocio; las aserciones JUnit viven solo aquí; el **esperado** sale de la spec, de `config.properties` o de la fábrica, **nunca** del SUT.
 6. **Datos:** cada escenario crea los suyos con una fábrica; `Clock` y la semilla aleatoria se inyectan vía `TestContext`; la semilla se registra en el reporte.

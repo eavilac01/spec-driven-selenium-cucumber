@@ -2,8 +2,8 @@ package com.demo.steps;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.demo.actions.LoginActions;
 import com.demo.data.Credentials;
-import com.demo.pages.PageManager;
 import com.demo.utils.ConfigReader;
 import com.demo.utils.CredentialsProvider;
 import io.cucumber.java.en.Given;
@@ -13,47 +13,44 @@ import io.cucumber.java.en.When;
 @SuppressWarnings("unused") // Cucumber resuelve los métodos anotados desde los textos Gherkin.
 public final class LoginSteps {
 
-    private final PageManager pages;
+    private final LoginActions login;
 
-    public LoginSteps(PageManager pages) {
-        this.pages = pages;
+    public LoginSteps(LoginActions login) {
+        this.login = login;
     }
 
     @Given("que el usuario abre la página de inicio de sesión")
     public void abrirPaginaInicioSesion() {
-        pages.loginPage().abrir();
+        login.abrirInicioSesion();
     }
 
     @When("inicia sesión con las credenciales estándar configuradas")
     public void iniciarSesionConCredencialesConfiguradas() {
-        Credentials credentials = CredentialsProvider.standardUser();
-        pages.loginPage().iniciarSesion(credentials.username(), credentials.password());
+        login.iniciarSesion(CredentialsProvider.standardUser());
     }
 
     @When("intenta iniciar sesión con el caso configurado {word}")
     public void intentarIniciarSesion(String caso) {
         CasoLogin casoLogin = obtenerCasoLogin(caso);
-        pages.loginPage().iniciarSesion(
-                casoLogin.credentials().username(),
-                casoLogin.credentials().password());
+        login.iniciarSesion(casoLogin.credentials());
     }
 
     @Then("accede al inventario")
     public void validarAccesoInventario() {
         assertEquals(
                 ConfigReader.getRequired("inventory.expected.title"),
-                pages.inventoryPage().obtenerTitulo(),
+                login.obtenerTituloCatalogo(),
                 "El usuario autenticado debería acceder al inventario");
     }
 
     @Then("el acceso es rechazado con el mensaje configurado para {word}")
     public void validarAccesoRechazado(String caso) {
         assertTrue(
-                pages.loginPage().seMuestraMensajeError(),
+                login.seMuestraRechazo(),
                 "El rechazo de autenticación debería mostrar un mensaje de error");
         assertEquals(
                 obtenerCasoLogin(caso).mensajeErrorEsperado(),
-                pages.loginPage().obtenerMensajeError(),
+                login.obtenerMensajeRechazo(),
                 "El rechazo de autenticación debería informar el motivo exacto");
     }
 

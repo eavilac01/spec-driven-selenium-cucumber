@@ -2,8 +2,8 @@ package com.demo.steps;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.List;
-import com.demo.data.Credentials;
-import com.demo.pages.PageManager;
+import com.demo.actions.CompraActions;
+import com.demo.actions.LoginActions;
 import com.demo.utils.ConfigReader;
 import com.demo.utils.CredentialsProvider;
 import com.demo.utils.TestContext;
@@ -18,21 +18,22 @@ public final class CompraSteps {
     private static final String PREFIJO_ESPERADO_UNICO = "cart.expected.single-product";
 
     private final TestContext testContext;
-    private final PageManager pages;
+    private final LoginActions login;
+    private final CompraActions compra;
 
-    public CompraSteps(TestContext testContext, PageManager pages) {
+    public CompraSteps(TestContext testContext, LoginActions login, CompraActions compra) {
         this.testContext = testContext;
-        this.pages = pages;
+        this.login = login;
+        this.compra = compra;
     }
 
     @Given("que el usuario está autenticado para comprar")
     public void autenticarUsuarioParaComprar() {
-        pages.loginPage().abrir();
-        Credentials credentials = CredentialsProvider.standardUser();
-        pages.loginPage().iniciarSesion(credentials.username(), credentials.password());
+        login.abrirInicioSesion();
+        login.iniciarSesion(CredentialsProvider.standardUser());
         assertEquals(
                 ConfigReader.getRequired("inventory.expected.title"),
-                pages.inventoryPage().obtenerTitulo(),
+                login.obtenerTituloCatalogo(),
                 "La compra requiere que el usuario acceda correctamente al inventario");
     }
 
@@ -40,48 +41,45 @@ public final class CompraSteps {
     public void agregarProductosConfiguradosAlCarrito() {
         List<String> productos = ConfigReader.getList("test.purchase.products");
         testContext.setPrefijoEsperadoCarrito(PREFIJO_ESPERADO_VARIOS);
-        productos.forEach(producto -> pages.inventoryPage().agregarProductoAlCarrito(producto));
+        compra.agregarProductos(productos);
     }
 
     @When("agrega el producto individual configurado al carrito")
     public void agregarProductoIndividualConfiguradoAlCarrito() {
         String producto = ConfigReader.getRequired("test.purchase.single-product");
         testContext.setPrefijoEsperadoCarrito(PREFIJO_ESPERADO_UNICO);
-        pages.inventoryPage().agregarProductoAlCarrito(producto);
+        compra.agregarProducto(producto);
     }
 
     @Then("el carrito refleja la cantidad de productos configurada")
     public void validarCantidadProductosEnCarrito() {
         assertEquals(
                 ConfigReader.getPositiveInt(testContext.getPrefijoEsperadoCarrito() + ".count"),
-                pages.inventoryPage().obtenerCantidadProductosEnCarrito(),
+                compra.obtenerCantidadEnCarrito(),
                 "La insignia del carrito debería reflejar todos los productos seleccionados");
     }
 
     @Then("el carrito contiene los productos seleccionados")
     public void validarProductosEnCarrito() {
-        pages.inventoryPage().abrirCarrito();
         assertEquals(
                 ConfigReader.getList(testContext.getPrefijoEsperadoCarrito() + ".products"),
-                pages.cartPage().obtenerNombresProductos(),
+                compra.revisarCarrito(),
                 "El carrito debería contener exactamente los productos seleccionados");
     }
 
     @When("tramita la compra con los datos de envío configurados")
     public void tramitarCompraConDatosConfigurados() {
-        pages.cartPage().iniciarCheckout();
-        pages.checkoutPage().completarInformacionEnvio(
+        compra.tramitarCompra(
                 ConfigReader.getRequired("test.checkout.first-name"),
                 ConfigReader.getRequired("test.checkout.last-name"),
                 ConfigReader.getRequired("test.checkout.postal-code"));
-        pages.checkoutPage().finalizarCompra();
     }
 
     @Then("la compra se confirma con el mensaje configurado")
     public void validarConfirmacionCompra() {
         assertEquals(
                 ConfigReader.getRequired("checkout.expected.confirmation"),
-                pages.checkoutPage().obtenerMensajeConfirmacion(),
+                compra.obtenerMensajeConfirmacion(),
                 "La compra completada debería mostrar el mensaje de confirmación esperado");
     }
 }

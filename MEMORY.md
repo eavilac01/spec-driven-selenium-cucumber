@@ -42,7 +42,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 ## Próximos pasos
 1. Responder las preguntas Q-* de las specs (usuario).
 2. P2 de CI: Jenkinsfile sin validar en un Jenkins real; stage `Test` sin timeout; filtro `not @quarantine` cuando exista la cuarentena. (`permissions: contents: read` hecho en `6c6b95b`, CI en verde.)
-3. ADR-002 aceptado (2026-10-09; pasos 0 y 1 hechos: `Navegador` único dueño del `WebDriver`, sin `BasePage` ni `ThreadLocal`) → 2 `actions` (+ `requireNonNull` en páginas, P2) → 3 CHK-17 `check-layers.sh` + autoprueba (devops) → 4 verifier → 5 `BrowserSettings` en `src/main`. Los cambios a reglas y agentes de cada paso se aplican al cerrarlo.
+3. ADR-002 aceptado (2026-10-09). Hechos: paso 1 (`Navegador` único dueño del `WebDriver`, sin `BasePage` ni `ThreadLocal`) y paso 2 (`LoginActions`/`CompraActions`, sin `PageManager`; steps solo usan acciones). P2 para el paso 3: la regex R3 de firmas de acciones no detecta páginas como parámetro → 3 CHK-17 `check-layers.sh` + autoprueba (devops) → 4 verifier → 5 `BrowserSettings` en `src/main`. Los cambios a reglas y agentes de cada paso se aplican al cerrarlo.
 4. P2: variables de entorno pueden sobrescribir claves `*.expected*` (`ConfigReader`); `getPositiveInt` no admite contador 0 (AC-COMPRA-05).
 5. Con las Q-* respondidas, cubrir AC-LOGIN-04…09 y AC-COMPRA-05…13.
 6. Paralelismo, solo después de confirmar la independencia de los escenarios.

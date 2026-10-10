@@ -1,6 +1,7 @@
 package com.demo.pages;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.openqa.selenium.By;
 
@@ -18,7 +19,7 @@ public final class CartPage {
     private final Navegador navegador;
 
     public CartPage(Navegador navegador) {
-        this.navegador = navegador;
+        this.navegador = Objects.requireNonNull(navegador, "El navegador no puede ser null");
     }
 
     public void iniciarCheckout() {

@@ -1,5 +1,7 @@
 package com.demo.pages;
 
+import java.util.Objects;
+
 import org.openqa.selenium.By;
 
 import com.demo.transport.Navegador;
@@ -15,7 +17,7 @@ public final class LoginPage {
     private final Navegador navegador;
 
     public LoginPage(Navegador navegador) {
-        this.navegador = navegador;
+        this.navegador = Objects.requireNonNull(navegador, "El navegador no puede ser null");
     }
 
     public void abrir() {

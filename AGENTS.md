@@ -23,13 +23,15 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 
 ## Estructura del proyecto
 - `docs/specs/` — specs de negocio (fuente de verdad, SDD) y su plantilla `_plantilla.md`
-- `docs/adr/` — decisiones de arquitectura (ADR-001: mutación con PIT)
+- `docs/adr/` — decisiones de arquitectura (ADR-001: mutación con PIT; ADR-002: transporte, acciones y capas)
 - `src/test/resources/features/` — escenarios Gherkin con tags `@AC-` y `@tec-`
 - `src/main/java/com/demo/config/` y `data/` — lógica pura del framework (configuración, secretos, credenciales): sin E/S, Selenium ni Cucumber; es lo que muta PIT
 - `src/test/java/com/demo/config/` y `data/` — pruebas unitarias JUnit 5 de esa lógica, aisladas (solo `*Test.java`)
-- `src/test/java/com/demo/steps/` — step definitions: vocabulario de negocio, sin Selenium
-- `src/test/java/com/demo/pages/` — page objects (`BasePage` con esperas explícitas, `PageManager`)
-- `src/test/java/com/demo/utils/` — driver por hilo, contexto del escenario y fachadas (`ConfigReader`, `SecretReader`, `CredentialsProvider`) que leen el entorno y delegan en `src/main`
+- `src/test/java/com/demo/steps/` — step definitions: aserciones y valores esperados; solo usan acciones, sin Selenium
+- `src/test/java/com/demo/actions/` — acciones de negocio (`LoginActions`, `CompraActions`): flujos entre páginas, sin aserciones
+- `src/test/java/com/demo/pages/` — page objects por composición sobre `Navegador`; de Selenium solo usan `By`
+- `src/test/java/com/demo/transport/` — `Navegador` (único dueño del `WebDriver`, esperas explícitas) y `DriverFactory` (ADR-002)
+- `src/test/java/com/demo/utils/` — contexto del escenario y fachadas (`ConfigReader`, `SecretReader`, `CredentialsProvider`) que leen el entorno y delegan en `src/main`
 - `scripts/` — `check-traceability.sh` (CHK-12)
 - `src/test/java/com/demo/hooks/` y `runners/` — ciclo de vida del navegador y runner de JUnit Platform
 - `src/test/resources/config.properties` — URLs, rutas, valores esperados y datos de prueba no sensibles
@@ -40,9 +42,9 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 - Una spec aprobada antes de la feature, y una feature antes del código: spec → feature → código.
 - Cada escenario lleva `@AC-<DOMINIO>-<NN>` y `@tec-<técnica>`; cada feature declara `Spec: docs/specs/<dominio>.md`.
 - Las features describen comportamiento de negocio: sin selectores ni palabras de interfaz (clic, botón, campo, xpath).
-- Los steps no importan Selenium: hablan con los page objects a través de `PageManager`.
+- Capas (ADR-002): steps → actions → pages → transport. Los steps solo usan acciones; las páginas solo interactúan a través de `Navegador`; Selenium solo vive en `transport` (en páginas, solo `By`).
 - Localizadores como constantes `By`, con prioridad `id` > CSS con atributos estables (`data-test`) > XPath relativo solo para relaciones del DOM; sin XPath absolutos, índices posicionales, `PageFactory` ni `@FindBy`.
-- Solo esperas explícitas por condición (`BasePage`); cada click espera su postcondición.
+- Solo esperas explícitas por condición (`Navegador`); cada click espera su postcondición.
 - Configuración con precedencia `-D` > variable de entorno > `config.properties`; los valores esperados salen de la spec.
 
 ## No hagas

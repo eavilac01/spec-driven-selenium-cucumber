@@ -1,5 +1,7 @@
 package com.demo.pages;
 
+import java.util.Objects;
+
 import org.openqa.selenium.By;
 
 import com.demo.transport.Navegador;
@@ -17,7 +19,7 @@ public final class InventoryPage {
     private final Navegador navegador;
 
     public InventoryPage(Navegador navegador) {
-        this.navegador = navegador;
+        this.navegador = Objects.requireNonNull(navegador, "El navegador no puede ser null");
     }
 
     public String obtenerTitulo() {
