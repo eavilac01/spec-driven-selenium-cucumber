@@ -15,10 +15,15 @@
 #     .gitignore, y exit 0 si ese archivo no está versionado;
 #   - exit 1 ("directorio:0: D6: …") por cada directorio de capa ausente o
 #     sin archivos versionados;
-#   - exit 2 cuando no se puede evaluar: raíz que no es repo, subdirectorio,
-#     raíz inexistente, argumentos de más, índice corrupto y configuración
-#     inválida (git grep rc >= 2) y archivo ilegible (stderr de git grep).
-# Así una expresión regular rota no deja pasar todo en silencio.
+#   - exit 2, con el mensaje de error esperado, cuando no se puede evaluar:
+#     raíz que no es repo, subdirectorio (también uno con su propio árbol de
+#     capas y una violación fuera de él), raíz inexistente, argumentos de más,
+#     índice corrupto y configuración inválida (git grep rc >= 2), git grep que
+#     termina con rc >= 2 sin escribir en stderr (shim de git en el PATH) y
+#     archivo ilegible (stderr de git grep).
+# Así una expresión regular rota no deja pasar todo en silencio. Cada
+# alternativa de una expresión regular de D7 tiene su caso negativo: quitar una
+# alternativa hace fallar al menos un caso.
 #
 # Sale con 0 solo si todos los casos se comportan como se espera; con 1 si
 # alguno falla; con 2 ante un error de preparación. Imprime la tabla
@@ -368,10 +373,21 @@ violation "D7-01c" R1 "Selenium fuera de transport y pages" \
   "src/main/java/com/demo/config/Bad.java" 'import org.openqa.selenium.By;'
 violation "D7-02" R1 "en pages solo se permite 'import org.openqa.selenium.By;'" \
   "$T/pages/BadPage.java" 'import org.openqa.selenium.WebElement;'
+# El "$" de D7-02: el import de By solo se permite como línea completa.
+violation "D7-02b" R1 "en pages solo se permite 'import org.openqa.selenium.By;'" \
+  "$T/pages/BadPage.java" 'import org.openqa.selenium.By; import java.util.List;'
 violation "D7-03" R1 "tipo de Selenium en una firma pública del transporte" \
   "$T/transport/Bad.java" '    public WebElement buscar(By locator) {'
 violation "D7-03b" R1 "tipo de Selenium en una firma pública del transporte" \
   "$T/transport/Bad.java" '    public ChromeOptions opciones() {'
+violation "D7-03c" R1 "tipo de Selenium en una firma pública del transporte" \
+  "$T/transport/Bad.java" '    public SearchContext contexto() {'
+violation "D7-03d" R1 "tipo de Selenium en una firma pública del transporte" \
+  "$T/transport/Bad.java" '    public void ejecutar(JavascriptExecutor ejecutor) {'
+violation "D7-03e" R1 "tipo de Selenium en una firma pública del transporte" \
+  "$T/transport/Bad.java" '    public TakesScreenshot captura() {'
+violation "D7-03f" R1 "tipo de Selenium en una firma pública del transporte" \
+  "$T/transport/Bad.java" '    public Capabilities capacidades() {'
 violation "D7-04" R1 "By en una firma pública de una página" \
   "$T/pages/BadPage.java" '    public void pulsar(By locator) {'
 violation "D7-05" R3 "steps nombran pages o transport" \
@@ -394,32 +410,47 @@ violation "D7-09" R4 "clave *.expected* en transport, pages o actions" \
   "$T/pages/BadPage.java" '    private static final String CLAVE = "cart.expected.count";'
 violation "D7-09b" R4 "clave *.expected* en transport, pages o actions" \
   "$T/actions/Bad.java" '    private static final String CLAVE = "checkout.expected.confirmation";'
+violation "D7-09c" R4 "clave *.expected* en transport, pages o actions" \
+  "$T/transport/Bad.java" '    private static final String CLAVE = "login.expected.error";'
 violation "D7-10" R5 "findElement(s) o executeScript fuera de transport" \
   "$T/pages/BadPage.java" '        driver.findElements(USUARIO);'
 violation "D7-10b" R5 "findElement(s) o executeScript fuera de transport" \
   "$T/hooks/Bad.java" '        executor.executeScript(script);'
 violation "D7-10c" R5 "findElement(s) o executeScript fuera de transport" \
   "$T/steps/Bad.java" '        executor.executeAsyncScript(script);'
+violation "D7-10d" R5 "findElement(s) o executeScript fuera de transport" \
+  "$T/pages/BadPage.java" '        driver.findElement(USUARIO);'
 violation "D7-11" R5 "una página extiende una clase" \
   "$T/pages/BadPage.java" 'public final class BadPage extends BasePage {'
-violation "D7-12" R6 "transport nombra un paquete fuera de su fila de D4" \
-  "$T/transport/Bad.java" 'import com.demo.pages.LoginPage;'
+# R6: un caso por cada paquete de la alternancia de cada fila (D7-12…D7-18).
+# r6 <id> <motivo> <archivo> <paquetes…>: "import com.demo.<paquete>.X;".
+r6() {
+  local id="$1" reason="$2" file="$3" pkg
+  shift 3
+  for pkg in "$@"; do
+    violation "$id-$pkg" R6 "$reason" "$file" "import com.demo.$pkg.X;"
+  done
+}
+r6 "D7-12" "transport nombra un paquete fuera de su fila de D4" \
+  "$T/transport/Bad.java" pages actions steps hooks runners data
 violation "D7-13" R6 "transport o pages nombran utils distinto de ConfigReader" \
   "$T/pages/BadPage.java" 'import com.demo.utils.TestContext;'
 violation "D7-13b" R6 "transport o pages nombran utils distinto de ConfigReader" \
   "$T/transport/Bad.java" 'import com.demo.utils.ConfigReaderX;'
-violation "D7-14" R6 "pages nombra un paquete fuera de su fila de D4" \
-  "$T/pages/BadPage.java" 'import com.demo.actions.LoginActions;'
-violation "D7-15" R6 "actions nombra un paquete fuera de su fila de D4" \
-  "$T/actions/Bad.java" 'import com.demo.utils.ConfigReader;'
-violation "D7-16" R6 "steps nombra un paquete fuera de su fila de D4" \
-  "$T/steps/Bad.java" 'import com.demo.hooks.Hooks;'
-violation "D7-17" R6 "utils nombra un paquete fuera de su fila de D4" \
-  "$T/utils/Bad.java" 'import com.demo.pages.LoginPage;'
-violation "D7-18" R6 "hooks nombra un paquete fuera de su fila de D4" \
-  "$T/hooks/Bad.java" 'import com.demo.steps.LoginSteps;'
+r6 "D7-14" "pages nombra un paquete fuera de su fila de D4" \
+  "$T/pages/BadPage.java" actions steps hooks runners config data
+r6 "D7-15" "actions nombra un paquete fuera de su fila de D4" \
+  "$T/actions/Bad.java" transport utils steps hooks runners config
+r6 "D7-16" "steps nombra un paquete fuera de su fila de D4" \
+  "$T/steps/Bad.java" hooks runners config
+r6 "D7-17" "utils nombra un paquete fuera de su fila de D4" \
+  "$T/utils/Bad.java" transport pages actions steps hooks runners
+r6 "D7-18" "hooks nombra un paquete fuera de su fila de D4" \
+  "$T/hooks/Bad.java" pages actions steps runners config data
 violation "D7-19" R6 "SecretReader o CredentialsProvider fuera de utils y steps" \
   "$T/actions/Bad.java" '    // Un comentario que nombra SecretReader también cuenta (D6).'
+violation "D7-19b" R6 "SecretReader o CredentialsProvider fuera de utils y steps" \
+  "$T/pages/BadPage.java" '    private CredentialsProvider proveedor;'
 
 # Archivos que coinciden con .gitignore: --untracked omite incluso los
 # versionados (git 2.53), así que el script hace también una pasada sobre el
@@ -453,36 +484,87 @@ run_script "$dir"
 expect "D7-20 directorio actions solo con archivos sin versionar" 1 \
   "$T/actions:0: D6: directorio de capa sin archivos versionados"
 
-# No se puede evaluar: 2 (falla cerrado)
+# No se puede evaluar: 2 (falla cerrado), siempre con el mensaje que explica
+# por qué; el código de salida solo no distingue un error de otro.
+err_rc='re:^check-layers: ERROR: git grep terminó con [0-9]+ '
+
 new_case
 rm -rf "$dir/.git"
 run_script "$dir"
-expect "error: la raíz no es un repositorio git" 2
+expect "error: la raíz no es un repositorio git" 2 \
+  "check-layers: '$dir' no es un repositorio git"
 
 new_case
 run_script "$dir/src"
-expect "error: la raíz es un subdirectorio del repositorio" 2
+expect "error: la raíz es un subdirectorio del repositorio" 2 \
+  "check-layers: '$dir/src' no es la raíz del repositorio ($dir)"
+
+# Subdirectorio con su propio árbol de capas (válido) dentro de un repositorio
+# con una violación fuera de él: evaluar solo el subdirectorio daría 0.
+new_case
+mkdir -p "$dir/proj"
+cp -a "$base/src" "$dir/proj/src"
+put "$dir/$T/steps/Bad.java" 'package com.demo.prueba;' 'import org.openqa.selenium.WebDriver;'
+git -C "$dir" add -A
+run_script "$dir/proj"
+expect "error: subdirectorio con árbol de capas propio y violación fuera" 2 \
+  "check-layers: '$dir/proj' no es la raíz del repositorio ($dir)"
 
 run_script "$tmp/no-existe"
-expect "error: la raíz no existe" 2
+expect "error: la raíz no existe" 2 \
+  "check-layers: la raíz '$tmp/no-existe' no es un directorio"
 
 new_case
 run_script "$dir" extra
-expect "error: argumentos de más" 2
+expect "error: argumentos de más" 2 \
+  "check-layers: uso: bash scripts/check-layers.sh [raíz]"
 
 new_case
 printf 'indice corrupto\n' > "$dir/.git/index"
 run_script "$dir"
 # El mensaje distingue el rc >= 2 de git grep del de git ls-files, que
 # también fallaría con el índice corrupto.
-expect "error: git grep termina con rc >= 2 (índice corrupto)" 2 \
-  're:^check-layers: ERROR: git grep terminó con [0-9]+ '
+expect "error: git grep termina con rc >= 2 (índice corrupto)" 2 "$err_rc"
 
 new_case
 git -C "$dir" config grep.threads no-numerico
 run_script "$dir"
-expect "error: git grep termina con rc >= 2 (configuración inválida)" 2 \
-  're:^check-layers: ERROR: git grep terminó con [0-9]+ '
+expect "error: git grep termina con rc >= 2 (configuración inválida)" 2 "$err_rc"
+
+# git grep termina con rc >= 2 sin escribir en stderr: solo la guarda de rc
+# lo detecta (con git real, todo rc >= 2 trae un "fatal:"). Un shim de git en
+# el PATH intercepta "git grep" y delega el resto en el git real.
+real_git="$(command -v git)"
+case "$real_git" in
+  /*) ;;
+  *) echo "check-layers-test: git no es un ejecutable con ruta absoluta" >&2; exit 2 ;;
+esac
+# shim <directorio> <acción para "git grep">
+shim() {
+  mkdir -p "$1"
+  printf '#!/usr/bin/env bash\nif [ "${1:-}" = grep ]; then %s; fi\nexec %q "$@"\n' \
+    "$2" "$real_git" > "$1/git"
+  chmod +x "$1/git"
+}
+shim "$tmp/shim-kill" 'kill -KILL "$$"'
+shim "$tmp/shim-rc2" 'exit 2'
+# run_with_path <directorio del shim> <argumentos…>
+run_with_path() {
+  local p="$1"
+  shift
+  rc=0
+  out="$(PATH="$p:$PATH" bash "$script" "$@" 2>&1)" || rc=$?
+}
+
+new_case
+run_with_path "$tmp/shim-kill" "$dir"
+expect "error: git grep muere por SIGKILL sin stderr (rc 137)" 2 \
+  're:^check-layers: ERROR: git grep terminó con 137 '
+
+new_case
+run_with_path "$tmp/shim-rc2" "$dir"
+expect "error: git grep termina con 2 sin stderr" 2 \
+  're:^check-layers: ERROR: git grep terminó con 2 '
 
 # git grep imprime "failed to stat" y termina con 0 o 1 ante un archivo
 # ilegible: el script lo trata como error por la salida en stderr. Como root
@@ -494,8 +576,7 @@ if [ "$(id -u)" -ne 0 ]; then
   chmod 000 "$dir/$T/steps/Ilegible.java"
   run_script "$dir"
   chmod 644 "$dir/$T/steps/Ilegible.java"
-  expect "error: archivo ilegible (git grep escribe en stderr)" 2 \
-    're:^check-layers: ERROR: git grep terminó con [0-9]+ '
+  expect "error: archivo ilegible (git grep escribe en stderr)" 2 "$err_rc"
 else
   table="${table}$(printf '| %-74s | %8s | %4s | %-5s |' "error: archivo ilegible (no aplica como root)" "2" "-" "n/a")"$'\n'
 fi
