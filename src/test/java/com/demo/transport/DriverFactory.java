@@ -1,84 +1,58 @@
 package com.demo.transport;
 
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
 import java.time.Duration;
-import java.util.Locale;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.remote.RemoteWebDriver;
+import com.demo.config.BrowserSettings;
 import com.demo.utils.ConfigReader;
 
+/** Traduce {@link BrowserSettings} a opciones de Selenium y crea el driver (ADR-002, D8). */
 final class DriverFactory {
 
     private DriverFactory() {
     }
 
     static WebDriver crear() {
-        String browser = ConfigReader.getRequired("browser")
-                .trim()
-                .toLowerCase(Locale.ROOT);
-        String remoteUrl = ConfigReader.getOptional("remote.url").trim();
-        boolean headless = ConfigReader.getBoolean("headless");
+        BrowserSettings settings = BrowserSettings.of(
+                ConfigReader.getRequired("browser"),
+                ConfigReader.getOptional("remote.url"),
+                ConfigReader.getBoolean("headless"),
+                () -> ConfigReader.getPositiveInt("browser.window.width"),
+                () -> ConfigReader.getPositiveInt("browser.window.height"));
 
-        WebDriver driver = switch (browser) {
-            case "chrome" -> createChromeDriver(remoteUrl, headless);
-            case "firefox" -> createFirefoxDriver(remoteUrl, headless);
-            default -> throw new IllegalArgumentException(
-                    "Navegador no soportado: '%s'. Usa chrome o firefox".formatted(browser));
+        WebDriver driver = switch (settings.browser()) {
+            case CHROME -> createChromeDriver(settings);
+            case FIREFOX -> createFirefoxDriver(settings);
         };
 
         driver.manage().timeouts().implicitlyWait(Duration.ZERO);
-        if (!headless) {
+        if (!settings.headless()) {
             driver.manage().window().maximize();
         }
         return driver;
     }
 
-    private static WebDriver createChromeDriver(String remoteUrl, boolean headless) {
+    private static WebDriver createChromeDriver(BrowserSettings settings) {
         ChromeOptions options = new ChromeOptions();
-        options.addArguments("--no-sandbox", "--disable-dev-shm-usage");
-        if (headless) {
-            options.addArguments(
-                    "--headless=new",
-                    "--window-size=%d,%d".formatted(
-                            ConfigReader.getPositiveInt("browser.window.width"),
-                            ConfigReader.getPositiveInt("browser.window.height")));
-        }
+        options.addArguments(settings.arguments());
 
-        return isRemote(remoteUrl)
-                ? new RemoteWebDriver(toUrl(remoteUrl), options)
+        return settings.remoteUrl().isPresent()
+                ? new RemoteWebDriver(settings.remoteUrl().get(), options)
                 : new ChromeDriver(options);
     }
 
-    private static WebDriver createFirefoxDriver(String remoteUrl, boolean headless) {
+    private static WebDriver createFirefoxDriver(BrowserSettings settings) {
         FirefoxOptions options = new FirefoxOptions();
-        if (headless) {
-            options.addArguments(
-                    "-headless",
-                    "--width=%d".formatted(ConfigReader.getPositiveInt("browser.window.width")),
-                    "--height=%d".formatted(ConfigReader.getPositiveInt("browser.window.height")));
+        if (!settings.arguments().isEmpty()) {
+            options.addArguments(settings.arguments());
         }
 
-        return isRemote(remoteUrl)
-                ? new RemoteWebDriver(toUrl(remoteUrl), options)
+        return settings.remoteUrl().isPresent()
+                ? new RemoteWebDriver(settings.remoteUrl().get(), options)
                 : new FirefoxDriver(options);
-    }
-
-    private static boolean isRemote(String remoteUrl) {
-        return !remoteUrl.isBlank();
-    }
-
-    private static URL toUrl(String remoteUrl) {
-        try {
-            return URI.create(remoteUrl).toURL();
-        } catch (IllegalArgumentException | MalformedURLException exception) {
-            throw new IllegalArgumentException(
-                    "La configuración remote.url no es una URL válida: '%s'".formatted(remoteUrl), exception);
-        }
     }
 }
