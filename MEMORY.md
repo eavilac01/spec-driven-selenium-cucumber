@@ -3,18 +3,18 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-- Suite 146 en verde (local, `not @quarantine`): 21 E2E (22 AC de login y compra) + 125 unitarias; PIT 91/91.
+- Suite 165 en verde (local, `not @quarantine`, 1 omitido = AC-COMPRA-09): 21 E2E (22 AC de login y compra) + 144 unitarias; PIT 116/116.
+- `Navegador.abrir` falla al instante ante una página de error de red (`IllegalStateException` con URL y `net::ERR_*`, ~1 s en vez de 11 s); `BrowserErrorPage` en `src/main`; Chrome con `--disable-component-update` (sin demostrar que quite el flake).
 - Specs `docs/specs/login.md` y `compra.md` con todos sus AC verificables y cubiertos (valores ratificados tras exploración, 2026-10-10).
 - CHK-10 demostrado en cada AC: cada control negativo falla en el `Then`.
 - AC-COMPRA-09 en cuarentena `defecto-sut` (SauceDemo deja comprar con carrito vacío); CHK-14; el job `quarantine` (`evaluate-quarantine-run.sh`) queda verde con el fallo esperado y rojo solo ante errores reales.
 - Package `com.demo`, Maven Wrapper, reportes Allure y HTML de Cucumber.
 - Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…17).
-- ADR-001 (mutación con PIT) completo: `src/main` puro (`ConfigResolver`, `DotEnvParser`, `SecretResolver`, `BrowserSettings`, `Credentials`); PIT 89/89; job `mutation` con guarda de reporte.
+- ADR-001 (mutación con PIT) completo: `src/main` puro (`ConfigResolver`, `DotEnvParser`, `SecretResolver`, `BrowserSettings`, `BrowserErrorPage`, `Credentials`); job `mutation` con guarda de reporte.
 - ADR-002 (capas) completo: steps → actions → pages → transport (`Navegador`, único dueño del `WebDriver`); CHK-17 `check-layers.sh` con autoprueba de 162 casos.
 - CHK-01…17 activas; en CI: CHK-12 antes de la suite; CHK-11/14/15/16/17 en el job `mutation`.
 - Hooks activos: gate DevOps y protección de `.claude/**`, `CLAUDE.md`, `MEMORY.md` y `AGENTS.md` (56/56 casos).
 - `AGENTS.md` en la raíz, para cualquier agente de código; bajo `ask`.
-- Repo renombrado a `spec-driven-selenium-cucumber` en GitHub y en local (`~/repo/`), con la memoria de Claude Code migrada.
 - CI con 5 jobs (`test`, `e2e-firefox`, `e2e-grid`, `mutation`, `quarantine`) y paralelismo por escenario (2 hilos); Jenkinsfile endurecido (6 Secret text = nombres de `.env.example`), sin servidor real.
 
 ## Decisiones (y por qué)
@@ -46,6 +46,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - No existe la CLI `gh` en esta máquina: las operaciones de GitHub (renombrar, settings) las hace el usuario en la web.
 
 ## Próximos pasos
-1. P1 (engineer): `Navegador.abrir` debe fallar al instante ante una página de error de Chrome (`net::ERR_*`); probar `--disable-component-update`. Flake solo bajo carga (PIT en paralelo).
-2. P2: API nueva de `Navegador` en la tabla del ADR-002; `XPathLiteral` sin pruebas; `clickHastaCumplir` sin acotar; lecturas inmediatas de "no se muestra"; AC-COMPRA-09 si el SUT deshabilita el botón; naming `long` de Cucumber.
-3. P2: el entorno puede sobrescribir claves `*.expected*`; R-4 abierto solo para Jenkins (sin servidor); decidir si un `<error>` en una cuarentena `inestable` debe ser solo aviso.
+1. Usuario: confirmar el run de CI de `3347062` (fallo rápido + README + cabecera del evaluador).
+2. P2 (engineer): `BrowserErrorPage.codeFromDriverMessage` trunca `ERR_ABCdef` a `ERR_ABC` en vez de rechazar; `abrir` descarta la `WebDriverException` sin log de depuración (Firefox: "código no disponible").
+3. P2: API nueva de `Navegador` y contrato de `abrir` en la tabla D1 del ADR-002; `XPathLiteral` sin pruebas; `clickHastaCumplir` sin acotar; lecturas inmediatas de "no se muestra"; AC-COMPRA-09 si el SUT deshabilita el botón; naming `long` de Cucumber.
+4. P2: el entorno puede sobrescribir claves `*.expected*`; R-4 abierto solo para Jenkins (sin servidor); decidir si un `<error>` en una cuarentena `inestable` debe ser solo aviso.
