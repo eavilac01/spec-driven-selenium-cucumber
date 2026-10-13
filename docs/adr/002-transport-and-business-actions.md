@@ -25,7 +25,7 @@
 | Flujo duplicado | Autenticación en `CompraSteps.java:30-36` y en `LoginSteps.java:24`, `:29-30`, `:44-46` | Un cambio en el inicio de sesión toca dos clases de steps |
 | CHK-03 es textual y estrecha | `04-quality-checks.md:32` busca `import org.openqa.selenium` | No detecta `import static org.openqa…` ni nombres calificados |
 | La inyección transitiva ya funciona | `TestContext` y `PageManager` no son glue (`RunnerTest.java:15`), y Pico los construye para `Hooks.java:20`, `LoginSteps.java:18`, `CompraSteps.java:23` y `PageManager.java:18` | Acciones, páginas y transporte se inyectan igual, sin tocar el glue |
-| La configuración del navegador no se ejercita en CI | CI solo corre Chrome local headless (`ci.yml:48`, `config.properties:3`, `:5`). No se ejercitan Firefox (`DriverFactory.java:38`, `:85-97`), Grid (`:80-81`, `:94-95`, `:103-110`) ni el tamaño de ventana (`:72-77`, `:88-91`) | Un defecto en esas ramas pasa inadvertido para la suite (criterio D1(b) del ADR-001) |
+| La configuración del navegador no se ejercita en CI | CI solo corre Chrome local headless (paso *Run tests (headless Chrome)* del job `test`, `ci.yml:48` en `90687f4`; `config.properties:3`, `:5`). *(Estado al 2026-10-09; R-6 lo cerró con los jobs `e2e-firefox` y `e2e-grid`.)* No se ejercitan Firefox (`DriverFactory.java:38`, `:85-97`), Grid (`:80-81`, `:94-95`, `:103-110`) ni el tamaño de ventana (`:72-77`, `:88-91`) | Un defecto en esas ramas pasa inadvertido para la suite (criterio D1(b) del ADR-001) |
 | Hoy no hay ciclos | `steps` → `pages`, `utils`, `data`; `pages` → `utils`; `hooks` → `utils`; `utils` → `config`, `data` (`git grep -n "^import com\.demo\."`) | R6 se cumple, pero nada impide romperla |
 
 ## Decisión
@@ -50,6 +50,40 @@
 | Navegación | `abrir(String url)`, `esperarUrlContiene(String)` | `BasePage.java:145-147`, `:154-156` |
 | Interacción con postcondición | `click(By)`, `clickYEsperarTexto(By, String)`, `clickYEsperarUrlContiene(By, String)`, `escribir(By, String)`, `desplazarA(By)` | `BasePage.java:47-66`, `:149-152` |
 | Lectura | `esperarVisible(By)` (sin retorno), `texto(By): String`, `textos(By): List<String>`, `esVisible(By): boolean`, `esperarInvisible(By)` | `BasePage.java:43-45`, `:68-70`, `:127-143` |
+| Navegación, lectura inmediata *(enmienda 2026-10-13)* | `urlContiene(String): boolean`, sin espera | Nuevo en `146df90` |
+| Interacción con postcondición *(enmienda 2026-10-13)* | `clickYEsperarVisible(By, By)`, `clickYEsperarVisibleOUrlContiene(By, By, String)` y `clickYEsperarInvisible(By)`: usan el mismo clic con respaldo (`clickHastaCumplir`) que `clickYEsperarTexto` y `clickYEsperarUrlContiene`, con otra postcondición. `clickYEsperarInvisible` exige antes que el control esté visible, para que un localizador que no coincide no dé por cumplida la ausencia | Nuevos en `146df90`. La visibilidad previa, en el árbol del 2026-10-13 |
+| Interacción observada *(enmienda 2026-10-13)* | `clickYObservarUrlContiene(By, String): ResultadoClic`, con el `enum` anidado `ResultadoClic { AVANZO, NO_AVANZO, NO_DISPONIBLE }`. No exige la postcondición: `AVANZO` = la URL se alcanzó; `NO_AVANZO` = no se alcanzó tras al menos un clic efectivo; `NO_DISPONIBLE` = el control no estuvo visible y habilitado en el plazo, y no hubo clic. Quien lo llama decide si `NO_DISPONIBLE` es un resultado válido, y antes debe probar que el resto de la página cargó | Nuevo en `146df90`, donde la falta de clics lanzaba `IllegalStateException`. `NO_DISPONIBLE` sustituye a esa excepción en el árbol del 2026-10-13 |
+| Lectura *(enmienda 2026-10-13)* | `apareceEnTiempoMaximo(By): boolean`: espera, hasta el plazo, a que el elemento sea visible. `existeEnTiempoMaximo(By): boolean`: espera, hasta el plazo, a que el elemento esté presente en el DOM, visible o no. Ninguna de las dos falla si el elemento no llega | `apareceEnTiempoMaximo`: nuevo en `146df90`. `existeEnTiempoMaximo`: árbol del 2026-10-13 |
+| Lectura estable *(enmienda 2026-10-13)* | `contarEstable(By): int`: devuelve el conteo cuando se repite en 2 sondeos consecutivos. `esVisibleEstable(By): boolean`: devuelve `true` en cuanto el elemento es visible, y `false` solo tras 2 sondeos consecutivos sin verlo. Las dos están acotadas por el plazo, sirven para afirmar ausencias y conteos, y exigen que el llamador haya comprobado antes que la página cargó | Árbol del 2026-10-13. `contarEstable` sustituye a `contar(By): int`, la lectura inmediata de `146df90` |
+
+Las filas marcadas registran la API pública que la tabla original no recogía; las cuatro primeras no se reescriben. Reflejan el `Navegador` del árbol de trabajo del 2026-10-13, que dejó `qa-automation-engineer` y estaba sin commit al redactar esta enmienda. Por eso se citan por método y no por línea. Todas cumplen este D1: reciben solo `By` y tipos de Java, no devuelven tipos de Selenium y fallan antes de `iniciar()`.
+
+- **Tope de clics** (árbol del 2026-10-13). `clickHastaCumplir` y `clickYObservarUrlContiene` pulsan como mucho `MAXIMO_CLICS_POR_ACCION = 3` veces: 1 clic nativo y, como máximo, 2 de respaldo JavaScript.
+  - Con el tope agotado no pulsan más; solo esperan la postcondición dentro del plazo.
+  - Si el plazo se agota, `clickHastaCumplir` lanza `TimeoutException` con el localizador, los clics efectivos y el plazo, y nunca con el texto escrito.
+  - Antes, el respaldo JavaScript se repetía sin límite dentro del plazo. Un control que alterna su estado (agregar y quitar) podía revertirse con un clic de más.
+  - **No es un reintento de la prueba (CHK-02):** es la misma acción, que antes no tenía tope (`BasePage.java:72-94`, movido en el paso 1).
+  - El algoritmo de clic deja de ser el que el paso 1 movió "sin cambios". Esa condición regía el diff de movimiento del paso 1, no la evolución posterior, y PI-05 y PI-09 se siguen cumpliendo.
+- **Contrato de `abrir(String url)`** (desde `8d7ce8b`, registrado el 2026-10-13):
+  - Abre la URL y **falla al instante** con `IllegalStateException` si el navegador muestra su propia página de error de red. Lo comprueba en tres puntos:
+    1. el driver lanza una `WebDriverException` cuyo mensaje describe un fallo de navegación (`net::ERR_…`, `about:neterror` o `chrome-error://`);
+    2. el documento cargado es la página `neterror` de Chrome, que detecta el script constante `SCRIPT_LEER_CODIGO_PAGINA_ERROR` (PI-05);
+    3. la URL actual empieza por `chrome-error://` o `about:neterror`.
+  - Cualquier otra `WebDriverException` de la navegación se propaga sin cambios. Si el script no puede leer el documento, lo registra en DEBUG y decide la comprobación de la URL.
+  - **Mensaje** (`BrowserErrorPage.describe`): `El navegador mostró una página de error de red al abrir '<url>' (<código>)`.
+    - `<url>` es la que recibió `abrir`, que las páginas componen desde la configuración (`LoginPage.abrir`, `InventoryPage.solicitarDirectamente`).
+    - `<código>` sale solo de un patrón `net::ERR_[A-Z0-9_]+`. Si no hay uno válido, es `código no disponible`.
+    - Nunca incluye texto de la página ni del driver (PI-05). Se registra en ERROR.
+  - En el árbol del 2026-10-13, el caso 1 registra además un DEBUG con SLF4J que solo lleva el nombre de la clase de la excepción y el código validado. No lleva el texto del driver ni la causa (PI-05, PI-09).
+  - No reintenta (CHK-02).
+  - **Dónde vive la lógica.** Clasificar el mensaje y la URL, validar el código y componer el mensaje es lógica pura. Vive en `src/main/java/com/demo/config/BrowserErrorPage.java`, con pruebas unitarias y PIT. Cumple el criterio D1 del ADR-001, porque un defecto en sus guardas pasaría inadvertido para la suite. La arista `transport` → `config` ya la permite D4.
+  - El mismo commit agrega `--disable-component-update` a los argumentos de Chrome en `BrowserSettings` (D8).
+- **`ResultadoClic`** es un tipo de Java del transporte, no de Selenium, así que cumple R1. Solo lo usan las páginas, dentro de su código: `CartPage.iniciarCheckout`, su método privado `pulsarTramitar` y `CartPage.intentarIniciarCheckout`.
+  - En el árbol del 2026-10-13, `intentarIniciarCheckout` solo acepta "no se puede tramitar" (`NO_DISPONIBLE`) con prueba positiva: el carrito cargó y el botón de tramitar está presente en el DOM (`existeEnTiempoMaximo`) pero deshabilitado u oculto.
+  - Si el botón no existe, falla cerrado con `IllegalStateException`, porque un botón eliminado no se distingue de un localizador roto.
+  - El estado lo observa después `permaneceEnCarrito`.
+  - **Restricción (enmienda 2026-10-13):** ningún método público de una página recibe ni devuelve `ResultadoClic`. Si una página lo expusiera, una acción podría recibirlo con `var` sin nombrar `com.demo.transport`, y R6 no lo vería: es el punto ciego que D6 cierra en el origen.
+  - Se cumple, en `afb6693` y en el árbol del 2026-10-13: `git grep -nP '^\s*public\b.*\bResultadoClic\b' -- src/test/java/com/demo/pages` no da salida (rc=1). Incorporarla a CHK-17 queda como P2 (*Enmiendas*, 2026-10-13).
 
 - **Algoritmos de sincronización.** Los de `BasePage.java:72-125` (clic y escritura con sus respaldos) se **mueven sin cambios**, y el diff se revisa como movimiento (*Criterio de verificación*).
 - **Lo que no puede cambiar al moverlos:**
@@ -79,7 +113,7 @@
 - **Lo que pueden leer:** `ConfigReader`, para rutas y textos de sincronización (`LoginPage.java:20`, `InventoryPage.java:22`, `:29`, `:37`).
   - Nunca leen claves `*.expected*`: un esperado usado en una espera convertiría el rojo de CHK-10 en un timeout fuera del `Then`.
   - Nunca leen secretos.
-- **`literalXPath` se queda en la página** (`InventoryPage.java:40-48`). No va a `src/main` porque su defecto produce un selector inválido, es decir, un fallo visible, y no cumple el criterio D1(b) del ADR-001.
+- **`literalXPath` se queda en la página** (`InventoryPage.java:40-48`). No va a `src/main` porque su defecto produce un selector inválido, es decir, un fallo visible, y no cumple el criterio D1(b) del ADR-001. *(Enmienda 2026-10-13: hoy es `pages/XPathLiteral`, compartida por dos páginas. Se queda en `pages`, sin las ramas que ningún dato ejercita; ver *Enmiendas*.)*
 
 ### D3. Acciones de negocio: `com.demo.actions`
 
@@ -160,8 +194,8 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
 
   Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`.
 - **Dónde corren el script y la autoprueba:**
-  - GitHub Actions: job `mutation`, en paralelo a la suite y sin secrets (`ci.yml:66-84`);
-  - Jenkins: etapa `Capas (CHK-17)`, antes de la suite y fuera de `withCredentials` (`Jenkinsfile:22-29`);
+  - GitHub Actions: job `mutation`, pasos *Capas, autoprueba (CHK-17)* y *Capas (CHK-17)*, en paralelo a la suite y sin secrets (`ci.yml:66-84` en `f7f7a13`);
+  - Jenkins: etapa `Capas (CHK-17)`, antes de la suite y fuera de `withCredentials` (`Jenkinsfile:22-29` en `f7f7a13`);
   - el gate local de devops;
   - la autoverificación del engineer.
 - **Disparador para reconsiderar ArchUnit:** una evasión real que el texto no detecte, un segundo módulo Maven o más de unos 10 paquetes. Las reglas equivalentes quedan escritas en D7.
@@ -361,7 +395,7 @@ Este ADR se escribió sin ejecutar nada: solo se leyeron archivos y se buscó co
 | R-1 | Pico construye `Navegador`, páginas y acciones de forma transitiva, con una instancia por escenario compartida por `Hooks` y las acciones. Hoy ya lo hace con `TestContext` y `PageManager` | engineer, paso 1: CHK-08. **Confirmado** (pasos 1 y 2): Pico construye `Navegador` (`Navegador.java:44`), las páginas (`LoginPage.java:19`), las acciones (`LoginActions.java:18`, `CompraActions.java:20`) y `Hooks` (`Hooks.java:16`) con el glue sin cambios (`RunnerTest.java:15`), y la suite queda en verde. Lo ratifica la verificación completa (paso 4). Si la instancia no fuera compartida, las páginas fallarían con `IllegalStateException` por usarse antes de `iniciar()` (`Navegador.java:156-160`) | Falla de forma visible al empezar el escenario. Se conserva una fábrica por escenario al estilo `PageManager`, por enmienda |
 | R-2 | Mover `BasePage.java:72-125` sin cambios conserva la estabilidad en Chrome y React | verifier: diff de movimiento y CHK-09; devops: CHK-08 ×2. **Confirmado** (pasos 1 y 2): CHK-08 ×2 y los 7 AC en verde por separado en el paso 1 (`0aa3a02`), y CI en verde sobre `475651f`, según el usuario. Paso 4: los 7 AC en verde por separado y los 8 controles negativos en rojo en el `Then` | Se revierte el paso y se diagnostica; nunca se agregan reintentos ni esperas fijas (CHK-01, CHK-02) |
 | R-3 | Sin `ThreadLocal`, el aislamiento depende de que cada escenario corra en un hilo con su propio contenedor. Es cierto en serie, que es el modo actual | devops, en el paso de paralelismo. **Cerrado** (`caf2fa0`): paralelismo por escenario activo, con 2 hilos y `max-pool-size=2` (`junit-platform.properties`). La independencia se verificó con CHK-08 cinco veces en paralelo, 122/122, sin fallos, y el run de GitHub Actions sobre `a66e8ce` terminó en verde (según el usuario). `Navegador` es seguro sin `ThreadLocal` porque hay uno por escenario | Se reintroduce el aislamiento dentro de `Navegador`, por enmienda |
-| R-4 | Las expresiones de D7 funcionan con `git grep -P` y `--untracked`, con exclusiones `:!`, en local, GitHub Actions y Jenkins. CHK-01 ya usa `-P` | **Confirmado en GitHub Actions (run de `257baaa`, verde); Jenkins sin servidor real para validar.** Según el usuario (2026-10-10), ese run incluye CHK-17 (`check-layers.sh` y su autoprueba) en el job `mutation`. Antes, en local (paso 3, git 2.53.0, 2026-10-10): el 2026-10-09 los comandos solo marcaban la deuda que resolvieron los pasos 1 y 2. Una ruta inexistente da rc=1 sin salida, y por eso D6 exige los directorios. Ahora, en local: devops informa la autoprueba con exit 0 en sus 81 casos (154 desde `bb7f145` y 162 desde `a66e8ce`) y el script con 0 sobre HEAD. El arquitecto ejecutó los 20 `git grep` sobre `f7f7a13`, con `--untracked` y con `--cached`: todos dan rc=1, sin salida, y cada directorio de capa lista archivos. Hallazgo: con git 2.53, `--untracked` omite los archivos versionados que coinciden con `.gitignore`, de ahí la doble pasada (D7, *Nota de ejecución*). Al cierre, el arquitecto repitió los 20 `git grep` de D7 con las dos pasadas sobre el árbol de trabajo del paso 5: todos dan rc=1, sin salida. **Abierto (P2), solo Jenkins:** el primer run en un servidor real, que imprime `git --version` (`Jenkinsfile:27`) | Se ajusta la sintaxis en el script; la autoprueba es la especificación ejecutable |
+| R-4 | Las expresiones de D7 funcionan con `git grep -P` y `--untracked`, con exclusiones `:!`, en local, GitHub Actions y Jenkins. CHK-01 ya usa `-P` | **Confirmado en GitHub Actions (run de `257baaa`, verde); Jenkins sin servidor real para validar.** Según el usuario (2026-10-10), ese run incluye CHK-17 (`check-layers.sh` y su autoprueba) en el job `mutation`. Antes, en local (paso 3, git 2.53.0, 2026-10-10): el 2026-10-09 los comandos solo marcaban la deuda que resolvieron los pasos 1 y 2. Una ruta inexistente da rc=1 sin salida, y por eso D6 exige los directorios. Ahora, en local: devops informa la autoprueba con exit 0 en sus 81 casos (154 desde `bb7f145` y 162 desde `a66e8ce`) y el script con 0 sobre HEAD. El arquitecto ejecutó los 20 `git grep` sobre `f7f7a13`, con `--untracked` y con `--cached`: todos dan rc=1, sin salida, y cada directorio de capa lista archivos. Hallazgo: con git 2.53, `--untracked` omite los archivos versionados que coinciden con `.gitignore`, de ahí la doble pasada (D7, *Nota de ejecución*). Al cierre, el arquitecto repitió los 20 `git grep` de D7 con las dos pasadas sobre el árbol de trabajo del paso 5: todos dan rc=1, sin salida. **Abierto (P2), solo Jenkins:** el primer run en un servidor real, que imprime `git --version` en la etapa `Capas (CHK-17)` (`Jenkinsfile:27` en `f7f7a13`) | Se ajusta la sintaxis en el script; la autoprueba es la especificación ejecutable |
 | R-5 | Las firmas públicas ocupan una línea, como en el estilo actual (`CheckoutPage.java:21`) | Revisión del verifier. **Se cumple hoy** (paso 4); sigue como riesgo residual aceptado (D6) | Una firma partida evade la regla de firmas, lo que activa el disparador de ArchUnit (D6) |
 | R-6 | Las ramas de Firefox y Grid se mueven sin cambios en el paso 1, aunque CI no las ejecuta | D8 cubre la parte pura: `BrowserSettings`, con 27 pruebas unitarias y PIT (paso 5). **Cerrado** (`e6e91bc`): los jobs `e2e-firefox` y `e2e-grid` (`selenium/standalone-chrome:4.45.0`) de `ci.yml` ejecutan la traducción a `Options` de `DriverFactory`, ambos en headless, y el run de GitHub Actions sobre `a66e8ce` terminó en verde (según el usuario). Antes, la revisión del paso 5 halló un desvío en esa traducción: Firefox sin headless enviaba `args=[]`, y se restauraron sus capacidades | Prueba manual opcional de devops, con `-Dbrowser=firefox` y `docker compose` |
 | R-7 | Los reportes de Cucumber, Allure y Surefire no cambian, porque el glue no cambia | devops: CHK-08 y artefactos. **Confirmado** (pasos 1 y 2): `git diff --stat 4159952 HEAD -- src/test/resources src/test/java/com/demo/runners pom.xml` no tiene salida. La captura ante un fallo pasa por `Navegador.capturarPantalla()` y se adjunta como antes (`Hooks.java:25-34`); el paso 1 la comprobó intacta (`0aa3a02`) | Se diagnostica antes de continuar |
@@ -386,7 +420,7 @@ Las decisiones de fondo y el estado no cambian.
   - Se documentan la doble pasada, stderr como error y los códigos 0, 1 y 2 (*Nota de ejecución*).
   - D6 declara el script como implementación normativa.
 - **Ubicación en CI (corrige D6):**
-  - En GitHub Actions, CHK-17 corre en el job `mutation`, en paralelo a la suite, porque el job `test` expone los secrets `TEST_*` a todos sus pasos (`ci.yml:66-69`).
+  - En GitHub Actions, CHK-17 corre en el job `mutation`, en paralelo a la suite, porque el job `test` expone los secrets `TEST_*` a todos sus pasos (`env` a nivel de job; lo explica el comentario que precede al job `mutation`, `ci.yml:66-69` en `f7f7a13`).
   - En Jenkins corre antes de la suite.
 - **Pendientes:**
   - el primer run remoto, que cierra R-4;
@@ -424,3 +458,99 @@ Las decisiones de fondo y el estado no cambian.
 - El run de GitHub Actions sobre `a66e8ce` terminó en verde en sus 4 jobs (`test`, `e2e-firefox`, `e2e-grid` y `mutation`), según el usuario.
 - Incidente: el run de `caf2fa0` falló en `mutation` porque el mantenimiento en segundo plano de git 2.55 dejaba un `.lock` efímero en el `cp -a` de la autoprueba; `a66e8ce` lo desactiva en su entorno aislado y suma 8 casos (162), sin cambiar `check-layers.sh` ni D7.
 - Siguen abiertos (P2): R-4 (solo Jenkins) y R-8 (Q-*).
+
+### 2026-10-13 — API de `Navegador`, `XPathLiteral` y referencias estables
+
+El estado del ADR y D1–D8 no cambian. **Enmienda aprobada por el coordinador el 2026-10-13** (Regla 01, nivel 2). La parte 2 (`XPathLiteral`) se redactó como propuesta y queda aprobada con ella, así que el engineer ya puede aplicarla. Las citas `archivo:línea` de esta enmienda son de `afb6693`, salvo que indiquen otra cosa.
+
+**1. API de `Navegador` registrada en D1.**
+- La tabla de D1 suma, en filas marcadas, la API pública que agregó `146df90` (2026-10-10, AC nuevos de login y compra):
+  - `urlContiene`;
+  - `clickYEsperarVisible`, `clickYEsperarVisibleOUrlContiene` y `clickYEsperarInvisible`;
+  - `clickYObservarUrlContiene`, con `ResultadoClic`;
+  - `apareceEnTiempoMaximo` y `contar`.
+- D1 suma también el contrato de `abrir` de `8d7ce8b`.
+- **Cambios del árbol del 2026-10-13** (`qa-automation-engineer`, sin commit al redactar), que la tabla y D1 ya reflejan:
+  - `contarEstable` sustituye a `contar`;
+  - `esVisibleEstable` y `existeEnTiempoMaximo` son nuevos;
+  - `ResultadoClic.NO_DISPONIBLE` sustituye a la `IllegalStateException` sin clics. `CartPage.intentarIniciarCheckout` lo acepta solo con el botón presente, y falla cerrado si no existe;
+  - el tope de 3 clics;
+  - `clickYEsperarInvisible` exige la visibilidad previa;
+  - el DEBUG de `abrir`.
+  - Además, un cambio privado: `esperarValorEstable` registra en INFO cuántas correcciones hicieron falta, sin el texto escrito.
+  - El registro debía corresponder a los blobs `7432d07…` y luego `83ff5b8…` que citó el coordinador, pero ninguno está en la base de objetos (`git diff` y `git show` responden `bad object`), y `git hash-object` no está en B-01. Por eso se registró el archivo leído del árbol tras el segundo aviso. Quien haga el commit confirma que coincide, y su hash completa esta enmienda.
+- Las condiciones de `Navegador` del *Criterio de verificación* se cumplen en `afb6693` y en el árbol del 2026-10-13.
+  - El primer argumento de cada `executeScript` es una constante o un literal: los de `desplazarA`, `esperarValorEstable` y el respaldo de clic (en `afb6693`, `Navegador.java:161`, `:224`, `:327` y `:355-358`; en el árbol, el respaldo vive en el método privado `pulsar`).
+  - `ejecutarScriptConstante` recibe el script por parámetro, pero su único llamador le pasa `SCRIPT_LEER_CODIGO_PAGINA_ERROR`.
+  - Se comprueba con `git grep -n -e "executeScript" -e "ejecutarScriptConstante(" -- src/test/java/com/demo/transport`.
+- La restricción sobre `ResultadoClic` (D1) se comprueba hoy a mano con su comando, que no da salida.
+  - **P2 (`devops-engineer`):** llevarla a CHK-17 como una línea más de la fila de `pages` de R6: `git grep --untracked -nP '^\s*public\b.*\bResultadoClic\b' -- "$T/pages"`, con su caso negativo en la autoprueba.
+  - Ese cambio enmienda D7 en el mismo commit (D6).
+
+**2. `XPathLiteral` (D2): se queda en `pages`, sin ramas especulativas (aprobado por el coordinador, 2026-10-13).**
+
+*Contexto:*
+- `146df90` sacó `literalXPath` de `InventoryPage` a `src/test/java/com/demo/pages/XPathLiteral.java` (package-private, `:7-21`). La usan `InventoryPage.agregarProductoAlCarrito` (`:52`) y `CartPage.quitarProducto` (`:66`).
+- Tiene tres ramas:
+  1. sin `'`, devuelve `'v'` (`:13-15`);
+  2. con `'` y sin `"`, devuelve `"v"` (`:16-18`);
+  3. con las dos, devuelve `concat(…)` (`:19`).
+- Le llegan las claves `test.purchase.*` (`config.properties:50-54`), y ninguna tiene comillas. El catálogo del SUT tampoco (`catalog.expected.products`, `:21`). La E2E solo ejecuta la rama 1, en cada escenario que agrega o quita productos.
+- Las ramas 2 y 3 no las ejecuta ninguna prueba. El motivo de D2 ("su defecto produce un selector inválido, es decir, un fallo visible") vale para la rama 1, pero no para estas dos: su defecto queda latente hasta que llegue un dato con comillas, y ningún AC lo pide (SDD-02).
+
+*Opciones:*
+
+| Opción | Veredicto | Motivo |
+|---|---|---|
+| A. Mover a `src/main/java/com/demo/config`, con pruebas unitarias y PIT | Descartada hoy; es el camino si se activa el disparador | D4 no permite `pages` → `config` (R6, `check-layers.sh:156`): habría que abrir una arista solo para esta clase, con cambios en D7, en el script y en su autoprueba. `config` no es su sitio, porque componer localizadores es de la capa 2. Y probaría dos ramas que ningún dato ni AC necesita (SDD-02) |
+| B. Prueba unitaria en `src/test/java/com/demo/pages` | Descartada | R4 rechaza JUnit en `pages`; CHK-16 solo admite unitarias en `config` y `data`; Surefire solo las incluye ahí (`pom.xml:185-190`); y PIT no muta `target/test-classes` (ADR-001, R-1). Serían excepciones en cuatro controles para una función de ocho líneas |
+| C. Ejercitar las ramas 2 y 3 desde la E2E | Imposible | Ningún producto del SUT tiene comillas: un dato de entrada con comillas no encuentra producto, así que solo probaría el fallo |
+| D. Quitar las ramas 2 y 3 y fallar al instante | **Elegida** | Ver *Decisión* |
+
+*Decisión:*
+- `XPathLiteral.de(valor)` solo admite valores sin comilla simple, y los devuelve entre `'…'`.
+- Con una `'` lanza `IllegalArgumentException`, con un mensaje que no repite el valor: el dato puede venir de `-D` o del entorno.
+- Sigue en `pages`, package-private y sin dependencias nuevas.
+- **Por qué:**
+  - Es la capa más baja: no abre aristas ni cambia CHK-17.
+  - Cumple SDD-02.
+  - Vuelve a hacer cierto el motivo de D2. La rama que queda corre en cada escenario que agrega o quita productos, y el control negativo de `cart.expected.*.products` (CHK-10) detecta un selector que agrega otro producto.
+  - Un defecto de la guarda también se ve. Si lanza siempre, falla toda la compra. Si no lanza nunca, solo lo nota un valor con `'`, que produce un selector inválido o, si está construido a propósito, otro selector válido. Por eso la guarda tiene su control negativo manual (paso 3).
+- **Disparador para reabrir:** una spec o un dato que necesite nombres con `'`. Entonces se aplica la opción A en un solo cambio:
+  - la clase pasa a `src/main/java/com/demo/config`, con pruebas y PIT;
+  - D4 suma `pages` → `config` (solo `XPathLiteral`);
+  - la fila de `pages` de R6 pasa a `com\.demo\.(actions|steps|hooks|runners|data)\b` y `com\.demo\.config\.(?!XPathLiteral\b)`, como la excepción de `ConfigReader` (`check-layers.sh:153-154`), con sus casos en la autoprueba.
+
+*Pasos para `qa-automation-engineer` (cada uno deja la suite en verde):*
+1. En `XPathLiteral.java` se eliminan las ramas de `:16-19`.
+   - Si `valor` contiene `'`: `throw new IllegalArgumentException("El literal XPath no admite comillas simples (ADR-002, enmienda 2026-10-13)")`.
+   - Si no, devuelve `"'" + valor + "'"`.
+   - Se actualiza el Javadoc. Las llamadas de `InventoryPage` y `CartPage` no cambian.
+2. Comprobaciones:
+   - CHK-01, CHK-03, CHK-07 y CHK-17 (`bash scripts/check-layers.sh`, exit 0);
+   - CHK-08 dos veces, con el mismo `Tests run` que antes del cambio;
+   - CHK-09 de `@AC-COMPRA-04` y de `@AC-COMPRA-08`;
+   - CHK-10 de `@AC-COMPRA-04` con `-Dcart.expected.single-product.products=__CONTROL_NEGATIVO__`, que falla en el `Then`;
+   - el commit solo cambia `XPathLiteral.java` (`git show --stat HEAD`).
+3. **Control negativo manual de la guarda**, como los `requireNonNull` del ADR-001:
+
+   ```bash
+   ./mvnw -B -ntp test -Dheadless=true -Dcucumber.filter.tags="@AC-COMPRA-04" "-Dtest.purchase.single-product=Sauce Labs Backpack'"
+   ```
+
+   - Debe fallar en el `When` *agrega el producto individual configurado al carrito*, con `IllegalArgumentException` y el mensaje del paso 1, sin agotar la espera.
+   - No vale un fallo con `InvalidSelectorException` o `TimeoutException`, ni un fallo en el `Then`.
+   - Con el código de `afb6693`, el mismo comando falla por tiempo de espera, porque la rama 2 produce un selector válido que no encuentra nada. Esa diferencia es la evidencia.
+
+*Efecto en las CHK:*
+- CHK-11 y CHK-15: sin cambios. `src/main` no cambia, y PIT no ve `pages`.
+- CHK-16: sin cambios, porque no hay pruebas unitarias nuevas.
+- CHK-17: sin cambios en el script ni en la autoprueba. `XPathLiteral` sigue sin nombrar `com.demo` ni Selenium, así que R1, R5 y R6 se cumplen igual.
+- CHK-10: sin cambios. Sigue siendo el control de la rama que queda.
+- `README.md:317` ("se convierte de forma segura en un literal XPath") pasa a decir que el valor se inserta entre comillas simples y que uno con comilla simple se rechaza. `README.md` no tiene dueño en la matriz: el usuario designa quién lo edita.
+
+**3. Referencias estables a CI.**
+- Las citas `ci.yml:<línea>` y `Jenkinsfile:<línea>` quedaron desfasadas con cada job y etapa nuevos. Desde esta fecha, este ADR cita la CI por el nombre del job, del paso o de la etapa.
+- Las citas con número de línea que quedan son registro histórico e indican su commit: *Contexto* (fila de la configuración del navegador), D6, R-4 y la enmienda de los pasos 1 a 3.
+
+**Pendientes (P2):** la restricción de `ResultadoClic` en CHK-17 (`devops-engineer`, parte 1) y `README.md:317` (usuario, parte 2).

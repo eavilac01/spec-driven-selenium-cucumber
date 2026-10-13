@@ -78,8 +78,8 @@ Criterio: se muta la lógica propia que **(a)** no necesita navegador, red, arch
   - `threads` = `2`. Sin `withHistory` ni `scmMutationCoverage`.
 - **Mutadores: `STRONGER`.** El código mutable es casi todo guardas (`isBlank`, `<= 0`, `matches`, `startsWith`, comillas con `&&` y `||`). `STRONGER` agrega a `DEFAULTS` las variantes `_IF` de `REMOVE_CONDITIONALS` (`EQUAL_IF`, `ORDER_IF`), que junto con las `_ELSE` de `DEFAULTS` obligan a ejercitar las dos ramas de cada guarda, y `REMOVE_SWITCH` (composición confirmada en R-5). Con unas 150 líneas mutables, el coste extra es de segundos. `ALL` queda descartado porque incluye mutadores experimentales que generan muchos equivalentes.
 - **Dónde corre:**
-  - **GitHub Actions:** job `mutation` en `.github/workflows/ci.yml`, en paralelo al job `test`. Va sin `env` de secrets: hoy están en el nivel del job `test` (`ci.yml:14-20`) y deben seguir ahí, nunca en el nivel del workflow. Tampoco lleva el paso de verificación de secrets ni navegador, y publica `target/pit-reports/`.
-  - **Jenkins:** etapa `Mutation (CHK-11)` fuera de `withCredentials` (`Jenkinsfile:26-44`).
+  - **GitHub Actions:** job `mutation` en `.github/workflows/ci.yml`, en paralelo al job `test`. Va sin `env` de secrets: hoy están en el nivel del job `test` (en su `env`; `ci.yml:14-20` al 2026-10-09) y deben seguir ahí, nunca en el nivel del workflow. Tampoco lleva el paso de verificación de secrets ni navegador, y publica `target/pit-reports/`. *(Nota del 2026-10-13: desde `e6e91bc` y `7faaead` también reciben los secrets, en el `env` de cada job, `e2e-firefox`, `e2e-grid` y `quarantine`; el workflow sigue sin ellos y `mutation` también.)*
+  - **Jenkins:** etapa `Mutation (CHK-11)` fuera de `withCredentials`. *(Nota del 2026-10-13: la cita original, `Jenkinsfile:26-44`, era la ubicación prevista antes de crear la etapa.)*
   - **Gate local:** previo al push (paso 7 de devops).
   - **Falla cerrada:** si se colara un escenario, fallaría por falta de secrets en el primer `Given` y PIT abortaría en la fase de cobertura.
 - **Presupuesto:** estimado, sin ejecutar, ≤ 2 min de PIT y ≤ 5 min de job con la caché de Maven, con `timeout-minutes: 10`. Superar los 5 min indica que una prueba hace E/S: se investiga; no se sube el timeout.
@@ -122,7 +122,7 @@ Si termina en `BUILD SUCCESS`, el umbral no protege nada y el resultado es RECHA
   - Las fachadas de `utils` quedan sin mutar. Su riesgo residual es el cableado al entorno, que el E2E ejercita en cada escenario.
   - Se agrega un job de CI.
   - Las reglas y los archivos de agentes cambian, y solo el usuario puede aplicarlo.
-- **Comportamiento actual fijado:** las pruebas fijan el comportamiento de hoy, incluidos dos P2 abiertos (`MEMORY.md`, *Próximos pasos* 5): el entorno puede sobrescribir claves `*.expected*` y `getPositiveInt` rechaza `0`. Se deciden aparte; si cambian, primero cambian sus pruebas.
+- **Comportamiento actual fijado:** las pruebas fijan el comportamiento de hoy, incluidos dos P2 abiertos (`MEMORY.md`, *Próximos pasos* 5): el entorno puede sobrescribir claves `*.expected*` y `getPositiveInt` rechaza `0`. Se deciden aparte; si cambian, primero cambian sus pruebas. *(Nota del 2026-10-13: ver la enmienda de esa fecha; el primero lo decide el ADR-003.)*
 - **AppleDouble:** la limpieza de `._*` en `src` corría en `generate-test-sources`, después de `compile`, y no protegía `src/main/java`. Mitigado en el paso 1 (R-6): corre en `generate-sources` (`pom.xml:115`) y también sobre `target/classes` en `process-classes` (`pom.xml:132`).
 
 ## Cambios propuestos a reglas y agentes (aplicados el 2026-10-09)
@@ -188,7 +188,7 @@ Este ADR se escribió sin red y sin `./mvnw`. El estado refleja el paso 6: todos
 | R-4 | Los motores `cucumber` y `junit-platform-suite` no descubren nada con un selector de una clase que no es `@Suite` | verifier, paso 5: el log | Se excluyen los motores por enmienda | **Cerrado** (verifier, paso 5): solo corrió `[engine:junit-jupiter]`, sin `RunnerTest`, Cucumber ni navegador |
 | R-5 | La composición exacta de `STRONGER` en la versión elegida | Los mutadores del reporte | Se documenta la composición real en este ADR | **Resuelto** (verifier, paso 5, `javap` sobre `StandardMutatorGroups` de 1.30.0): `STRONGER` = `DEFAULTS` + `REMOVE_SWITCH` + `REMOVE_CONDITIONALS_ORDER_IF` + `REMOVE_CONDITIONALS_EQUAL_IF`. `DEFAULTS` ya incluye las variantes `_ELSE` (*Enmiendas*) |
 | R-6 | En macOS, los `._*` romperían la compilación de `src/main` (no es reproducible en Linux) | devops, paso 1 | — | **Mitigado;** sin confirmar en macOS |
-| R-7 | El tiempo se mantiene dentro del presupuesto de D5 | El primer run de CI | Se investiga la E/S en las pruebas | **Cerrado en cuanto al resultado** (paso 6): el usuario confirmó el run remoto de `90687f4` en verde, sin informar el tiempo del job. En local, PIT tarda unos 3 s y Maven con PIT 5,8 s. El tiempo remoto exacto no se midió; lo acota `timeout-minutes: 10` (`ci.yml:64`), que haría fallar el job |
+| R-7 | El tiempo se mantiene dentro del presupuesto de D5 | El primer run de CI | Se investiga la E/S en las pruebas | **Cerrado en cuanto al resultado** (paso 6): el usuario confirmó el run remoto de `90687f4` en verde, sin informar el tiempo del job. En local, PIT tarda unos 3 s y Maven con PIT 5,8 s. El tiempo remoto exacto no se midió; lo acota `timeout-minutes: 10` del job `mutation` (`ci.yml:64` en `90687f4`), que haría fallar el job |
 
 ## Enmiendas
 
@@ -227,8 +227,8 @@ Sin cambios en D1–D6 ni en el estado. Con este paso, el ADR queda **completame
   - (e) no hay ningún `.java` en `src/main/java`. Para retirar el código mutable hay que enmendar este ADR y retirar el job.
 - **Criterio de falla cerrada:** la guarda solo da 0 si demuestra que el reporte existe, es completo y es de esta ejecución. Una raíz equivocada, un reporte anterior o un log sin resumen se rechazan. Ante un error de uso sale con 2. Automatiza la condición de `mutations.xml` y `Skipping project` del *Criterio de verificación*: el `BUILD SUCCESS` de PIT no basta (enmienda del paso 1).
 - **`scripts/check-unit-purity.sh`:** ejecuta CHK-15 y CHK-16 con los comandos de la Regla 04, para que GitHub Actions y Jenkins no repitan las expresiones regulares. También falla cerrado: si `git grep` termina con un código mayor que 1 (un error), el resultado es 1.
-- **GitHub Actions:** job `mutation` (`ci.yml:62-95`), en paralelo a `test`, sin `env` de secrets ni navegador y con `timeout-minutes: 10`. Ejecuta el script de pureza, PIT con `pipefail` y `tee` y la guarda, y publica `target/pit-reports/` como artefacto. Los secrets siguen en el nivel del job `test` (`ci.yml:14-20`).
-- **Jenkins:** etapa `Mutation (CHK-11)` (`Jenkinsfile:24-45`), fuera de `withCredentials` y con un timeout de 10 minutos. Corre antes de `Test`, porque `clean test` borra `target/pit-reports`. Además borra el reporte y el log anteriores, porque el workspace persiste entre builds.
+- **GitHub Actions:** job `mutation` (`ci.yml:62-95` en `90687f4`), en paralelo a `test`, sin `env` de secrets ni navegador y con `timeout-minutes: 10`. Ejecuta el script de pureza, PIT con `pipefail` y `tee` y la guarda, y publica `target/pit-reports/` como artefacto. Los secrets siguen en el `env` del job `test` (`ci.yml:14-20` en `90687f4`).
+- **Jenkins:** etapa `Mutation (CHK-11)` (`Jenkinsfile:24-45` en `90687f4`), fuera de `withCredentials` y con un timeout de 10 minutos. Corre antes de `Test`, porque `clean test` borra `target/pit-reports`. Además borra el reporte y el log anteriores, porque el workspace persiste entre builds.
 - **Gate local (devops):** CHK-08 dio 95/95 en las dos ejecuciones, CHK-11 dio 73/73 y la guarda terminó en 0. La guarda se probó con 12 controles negativos, todos en rojo, incluido un log real de `Skipping project` con `BUILD SUCCESS`.
 - **Run remoto:** el usuario confirmó en la conversación que el CI de `90687f4` está en verde. Con eso se cierra R-7 (*Riesgos*).
 - **Reglas y agentes:** el usuario los aplicó, y estaban sin commit al redactar esta enmienda.
@@ -238,3 +238,11 @@ Sin cambios en D1–D6 ni en el estado. Con este paso, el ADR queda **completame
 - **P2 abiertos (no bloquean; dueño: `devops-engineer`):**
   - `.github/workflows/ci.yml` no declara `permissions: contents: read`, ni en el workflow ni en los jobs. El `GITHUB_TOKEN` queda con los permisos por defecto del repositorio.
   - El `Jenkinsfile` no se validó en un Jenkins real.
+
+### 2026-10-13 — Referencias estables a CI y P2 de *Consecuencias*
+
+Sin cambios en D1–D6 ni en el estado.
+- **Referencias a CI.** Las citas `ci.yml:<línea>` y `Jenkinsfile:<línea>` quedaron desfasadas con cada job y etapa nuevos (`6c6b95b`, `e6e91bc`, `7faaead`, `1e1e1e3`). Desde esta fecha, este ADR cita la CI por el nombre del job, del paso o de la etapa, que no cambia al editar el archivo. Las citas con número de línea que quedan en D5, *Riesgos* y las enmiendas son registro histórico e indican el commit o la fecha en que eran ciertas. La de D5 para Jenkins (`:26-44`) nunca fue exacta: se escribió antes de crear la etapa.
+- **P2 de *Consecuencias* ("Comportamiento actual fijado"):**
+  - Que el entorno pueda sobrescribir las claves `*.expected*` lo decide el **ADR-003**, propuesto y aceptado el 2026-10-13. Por decisión del usuario, el ADR-003 también quita el entorno a `base.url` y `remote.url` (D5). Como exige este ADR, la migración empieza por la prueba que fija el comportamiento actual (`ConfigResolverTest.java:130-136`).
+  - Lo de `getPositiveInt` y el `0` se resolvió sin cambiar ese getter: `146df90` agregó `getNonNegativeInt` (`ConfigResolver.java:59-61`) para los conteos que admiten cero. `getPositiveInt` sigue rechazando el `0` a propósito, y lo fija `ConfigResolverTest.java:146-154`.
