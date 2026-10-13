@@ -98,6 +98,14 @@ bash scripts/check-layers.sh
             }
         }
 
+        // ADR-003, R-2: autoprueba del control de las etapas 'Test' y
+        // 'Cuarentena (CHK-14)', con logs sintéticos (sin awk ni secrets).
+        stage('Esperados por -D (ADR-003, R-2)') {
+            steps {
+                sh 'bash scripts/tests/check-no-expected-override-test.sh'
+            }
+        }
+
         // CHK-11 (ADR-001, D5): fuera de withCredentials, sin secrets ni navegador.
         // Va antes de 'Test' porque `clean test` borra target/pit-reports.
         stage('Mutation (CHK-11)') {
@@ -126,6 +134,11 @@ rm -rf target/pit-reports pit.log
         }
 
         // CHK-08: misma suite y mismo filtro que el job `test` de GitHub Actions.
+        // ADR-003, R-2: después de Maven, aunque falle, el log no puede tener el
+        // aviso de D3 (un esperado sobrescrito por -D). El rc de Maven no se
+        // tapa: si Maven falla, la etapa sale con su rc; si no, con el del
+        // control. test.log no se archiva: los artefactos no pasan por el
+        // enmascarado de credenciales de la consola.
         stage('Test') {
             options {
                 timeout(time: 20, unit: 'MINUTES')
@@ -146,8 +159,23 @@ java -version
                 ]) {
                     sh '''#!/usr/bin/env bash
 set -euo pipefail
+rm -f test.log
 bash scripts/check-required-secrets.sh
-./mvnw -B -ntp clean test -Dheadless=true -Dcucumber.filter.tags="not @quarantine"
+set +e
+./mvnw -B -ntp clean test -Dheadless=true -Dcucumber.filter.tags="not @quarantine" 2>&1 | tee test.log
+st=("${PIPESTATUS[@]}")
+set -e
+mvn_rc="${st[0]}"
+override_rc=0
+bash scripts/check-no-expected-override.sh test.log || override_rc=$?
+if [ "${st[1]}" -ne 0 ]; then
+  echo "tee terminó con ${st[1]}: el log de Maven está incompleto" >&2
+  exit 1
+fi
+if [ "$mvn_rc" -ne 0 ]; then
+  exit "$mvn_rc"
+fi
+exit "$override_rc"
 '''
                 }
             }
@@ -184,6 +212,10 @@ bash scripts/check-required-secrets.sh
         // Sin `junit` a propósito: no mezcla estos resultados con los de 'Test'.
         // Corre después de 'Test' (cuyo post ya publicó y archivó sus reportes) y
         // copia los suyos a quarantine-reports/. Si 'Test' falla, esta etapa no corre.
+        // ADR-003, R-2: tras el evaluador corre el control del aviso de D3. Un
+        // error real del evaluador conserva su rc; si el evaluador da 0 o 3 y el
+        // log tiene el aviso (o no se puede evaluar), sale con el rc del control
+        // (1 o 2): FAILURE, nunca el UNSTABLE del rc 3.
         stage('Cuarentena (CHK-14)') {
             options {
                 timeout(time: 20, unit: 'MINUTES')
@@ -222,7 +254,17 @@ if [ "${st[1]}" -ne 0 ]; then
   exit 1
 fi
 cp -R target/surefire-reports target/allure-results target/cucumber-report.html quarantine-reports/ 2>/dev/null || true
-exec bash scripts/evaluate-quarantine-run.sh "$mvn_rc" quarantine-reports/quarantine.log
+eval_rc=0
+bash scripts/evaluate-quarantine-run.sh "$mvn_rc" quarantine-reports/quarantine.log || eval_rc=$?
+override_rc=0
+bash scripts/check-no-expected-override.sh quarantine-reports/quarantine.log || override_rc=$?
+if [ "$eval_rc" -ne 0 ] && [ "$eval_rc" -ne 3 ]; then
+  exit "$eval_rc"
+fi
+if [ "$override_rc" -ne 0 ]; then
+  exit "$override_rc"
+fi
+exit "$eval_rc"
 ''')
                     }
                     if (rc == 3) {
@@ -230,7 +272,7 @@ exec bash scripts/evaluate-quarantine-run.sh "$mvn_rc" quarantine-reports/quaran
                             error('Cuarentena (CHK-14): aviso (un defecto-sut pasa o un inestable termina con error); ver el log de la etapa y docs/quarantine.md')
                         }
                     } else if (rc != 0) {
-                        error("Cuarentena (CHK-14): la ejecución no midió la cuarentena (rc ${rc}); ver el log de la etapa")
+                        error("Cuarentena (CHK-14): la ejecución no midió la cuarentena o el log tiene un esperado sobrescrito por -D (rc ${rc}; ADR-003, R-2); ver el log de la etapa")
                     }
                 }
             }
