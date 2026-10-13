@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # CHK-14 — Evalúa la ejecución de los escenarios @quarantine (job `quarantine`
-# de GitHub Actions y etapa `Cuarentena` de Jenkins).
+# de GitHub Actions y etapa `Cuarentena (CHK-14)` de Jenkins).
 #
 # Uso: bash scripts/evaluate-quarantine-run.sh [--github] [--summary <archivo>]
 #           <rc-de-maven> <log-de-maven> [raíz]          (raíz por defecto: .)
