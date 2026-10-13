@@ -176,7 +176,7 @@ flowchart TB
 
 | Comprobación | Qué impide | Dónde corre |
 |---|---|---|
-| **CHK-17** · `scripts/check-layers.sh` | Saltos de capa (reglas R1–R6): firmas expuestas (públicas o protegidas, con anotaciones o modificadores en cualquier orden), cualquier tipo de Selenium importado o calificado en las firmas del transporte, imports con comodín y herencia en `transport`, `pages`, `actions` y `utils`; con autoprueba en la matriz de awk y mutantes | CI (job `mutation`) y Jenkins |
+| **CHK-17** · `scripts/check-layers.sh` | Saltos de capa (reglas R1–R6): firmas expuestas (públicas o protegidas, con anotaciones o modificadores en cualquier orden), cualquier tipo de Selenium importado o calificado en las firmas del transporte, imports con comodín y herencia en `transport`, `pages`, `actions` y `utils`; en `transport`, un único clic nativo, `executeScript` solo con scripts de una lista cerrada y ningún evento sintético; y exige que `DriverFactory` aplique la preferencia de Chrome de D8. Con autoprueba en la matriz de awk y mutantes | CI (job `mutation`) y Jenkins |
 | **CHK-12** · `scripts/check-traceability.sh` | Escenarios sin spec aprobada o sin `@AC-`/`@tec-` | CI y Jenkins, antes de la suite |
 | **CHK-15/16** · `scripts/check-unit-purity.sh` | E/S o Selenium en `src/main`; pruebas unitarias acopladas | CI (job `mutation`) y Jenkins |
 | **CHK-11** · PIT + `scripts/check-mutation-report.sh` | Pruebas unitarias que no detectan defectos (umbral 80 %) | CI (job `mutation`) y Jenkins |
@@ -549,19 +549,22 @@ Para comprobar la evidencia durante desarrollo, puede cambiarse temporalmente un
 
 ### GitHub Actions
 
-`.github/workflows/ci.yml` corre en cada `push` y `pull request` a `main` (y manualmente con `workflow_dispatch`), con permisos mínimos (`contents: read`). Tiene cinco jobs en paralelo:
+`.github/workflows/ci.yml` corre en cada `push` y `pull request` a `main` (y manualmente con `workflow_dispatch`), con permisos mínimos (`contents: read`), checkout sin credenciales persistidas (`persist-credentials: false`) y `concurrency` que cancela el run anterior de un mismo PR. Tiene seis jobs en paralelo:
 
 | Job | Qué hace | Secrets |
 |---|---|---|
 | `test` | CHK-12 (trazabilidad) y la suite completa en Chrome headless, sin `@quarantine`; después, CHK-19 sobre su log | Sí |
 | `e2e-firefox` | Los escenarios E2E en Firefox headless; después, CHK-19 sobre su log | Sí |
 | `e2e-grid` | Los escenarios E2E contra un Selenium Grid (`selenium/standalone-chrome`), con espera activa a que esté listo; después, CHK-19 sobre su log | Sí |
-| `mutation` | CHK-18 (portabilidad de awk); CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, que corren con mawk, gawk y `gawk --posix`; la autoprueba de CHK-19; CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
+| `mutation` | CHK-12 (trazabilidad, también aquí para que corra en los PR de forks); CHK-18 (portabilidad de awk); CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, que corren con mawk, gawk y `gawk --posix`; la autoprueba de CHK-19; CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
 | `quarantine` | Solo los escenarios `@quarantine`, evaluados por `scripts/evaluate-quarantine-run.sh` contra `docs/quarantine.md`: **verde** si un `defecto-sut` falla por aserción (lo esperado) o un `inestable` falla por aserción o pasa; **verde con aviso** si un `defecto-sut` pasa (revisar la spec) o un `inestable` termina con error (revisar su diagnóstico); **rojo** si un `defecto-sut` termina con error (excepción o timeout) o si la cuarentena no mide nada (cero escenarios, sin reporte, fallo de compilación o un escenario sin fila). Después, CHK-19 sobre su log: un esperado sobrescrito por `-D` lo deja en **rojo** | Sí |
+| `fork-pr-notice` | Solo en los PR que vienen de un fork: avisa (`::notice::` y resumen del run) de que los E2E se omitieron porque esos PR no reciben secrets; un mantenedor los ejecuta antes de fusionar ([CONTRIBUTING.md](CONTRIBUTING.md)) | No |
+
+En los PR de forks se omiten `test`, `e2e-firefox`, `e2e-grid` y `quarantine` (la condición depende de quién origina el PR, no de que falte un secret: en `main` y en los PR internos, un secret ausente sigue dejando el job en rojo). Un job omitido cuenta como correcto en los checks requeridos, por eso la ejecución de los E2E antes de fusionar es un paso del mantenedor.
 
 Los jobs con navegador registran su versión antes de Maven: `google-chrome --version` en `test` y `quarantine`, la del contenedor del Grid en `e2e-grid` y `firefox --version` en `e2e-firefox`. Así, si una versión nueva de Chrome cambia algo (por ejemplo, renombra la preferencia de D8), el log dice con qué versión empezó.
 
-Cada job publica sus reportes como artefactos aunque falle. Los jobs con secrets los verifican al inicio con `scripts/check-required-secrets.sh`, que solo nombra las variables que faltan.
+Cada job publica sus reportes como artefactos aunque falle, con una retención de 14 días. Los artefactos no pasan por el enmascarado de secrets de GitHub, por eso los logs de Maven (`test.log`, `quarantine.log`) no se suben, ni en GitHub ni en Jenkins. Los jobs con secrets los verifican al inicio con `scripts/check-required-secrets.sh`, que solo nombra las variables que faltan.
 
 Las credenciales se cargan como *Secrets* del repositorio (`Settings → Secrets and variables → Actions`), uno por variable de `.env.example` y con el mismo nombre: `TEST_USER_STANDARD_USERNAME`, `TEST_USER_STANDARD_PASSWORD`, `TEST_LOGIN_CASES_LOCKED_USER_USERNAME`, `TEST_LOGIN_CASES_LOCKED_USER_PASSWORD`, `TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME` y `TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD`.
 

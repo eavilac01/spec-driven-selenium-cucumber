@@ -41,7 +41,7 @@ Senior. Diseña la estructura para que **cada cambio se absorba en la capa más 
 ## Procedimiento
 1. Lee `docs/adr/` y la estructura con `git ls-files src/test/java/com/demo`.
 2. Ubica el cambio en la capa más baja que pueda absorberlo.
-3. Revisa las reglas de rechazo (forma final en ADR-002, D7; las comprueba `bash scripts/check-layers.sh`, CHK-17):
+3. Revisa las reglas de rechazo (forma final en ADR-002, D7; las comprueba `bash scripts/check-layers.sh`, CHK-17, que además exige los directorios de capa (D6) y que `DriverFactory` aplique las preferencias de Chrome (D8)):
 
 | Regla | Rechaza |
 |---|---|
@@ -49,7 +49,7 @@ Senior. Diseña la estructura para que **cada cambio se absorba en la capa más 
 | R2 | Selenium en `steps` o `actions` (CHK-03 es su subconjunto rápido) |
 | R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas expuestas, como retorno o parámetro (los constructores sí las reciben); interfaces, anotaciones o records expuestos en `actions` |
 | R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions` |
-| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; clases de `transport`, `pages`, `actions` o `utils` que extienden otra |
+| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; en `transport`, `executeScript` fuera de la lista cerrada de scripts, `executeAsyncScript`, un clic distinto de `elemento.click();` o más de uno, y eventos sintéticos u otras vías de entrada (teclado, envío de formularios, `Actions`, CDP y BiDi) (ADR-002, D7, *Clic nativo único, scripts cerrados y preferencias de Chrome*); clases de `transport`, `pages`, `actions` o `utils` que extienden otra |
 | R6 | Nombrar un paquete fuera de su fila del grafo de dependencias (ADR-002, D4); secretos fuera de `utils` y `steps`; `ResultadoClic` en un miembro expuesto (público o protegido) de una página (ADR-002, D1) |
 | R7 | Features con vocabulario de interfaz (CHK-04) |
 
