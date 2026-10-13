@@ -30,16 +30,28 @@ public final class CartPage {
     public void iniciarCheckout() {
         Navegador.ResultadoClic resultado = pulsarTramitar();
         if (resultado != Navegador.ResultadoClic.AVANZO) {
-            throw new IllegalStateException("La compra no avanzó a los datos de envío tras pulsar el botón de tramitar");
+            throw new IllegalStateException(
+                    "La compra no avanzó a los datos de envío tras pulsar el botón de tramitar (resultado: %s)"
+                            .formatted(resultado));
         }
     }
 
     /**
-     * Pulsa el botón de tramitar sin exigir que la compra avance: quien lo llama observa el estado con
-     * {@link #permaneceEnCarrito()} y la ruta de datos de envío. Un control no disponible lanza error.
+     * Intenta tramitar sin exigir que la compra avance. Quien lo llama observa el estado con
+     * {@link #permaneceEnCarrito()} y la ruta de datos de envío. "No se puede tramitar" solo se acepta con prueba
+     * positiva: el carrito cargó (ruta, título y contenedor) y el botón de tramitar está presente en el DOM pero
+     * no estuvo visible y habilitado en todo el tiempo máximo (deshabilitado u oculto), sin clic. Si el botón no
+     * existe en el DOM falla cerrado: un botón eliminado no se distingue de un localizador roto.
      */
     public void intentarIniciarCheckout() {
-        pulsarTramitar();
+        esperarCarritoCargado();
+        exigirBotonTramitarPresente();
+        Navegador.ResultadoClic resultado = navegador.clickYObservarUrlContiene(
+                BOTON_CHECKOUT,
+                ConfigReader.getRequired("route.checkout.information"));
+        if (resultado == Navegador.ResultadoClic.NO_DISPONIBLE) {
+            exigirBotonTramitarPresente();
+        }
     }
 
     /** Prueba positiva de permanencia: la URL es la del carrito y su contenedor está visible. */
@@ -58,7 +70,7 @@ public final class CartPage {
     public int contarProductos() {
         navegador.esperarUrlContiene(ConfigReader.getRequired("route.cart"));
         navegador.esperarVisible(LISTA_CARRITO);
-        return navegador.contar(NOMBRES_PRODUCTOS);
+        return navegador.contarEstable(NOMBRES_PRODUCTOS);
     }
 
     public void quitarProducto(String nombreProducto) {
@@ -76,9 +88,21 @@ public final class CartPage {
 
     /** El carrito está listo cuando su URL, su título, su contenedor y el botón de tramitar son visibles. */
     private void esperarCarritoListo() {
+        esperarCarritoCargado();
+        navegador.esperarVisible(BOTON_CHECKOUT);
+    }
+
+    private void exigirBotonTramitarPresente() {
+        if (!navegador.existeEnTiempoMaximo(BOTON_CHECKOUT)) {
+            throw new IllegalStateException(
+                    "El control de tramitar no existe en el carrito: ¿localizador roto o el sistema lo eliminó?");
+        }
+    }
+
+    /** El carrito cargó cuando su URL, su título y su contenedor son visibles; no exige el botón de tramitar. */
+    private void esperarCarritoCargado() {
         navegador.esperarUrlContiene(ConfigReader.getRequired("route.cart"));
         navegador.esperarVisible(TITULO);
         navegador.esperarVisible(LISTA_CARRITO);
-        navegador.esperarVisible(BOTON_CHECKOUT);
     }
 }

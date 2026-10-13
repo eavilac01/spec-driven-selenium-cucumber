@@ -133,6 +133,28 @@ class BrowserErrorPageTest {
         assertEquals(Optional.empty(), BrowserErrorPage.codeFromDriverMessage(null));
     }
 
+    @Test
+    void codeFollowedByLowercaseTailIsRejectedNotTruncated() {
+        assertEquals(Optional.empty(), BrowserErrorPage.codeFromDriverMessage("net::ERR_ABCdef"));
+        assertEquals(Optional.empty(), BrowserErrorPage.codeFromDriverMessage("unknown error: net::ERR_ABCdef (Session)"));
+        assertEquals(Optional.empty(), BrowserErrorPage.codeFromDriverMessage("net::ERR_ABC_def"));
+    }
+
+    @Test
+    void validCodeFollowedByASeparatorIsStillAccepted() {
+        assertEquals(Optional.of("net::ERR_ABC"), BrowserErrorPage.codeFromDriverMessage("net::ERR_ABC def"));
+        assertEquals(Optional.of("net::ERR_ABC"), BrowserErrorPage.codeFromDriverMessage("net::ERR_ABC."));
+        assertEquals(Optional.of("net::ERR_ABC"), BrowserErrorPage.codeFromDriverMessage("(net::ERR_ABC)"));
+        assertEquals(Optional.of("net::ERR_ABC"), BrowserErrorPage.codeFromDriverMessage("net::ERR_ABC\nmore"));
+        assertEquals(Optional.of("net::ERR_ABC"), BrowserErrorPage.codeFromDriverMessage("net::ERR_ABC"));
+    }
+
+    @Test
+    void messageWithAnIncompleteCodeIsStillANavigationErrorWithoutAUsableCode() {
+        assertTrue(BrowserErrorPage.isNavigationErrorMessage("net::ERR_ABCdef"));
+        assertEquals(Optional.empty(), BrowserErrorPage.codeFromDriverMessage("net::ERR_ABCdef"));
+    }
+
     // --- describe ---
 
     @Test

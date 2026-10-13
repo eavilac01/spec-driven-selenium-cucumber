@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.util.List;
 import java.util.Properties;
@@ -233,7 +234,11 @@ class BrowserSettingsTest {
                 () -> of("chrome", "http://not a url", false));
 
         assertEquals("La configuración remote.url no es una URL válida: 'http://not a url'", error.getMessage());
-        assertInstanceOf(IllegalArgumentException.class, error.getCause());
+        assertEquals(IllegalArgumentException.class, error.getCause().getClass());
+        // El esperado sale de la misma API del JDK con la misma entrada: no depende de la versión del texto.
+        IllegalArgumentException delJdk = assertThrows(IllegalArgumentException.class,
+                () -> URI.create("http://not a url"));
+        assertEquals(delJdk.getMessage(), error.getCause().getMessage());
     }
 
     @Test
@@ -250,7 +255,10 @@ class BrowserSettingsTest {
                 () -> of("chrome", "foo://grid:4444", false));
 
         assertEquals("La configuración remote.url no es una URL válida: 'foo://grid:4444'", error.getMessage());
-        assertInstanceOf(MalformedURLException.class, error.getCause());
+        assertEquals(MalformedURLException.class, error.getCause().getClass());
+        MalformedURLException delJdk = assertThrows(MalformedURLException.class,
+                () -> URI.create("foo://grid:4444").toURL());
+        assertEquals(delJdk.getMessage(), error.getCause().getMessage());
     }
 
     @Test

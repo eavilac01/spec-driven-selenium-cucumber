@@ -23,7 +23,11 @@ public final class BrowserErrorPage {
     private static final String FIREFOX_ERROR_URL_PREFIX = "about:neterror";
     private static final String CODE_BODY = "ERR_[A-Z0-9_]+";
     private static final Pattern CODE_FROM_PAGE = Pattern.compile("(?:net::)?(" + CODE_BODY + ")");
+    /** Detecta un fallo de navegación: basta el comienzo de un código, aunque el resto no sea válido. */
     private static final Pattern CODE_IN_MESSAGE = Pattern.compile("net::" + CODE_BODY);
+    /** Extrae solo códigos completos: el código no puede continuar con otro carácter de palabra. */
+    private static final Pattern VALID_CODE_IN_MESSAGE =
+            Pattern.compile("net::" + CODE_BODY + "(?![A-Za-z0-9_])");
 
     private BrowserErrorPage() {
     }
@@ -57,12 +61,16 @@ public final class BrowserErrorPage {
         return matcher.matches() ? Optional.of("net::" + matcher.group(1)) : Optional.empty();
     }
 
-    /** Extrae el primer {@code net::ERR_…} de un mensaje de excepción del driver. */
+    /**
+     * Extrae el primer {@code net::ERR_…} completo de un mensaje de excepción del driver. Un código
+     * seguido de letras, dígitos o guion bajo no válidos (por ejemplo {@code net::ERR_ABCdef}) se rechaza
+     * en lugar de truncarse.
+     */
     public static Optional<String> codeFromDriverMessage(String message) {
         if (message == null) {
             return Optional.empty();
         }
-        Matcher matcher = CODE_IN_MESSAGE.matcher(message);
+        Matcher matcher = VALID_CODE_IN_MESSAGE.matcher(message);
         return matcher.find() ? Optional.of(matcher.group()) : Optional.empty();
     }
 

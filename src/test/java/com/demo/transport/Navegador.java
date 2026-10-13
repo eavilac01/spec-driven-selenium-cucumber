@@ -31,6 +31,13 @@ public final class Navegador {
 
     private static final Duration TIEMPO_MAXIMO_ESPERA =
             Duration.ofSeconds(ConfigReader.getPositiveInt("explicit.wait.seconds"));
+    /**
+     * Tope de clics por acción: el primero es nativo y los demás, el respaldo JavaScript. No es un reintento de
+     * la prueba: agotado el tope no se vuelve a pulsar y solo se espera la postcondición hasta el tiempo máximo.
+     */
+    private static final int MAXIMO_CLICS_POR_ACCION = 3;
+    /** Sondeos consecutivos con el mismo resultado para dar por estable una lectura de ausencia o de conteo. */
+    private static final int SONDEOS_ESTABLES = 2;
     private static final String SCRIPT_ESCRIBIR_INPUT_CONTROLADO = """
             const elemento = arguments[0];
             const valor = arguments[1];
@@ -94,7 +101,12 @@ public final class Navegador {
             driver.navigate().to(url);
         } catch (WebDriverException exception) {
             if (BrowserErrorPage.isNavigationErrorMessage(exception.getMessage())) {
-                throw errorDeNavegacion(url, BrowserErrorPage.codeFromDriverMessage(exception.getMessage()));
+                Optional<String> codigo = BrowserErrorPage.codeFromDriverMessage(exception.getMessage());
+                // PI-05/PI-09: solo el tipo de la excepción y el código que pasó el patrón; ni el texto del driver
+                // ni la causa viajan al mensaje o al log.
+                logger.debug("La navegación lanzó {} y se clasificó como página de error de red (código: {})",
+                        exception.getClass().getName(), codigo.orElse(BrowserErrorPage.CODE_UNAVAILABLE));
+                throw errorDeNavegacion(url, codigo);
             }
             throw exception;
         }
@@ -128,18 +140,23 @@ public final class Navegador {
         wait.until(ExpectedConditions.elementToBeClickable(localizador)).click();
     }
 
-    /** Resultado de {@link #clickYObservarUrlContiene}: la URL esperada se alcanzó o no, con clics efectivos. */
+    /**
+     * Resultado de {@link #clickYObservarUrlContiene}: la URL esperada se alcanzó, no se alcanzó tras al menos un
+     * clic efectivo, o el control nunca estuvo disponible (visible y habilitado) y no hubo ningún clic.
+     */
     public enum ResultadoClic {
         AVANZO,
-        NO_AVANZO
+        NO_AVANZO,
+        NO_DISPONIBLE
     }
 
     /**
-     * Hace clic en el control, con el mismo respaldo de clic repetido que {@link #clickYEsperarUrlContiene},
+     * Hace clic en el control, con el mismo respaldo y el mismo tope de clics que {@link #clickYEsperarUrlContiene},
      * hasta que la URL contenga el fragmento o se agote el tiempo máximo. Distingue tres estados:
      * {@link ResultadoClic#AVANZO}; {@link ResultadoClic#NO_AVANZO} con al menos un clic efectivo (el control
-     * estuvo clicable y se pulsó); y control no disponible (nunca clicable, ningún clic), que lanza
-     * {@link IllegalStateException} porque no prueba nada y no debe leerse como "no avanza".
+     * estuvo clicable y se pulsó); y {@link ResultadoClic#NO_DISPONIBLE}: el control no estuvo visible y habilitado
+     * en todo el tiempo máximo, así que no hubo clic. Quien lo llama decide si "no disponible" es un resultado
+     * válido; para que no sea un falso positivo debe comprobar antes que el resto de la página sí cargó.
      * Registra a nivel INFO el número de clics efectivos, nunca datos del escenario.
      */
     public ResultadoClic clickYObservarUrlContiene(By localizador, String fragmentoUrl) {
@@ -151,15 +168,14 @@ public final class Navegador {
                 if (Boolean.TRUE.equals(urlEsperada.apply(webDriver))) {
                     return true;
                 }
+                if (clicsEfectivos.get() >= MAXIMO_CLICS_POR_ACCION) {
+                    return false;
+                }
                 WebElement elemento = ExpectedConditions.elementToBeClickable(localizador).apply(webDriver);
                 if (elemento == null) {
                     return false;
                 }
-                if (clicsEfectivos.getAndIncrement() == 0) {
-                    elemento.click();
-                } else {
-                    ((JavascriptExecutor) webDriver).executeScript("arguments[0].click();", elemento);
-                }
+                pulsar(webDriver, elemento, localizador, clicsEfectivos);
                 return Boolean.TRUE.equals(urlEsperada.apply(webDriver));
             });
             logger.info("El clic en {} avanzó con {} clic(s) efectivo(s)", localizador, clicsEfectivos.get());
@@ -167,13 +183,7 @@ public final class Navegador {
         } catch (TimeoutException exception) {
             int clics = clicsEfectivos.get();
             logger.info("El clic en {} no avanzó; clics efectivos: {}", localizador, clics);
-            if (clics == 0) {
-                throw new IllegalStateException(
-                        "El control %s no estuvo disponible para hacer clic: la observación no es válida"
-                                .formatted(localizador),
-                        exception);
-            }
-            return ResultadoClic.NO_AVANZO;
+            return clics == 0 ? ResultadoClic.NO_DISPONIBLE : ResultadoClic.NO_AVANZO;
         }
     }
 
@@ -205,8 +215,10 @@ public final class Navegador {
         clickHastaCumplir(localizador, alguna);
     }
 
+    /** Exige que el control esté visible antes del clic: un localizador que no coincide no puede dar por cumplida la ausencia. */
     public void clickYEsperarInvisible(By localizador) {
         verificarIniciado();
+        elementoVisible(localizador);
         clickHastaCumplir(localizador, ExpectedConditions.invisibilityOfElementLocated(localizador));
     }
 
@@ -243,15 +255,40 @@ public final class Navegador {
                 .toList();
     }
 
-    public boolean esVisible(By localizador) {
+    /** Observa si el elemento llega a estar presente en el DOM (visible o no) dentro del tiempo máximo; no falla si no llega. */
+    public boolean existeEnTiempoMaximo(By localizador) {
         verificarIniciado();
         try {
-            List<WebElement> elementos = driver.findElements(localizador);
-            return !elementos.isEmpty() && elementos.get(0).isDisplayed();
-        } catch (WebDriverException exception) {
-            logger.debug("El elemento {} no está visible", localizador, exception);
+            wait.until(webDriver -> !webDriver.findElements(localizador).isEmpty());
+            return true;
+        } catch (TimeoutException exception) {
+            logger.debug("El elemento {} no estuvo presente dentro del tiempo máximo", localizador);
             return false;
         }
+    }
+
+    /** Lectura inmediata, sin espera: indica si el elemento está presente y visible en este instante. */
+    public boolean esVisible(By localizador) {
+        verificarIniciado();
+        return visibleAhora(driver, localizador);
+    }
+
+    /**
+     * Lectura de "se muestra" apta para afirmar una ausencia: devuelve true en cuanto el elemento es visible y
+     * false solo si no lo estuvo en {@value #SONDEOS_ESTABLES} sondeos consecutivos (el sondeo de la espera
+     * explícita), de modo que un elemento que aparece con la página ya lista no se da por ausente. Acotada por el
+     * tiempo máximo. El llamador debe haber comprobado antes que la página cargó.
+     */
+    public boolean esVisibleEstable(By localizador) {
+        verificarIniciado();
+        AtomicInteger ausenciasConsecutivas = new AtomicInteger();
+        Optional<Boolean> decision = wait.until(webDriver -> {
+            if (visibleAhora(webDriver, localizador)) {
+                return Optional.of(true);
+            }
+            return ausenciasConsecutivas.incrementAndGet() >= SONDEOS_ESTABLES ? Optional.of(false) : null;
+        });
+        return decision.orElseThrow();
     }
 
     /** Observa si el elemento llega a ser visible dentro del tiempo máximo; no falla si no llega. */
@@ -266,10 +303,24 @@ public final class Navegador {
         }
     }
 
-    /** Lectura inmediata, sin espera: cuenta los elementos presentes que coinciden. */
-    public int contar(By localizador) {
+    /**
+     * Cuenta los elementos presentes que coinciden, una vez que el conteo se repitió en {@value #SONDEOS_ESTABLES}
+     * sondeos consecutivos: un cero (o cualquier cifra) leído antes de que la página termine de pintar no se
+     * acepta. Acotada por el tiempo máximo. El llamador debe haber comprobado antes que la página cargó.
+     */
+    public int contarEstable(By localizador) {
         verificarIniciado();
-        return driver.findElements(localizador).size();
+        AtomicInteger ultimoConteo = new AtomicInteger(-1);
+        AtomicInteger sondeosConsecutivos = new AtomicInteger();
+        return wait.until(webDriver -> {
+            int conteo = webDriver.findElements(localizador).size();
+            if (conteo == ultimoConteo.getAndSet(conteo)) {
+                sondeosConsecutivos.incrementAndGet();
+            } else {
+                sondeosConsecutivos.set(1);
+            }
+            return sondeosConsecutivos.get() >= SONDEOS_ESTABLES ? Optional.of(conteo) : null;
+        }).orElseThrow();
     }
 
     public void esperarInvisible(By localizador) {
@@ -305,33 +356,74 @@ public final class Navegador {
         return wait.until(ExpectedConditions.visibilityOfElementLocated(localizador));
     }
 
+    /**
+     * Pulsa hasta {@value #MAXIMO_CLICS_POR_ACCION} veces (el primero nativo, el resto con el respaldo JavaScript
+     * para cuando Chrome pierde el evento) y espera la postcondición dentro del tiempo máximo. El respaldo solo
+     * se aplica si 500 ms después del clic anterior la postcondición sigue sin cumplirse; con el tope agotado no
+     * se pulsa más y solo se espera. Un control que alterna estado (agregar y quitar) podría revertirse con un
+     * segundo clic si el primero sí se registró pero tardó en verse: por eso el tope es pequeño y se registra a
+     * nivel INFO cada vez que hace falta un clic extra. Al agotarse el plazo lanza {@link TimeoutException} con
+     * el localizador, los clics efectivos y el plazo. El localizador puede llevar el nombre de un producto del
+     * escenario (dato propio de la prueba); el mensaje no incluye texto leído del SUT ni credenciales.
+     */
     private void clickHastaCumplir(By localizador, ExpectedCondition<Boolean> postcondicion) {
-        AtomicBoolean clicNativoIntentado = new AtomicBoolean();
-        wait.until(webDriver -> {
-            if (Boolean.TRUE.equals(postcondicion.apply(webDriver))) {
-                return true;
-            }
+        AtomicInteger clicsEfectivos = new AtomicInteger();
+        try {
+            wait.until(webDriver -> {
+                if (Boolean.TRUE.equals(postcondicion.apply(webDriver))) {
+                    return true;
+                }
+                if (clicsEfectivos.get() >= MAXIMO_CLICS_POR_ACCION) {
+                    return false;
+                }
 
-            WebElement elemento = ExpectedConditions.elementToBeClickable(localizador).apply(webDriver);
-            if (elemento == null) {
-                return false;
-            }
+                WebElement elemento = ExpectedConditions.elementToBeClickable(localizador).apply(webDriver);
+                if (elemento == null) {
+                    return false;
+                }
 
-            if (clicNativoIntentado.compareAndSet(false, true)) {
-                elemento.click();
+                pulsar(webDriver, elemento, localizador, clicsEfectivos);
                 return Boolean.TRUE.equals(postcondicion.apply(webDriver));
-            }
+            });
+        } catch (TimeoutException exception) {
+            int clics = clicsEfectivos.get();
+            throw new TimeoutException(
+                    "El clic en %s no alcanzó su postcondición en %d s (clics efectivos: %d de %d permitidos%s)"
+                            .formatted(localizador, TIEMPO_MAXIMO_ESPERA.toSeconds(), clics, MAXIMO_CLICS_POR_ACCION,
+                                    clics == 0 ? "; el control nunca estuvo visible y habilitado" : ""),
+                    exception);
+        }
+        if (clicsEfectivos.get() > 1) {
+            logger.info("El clic en {} necesitó {} clics efectivos (respaldo JavaScript)", localizador,
+                    clicsEfectivos.get());
+        }
+    }
 
-            logger.debug("El clic nativo en {} no alcanzó su postcondición; se aplica el respaldo JavaScript",
-                    localizador);
-            ((JavascriptExecutor) webDriver).executeScript("arguments[0].click();", elemento);
-            return Boolean.TRUE.equals(postcondicion.apply(webDriver));
-        });
+    /** Primer clic nativo; los siguientes, con el respaldo JavaScript. Cuenta el clic antes de pulsar. */
+    private void pulsar(WebDriver webDriver, WebElement elemento, By localizador, AtomicInteger clicsEfectivos) {
+        if (clicsEfectivos.getAndIncrement() == 0) {
+            elemento.click();
+            return;
+        }
+        logger.debug("El clic anterior en {} no alcanzó su postcondición; se aplica el respaldo JavaScript",
+                localizador);
+        ((JavascriptExecutor) webDriver).executeScript("arguments[0].click();", elemento);
+    }
+
+    private boolean visibleAhora(WebDriver webDriver, By localizador) {
+        try {
+            List<WebElement> elementos = webDriver.findElements(localizador);
+            return !elementos.isEmpty() && elementos.get(0).isDisplayed();
+        } catch (WebDriverException exception) {
+            logger.debug("El elemento {} no está visible", localizador, exception);
+            return false;
+        }
     }
 
     private void esperarValorEstable(By localizador, String textoEsperado) {
         AtomicInteger coincidenciasConsecutivas = new AtomicInteger();
         AtomicBoolean reintentoNativoRealizado = new AtomicBoolean();
+        AtomicInteger correcciones = new AtomicInteger();
         wait.until(webDriver -> {
             WebElement elemento = ExpectedConditions.visibilityOfElementLocated(localizador).apply(webDriver);
             if (elemento == null) {
@@ -344,6 +436,7 @@ public final class Navegador {
             }
 
             coincidenciasConsecutivas.set(0);
+            correcciones.incrementAndGet();
             if (reintentoNativoRealizado.compareAndSet(false, true)) {
                 elemento.clear();
                 elemento.sendKeys(textoEsperado);
@@ -358,5 +451,9 @@ public final class Navegador {
                     textoEsperado);
             return false;
         });
+        if (correcciones.get() > 0) {
+            logger.info("La escritura en {} necesitó {} corrección(es) tras la escritura nativa", localizador,
+                    correcciones.get());
+        }
     }
 }

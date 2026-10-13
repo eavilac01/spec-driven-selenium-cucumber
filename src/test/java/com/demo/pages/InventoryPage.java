@@ -18,6 +18,7 @@ public final class InventoryPage {
     private static final By ENLACE_CARRITO = By.cssSelector("[data-test='shopping-cart-link']");
     private static final By NOMBRES_CATALOGO = By.cssSelector("[data-test='inventory-item-name']");
     private static final By BOTONES_AGREGAR = By.cssSelector("button[data-test^='add-to-cart']");
+    private static final By BOTONES_QUITAR = By.cssSelector("button[data-test^='remove']");
 
     private final Navegador navegador;
 
@@ -42,10 +43,23 @@ public final class InventoryPage {
         return navegador.textos(NOMBRES_CATALOGO);
     }
 
+    /**
+     * Cuenta los productos que aún se pueden agregar. Falla cerrado: cada producto del catálogo tiene un botón de
+     * agregar o uno de quitar, así que si ambas cuentas no suman los productos visibles, algún selector dejó de
+     * coincidir y el cero no prueba nada.
+     */
     public int contarProductosPorAgregar() {
         navegador.esperarUrlContiene(ConfigReader.getRequired("route.inventory"));
         navegador.esperarVisible(NOMBRES_CATALOGO);
-        return navegador.contar(BOTONES_AGREGAR);
+        int productos = navegador.contarEstable(NOMBRES_CATALOGO);
+        int porAgregar = navegador.contarEstable(BOTONES_AGREGAR);
+        int enElCarrito = navegador.contarEstable(BOTONES_QUITAR);
+        if (porAgregar + enElCarrito != productos) {
+            throw new IllegalStateException(
+                    ("Los botones de agregar (%d) y de quitar (%d) no suman los productos del catálogo (%d): "
+                            + "algún selector dejó de coincidir").formatted(porAgregar, enElCarrito, productos));
+        }
+        return porAgregar;
     }
 
     public void agregarProductoAlCarrito(String nombreProducto) {
@@ -61,7 +75,7 @@ public final class InventoryPage {
     /** Indica si la insignia del carrito está visible, una vez que el encabezado de la página está listo. */
     public boolean seMuestraContadorCarrito() {
         navegador.esperarVisible(ENLACE_CARRITO);
-        return navegador.esVisible(INSIGNIA_CARRITO);
+        return navegador.esVisibleEstable(INSIGNIA_CARRITO);
     }
 
     public void abrirCarrito() {
