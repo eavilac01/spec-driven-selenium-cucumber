@@ -295,16 +295,17 @@ Las fuentes están separadas deliberadamente:
 
 ```text
 Configuración no sensible:  -Dpropiedad  >  variable de entorno  >  config.properties
+Esperados y URL:            -Dpropiedad  >  config.properties
 Credenciales:                variable de entorno de CI  >  .env local
 ```
 
 `ConfigReader` solo resuelve configuración no sensible y nunca abre `.env`. `SecretReader` solo consulta nombres explícitos de variables del sistema o del `.env`; nunca consulta `config.properties` ni propiedades JVM. `CredentialsProvider` construye objetos tipados para usuario estándar, usuario bloqueado y contraseña inválida, evitando que los steps conozcan el mecanismo de almacenamiento.
 
-Esta separación impide que una credencial vuelva a `config.properties` por un fallback accidental. Una opción de ejecución no sensible puede sobrescribir el archivo sin modificar el repositorio; las variables del sistema reciben los secretos de CI y `.env` facilita el desarrollo local sin confirmar credenciales. Una entrada obligatoria ausente o vacía falla inmediatamente indicando únicamente su nombre, nunca su valor. `remote.url` es la única configuración que admite un valor vacío porque representa ejecución local.
+Esta separación impide que una credencial vuelva a `config.properties` por un fallback accidental. Una opción de ejecución no sensible puede sobrescribir el archivo sin modificar el repositorio, salvo los valores esperados (`*.expected*`) y las URL (`base.url`, `remote.url`), que solo aceptan `-D` (ADR-003); las variables del sistema reciben los secretos de CI y `.env` facilita el desarrollo local sin confirmar credenciales. Una entrada obligatoria ausente o vacía falla inmediatamente indicando únicamente su nombre, nunca su valor. `remote.url` es la única configuración que admite un valor vacío porque representa ejecución local.
 
 Ejemplo: el archivo define `headless=false`; al ejecutar Maven con `-Dheadless=true`, la propiedad de sistema gana y activa la ejecución sin ventana.
 
-Para configuración no sensible, las variables de entorno se aceptan con el nombre exacto o normalizado a mayúsculas, reemplazando puntos y guiones por guion bajo. Por ejemplo, `REMOTE_URL=http://localhost:4444` sobrescribe `remote.url`. Para secretos, `CredentialsProvider` usa directamente los nombres `TEST_*` declarados en `.env.example`; el lector no registra valores y admite líneas vacías, comentarios, el prefijo `export` y valores entre comillas.
+Para configuración no sensible, las variables de entorno se aceptan con el nombre exacto o normalizado a mayúsculas, reemplazando puntos y guiones por guion bajo. Por ejemplo, `HEADLESS=true` sobrescribe `headless`. Los valores esperados y las URL no aceptan variables de entorno: el Grid se elige con `-Dremote.url=http://localhost:4444`, y un `-D` sobre un valor esperado deja un aviso en el log y solo es válido en el control negativo (ADR-003). Para secretos, `CredentialsProvider` usa directamente los nombres `TEST_*` declarados en `.env.example`; el lector no registra valores y admite líneas vacías, comentarios, el prefijo `export` y valores entre comillas.
 
 ### Estrategia de localizadores
 
@@ -314,7 +315,7 @@ La prioridad es `id`, después CSS con atributos estables como `data-test` y, so
 //div[@data-test='inventory-item'][.//div[@data-test='inventory-item-name' and normalize-space()='Sauce Labs Backpack']]//button
 ```
 
-El valor procedente de datos de prueba se convierte de forma segura en un literal XPath antes de construir el selector.
+El valor procedente de datos de prueba se envuelve en un literal XPath entre comillas simples antes de construir el selector; si contiene una comilla simple, falla al instante en lugar de agotar la espera (ADR-002, enmienda del 2026-10-13).
 
 ### Granularidad BDD
 

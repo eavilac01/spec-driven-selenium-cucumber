@@ -45,7 +45,7 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 - Capas (ADR-002): steps → actions → pages → transport. Los steps solo usan acciones; las páginas solo interactúan a través de `Navegador`; Selenium solo vive en `transport` (en páginas, solo `By`).
 - Localizadores como constantes `By`, con prioridad `id` > CSS con atributos estables (`data-test`) > XPath relativo solo para relaciones del DOM; sin XPath absolutos, índices posicionales, `PageFactory` ni `@FindBy`.
 - Solo esperas explícitas por condición (`Navegador`); cada click espera su postcondición.
-- Configuración con precedencia `-D` > variable de entorno > `config.properties`; los valores esperados salen de la spec.
+- Configuración con precedencia `-D` > variable de entorno > `config.properties`; los valores esperados (`*.expected*`) y las URL (`base.url`, `remote.url`) solo aceptan `-D` y `config.properties` (ADR-003); los valores esperados salen de la spec.
 
 ## No hagas
 - No leas, imprimas ni subas `.env`, credenciales o secretos; las credenciales viven en `.env` (local) o en GitHub Secrets.
