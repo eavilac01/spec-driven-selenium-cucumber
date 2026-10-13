@@ -2,7 +2,6 @@ package com.demo.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -224,8 +223,11 @@ class BrowserSettingsTest {
                 () -> of("chrome", "localhost:4444", false));
 
         assertEquals("La configuración remote.url no es una URL válida: 'localhost:4444'", error.getMessage());
-        assertInstanceOf(MalformedURLException.class, error.getCause());
-        assertEquals("unknown protocol: localhost", error.getCause().getMessage());
+        assertEquals(MalformedURLException.class, error.getCause().getClass());
+        // El esperado sale de la misma API del JDK con la misma entrada: no depende de la versión del texto.
+        MalformedURLException delJdk = assertThrows(MalformedURLException.class,
+                () -> URI.create("localhost:4444").toURL());
+        assertEquals(delJdk.getMessage(), error.getCause().getMessage());
     }
 
     @Test
