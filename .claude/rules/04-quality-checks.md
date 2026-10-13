@@ -20,7 +20,8 @@ Comprobaciones deterministas que los agentes citan por ID. Una CHK en rojo es un
 | CHK-14 | Cuarentena reglada, con dos tipos | Cada `@quarantine` tiene su fila en `docs/quarantine.md` con su tipo: `inestable` (dueño, ingreso, issue, diagnóstico y límite ≤ 14 días, no vencido) o `defecto-sut` (dueño, referencia al defecto en la spec según SDD-08, comportamiento esperado frente a observado y próxima revisión ≤ 90 días, no vencida); una fila por cada `@AC-` en cuarentena (propia o heredada) y ninguna fila sin escenario. Exit 0 en el script y en su autoprueba; con exit 1 imprime `archivo:línea: motivo` | devops |
 | CHK-15 | `src/main/java` puro: sin entorno, archivos, Selenium, Cucumber ni JUnit (ADR-001) | Sin salida | engineer, verifier, devops |
 | CHK-16 | Pruebas unitarias aisladas: sin Selenium, Cucumber, capas de prueba, entorno ni `.env` real, y solo `*Test.java` en sus directorios (ADR-001) | Sin salida | engineer, verifier |
-| CHK-17 | Capas (ADR-002): R1–R6 de D7, incluidas páginas como parámetro en acciones y `ResultadoClic` en miembros públicos de páginas; falla cerrado (directorios de capa, `git grep` con rc ≥ 2 o con stderr) | Exit 0 en el script y en su autoprueba | engineer, verifier, devops |
+| CHK-17 | Capas (ADR-002): R1–R6 de D7, incluidas páginas como parámetro en acciones y `ResultadoClic` en miembros expuestos de páginas; las firmas expuestas incluyen anotaciones, cualquier orden de modificadores y `protected`, y en `transport`, `pages` y `actions` no hay interfaces, anotaciones ni records expuestos (D7, *Firmas expuestas*); falla cerrado (directorios de capa, `git grep` con rc ≥ 2 o con stderr) | Exit 0 en el script y en su autoprueba | engineer, verifier, devops |
+| CHK-18 | Portabilidad de awk: los scripts no usan nombres ni funciones exclusivos de una implementación (en el runner `awk` es gawk; en Ubuntu de escritorio, mawk), y las autopruebas que ejercitan awk pasan con mawk, gawk y `gawk --posix` | Exit 0 en el control estático, en las dos autopruebas y en la matriz; sin gawk, `--require` falla cerrado con 2 | devops |
 
 ## Comandos (copiar tal cual)
 
@@ -65,6 +66,14 @@ bash scripts/check-unit-purity.sh
 # CHK-17 (capas, ADR-002) y su autoprueba (temporal fuera del repo)
 bash scripts/check-layers.sh
 bash scripts/tests/check-layers-test.sh
+# CHK-18 (portabilidad de awk): control estático y autopruebas del control y del runner de la matriz
+bash scripts/check-awk-portability.sh
+bash scripts/tests/check-awk-portability-test.sh
+bash scripts/tests/run-with-each-awk-test.sh
+# CHK-18, matriz: las autopruebas que ejercitan awk, con cada implementación (como en CI; requiere gawk instalado)
+bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/check-layers-test.sh
+bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/check-quarantine-test.sh
+bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/evaluate-quarantine-run-test.sh
 ```
 
 Control negativo de CHK-11 (ADR-001, D6): con menos pruebas, el umbral **debe** fallar (`BUILD FAILURE`).
@@ -73,6 +82,6 @@ Control negativo de CHK-11 (ADR-001, D6): con menos pruebas, el umbral **debe** 
 ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage -Dpit.targetTests='com.demo.data.*Test'
 ```
 
-**Estado actual:** CHK-12 está activa en `scripts/check-traceability.sh` y corre en GitHub Actions y Jenkins antes de la suite. CHK-11, CHK-15 y CHK-16 están activas (ADR-001): job `mutation` en GitHub Actions y etapa `Mutation (CHK-11)` en Jenkins, sin secrets ni navegador (`90687f4`), con `scripts/check-mutation-report.sh` contra el fallo abierto de PIT. CHK-17 está activa (ADR-002): `scripts/check-layers.sh` y su autoprueba corren en el job `mutation` de GitHub Actions y en la etapa `Capas (CHK-17)` de Jenkins, sin secrets (`f7f7a13`). CHK-14 está activa: `scripts/check-quarantine.sh` y su autoprueba corren en el job `mutation` y en Jenkins; el job `quarantine` ejecuta solo los escenarios en cuarentena sin bloquear el pipeline y avisa si alguno pasa.
+**Estado actual:** CHK-12 está activa en `scripts/check-traceability.sh` y corre en GitHub Actions y Jenkins antes de la suite. CHK-11, CHK-15 y CHK-16 están activas (ADR-001): job `mutation` en GitHub Actions y etapa `Mutation (CHK-11)` en Jenkins, sin secrets ni navegador (`90687f4`), con `scripts/check-mutation-report.sh` contra el fallo abierto de PIT. CHK-17 está activa (ADR-002): `scripts/check-layers.sh` y su autoprueba corren en el job `mutation` de GitHub Actions y en la etapa `Capas (CHK-17)` de Jenkins, sin secrets (`f7f7a13`). CHK-14 está activa: `scripts/check-quarantine.sh` y su autoprueba corren en el job `mutation` y en Jenkins; el job `quarantine` ejecuta solo los escenarios en cuarentena sin bloquear el pipeline y avisa si alguno pasa. CHK-18 está activa: el control estático y la matriz corren en el job `mutation` de GitHub Actions, que exige mawk, gawk y `gawk --posix` (`1d3a593` y `34f8528`), y en la etapa `Portabilidad de awk` de Jenkins, con los awk que tenga el agente.
 
 La cobertura de líneas **no** es una CHK: mide qué código se ejecutó, no qué se verificó.

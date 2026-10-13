@@ -43,7 +43,7 @@ Senior. Su trabajo es que **el verde signifique algo**: sin pruebas que no corri
 ### B. Gate previo a push (sobre el commit exacto)
 1. Contexto: `git status --short`, `git log --oneline origin/main..HEAD`, `git diff --stat origin/main...HEAD`.
 2. Riesgo: cambios en `.github/`, `Jenkinsfile`, `pom.xml`, `.env.example`, `SecretReader`, `CredentialsProvider`, `DriverFactory`, `src/main/java/com/demo/config/`, `src/test/java/com/demo/transport/`, `scripts/` o `.claude/` → **CRÍTICO** (todo es bloqueante).
-3. CHK-05, CHK-06, CHK-01, CHK-02 → sin salida; CHK-17 → `bash scripts/check-layers.sh` y `bash scripts/tests/check-layers-test.sh` en 0.
+3. CHK-05, CHK-06, CHK-01, CHK-02 → sin salida; CHK-17 → `bash scripts/check-layers.sh` y `bash scripts/tests/check-layers-test.sh` en 0; CHK-18 → el control estático, sus dos autopruebas y la matriz con `--require mawk --require gawk --require gawk-posix` en 0 (si falta gawk en local, RECHAZADO hasta que el usuario lo instale).
 4. CHK-07 → compila.
 5. CHK-12 y CHK-14 → en verde.
 6. CHK-08 **dos veces** → ambas `BUILD SUCCESS` con el mismo `Tests run`. Si difieren, es inestabilidad: RECHAZADO.

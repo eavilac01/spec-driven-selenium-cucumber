@@ -45,12 +45,12 @@ Senior. Diseña la estructura para que **cada cambio se absorba en la capa más 
 
 | Regla | Rechaza |
 |---|---|
-| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;` (excepción permanente); tipos de Selenium en firmas públicas del transporte; `By` en firmas públicas de páginas |
+| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;` (excepción permanente); tipos de Selenium en firmas expuestas del transporte; `By` en firmas expuestas de páginas; interfaces, anotaciones o records expuestos en `transport` o `pages`. "Expuesta" = pública o protegida, con anotaciones y modificadores en cualquier orden (ADR-002, D7, *Firmas expuestas*) |
 | R2 | Selenium en `steps` o `actions` (CHK-03 es su subconjunto rápido) |
-| R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas públicas, como retorno o parámetro (los constructores sí las reciben) |
+| R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas expuestas, como retorno o parámetro (los constructores sí las reciben); interfaces, anotaciones o records expuestos en `actions` |
 | R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions` |
 | R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase |
-| R6 | Nombrar un paquete fuera de su fila del grafo de dependencias (ADR-002, D4); secretos fuera de `utils` y `steps`; `ResultadoClic` en un miembro público de una página (ADR-002, D1) |
+| R6 | Nombrar un paquete fuera de su fila del grafo de dependencias (ADR-002, D4); secretos fuera de `utils` y `steps`; `ResultadoClic` en un miembro expuesto (público o protegido) de una página (ADR-002, D1) |
 | R7 | Features con vocabulario de interfaz (CHK-04) |
 
 4. Escribe o actualiza el ADR (siguiente número libre en `docs/adr/`). Si cambia una regla, el ADR y `scripts/check-layers.sh` (con su autoprueba) cambian juntos.

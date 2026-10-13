@@ -19,7 +19,7 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 - `bash scripts/check-traceability.sh` — trazabilidad spec → feature (CHK-12)
 - `docker compose up -d` y `-Dremote.url=http://localhost:4444` — ejecuta contra el Selenium Grid local
 - `allure serve target/allure-results` — abre el reporte (requiere Allure CLI)
-- Lint: no hay linter configurado; las comprobaciones de estilo y calidad están en `.claude/rules/04-quality-checks.md` (CHK-01…17)
+- Lint: no hay linter configurado; las comprobaciones de estilo y calidad están en `.claude/rules/04-quality-checks.md` (CHK-01…18)
 
 ## Estructura del proyecto
 - `docs/specs/` — specs de negocio (fuente de verdad, SDD) y su plantilla `_plantilla.md`
