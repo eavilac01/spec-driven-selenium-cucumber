@@ -26,7 +26,7 @@
 //   TEST_LOGIN_CASES_LOCKED_USER_PASSWORD
 //   TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME
 //   TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD
-// Solo las etapas 'Test' y 'Cuarentena (informativa)' las reciben. Los bloques `sh` usan comillas simples para
+// Solo las etapas 'Test' y 'Cuarentena (CHK-14)' las reciben. Los bloques `sh` usan comillas simples para
 // que Groovy no interpole ningún valor: lo expande bash dentro del agente.
 
 pipeline {
@@ -82,6 +82,7 @@ bash scripts/check-layers.sh
         stage('Cuarentena reglada (CHK-14)') {
             steps {
                 sh 'bash scripts/tests/check-quarantine-test.sh'
+                sh 'bash scripts/tests/evaluate-quarantine-run-test.sh'
                 sh 'bash scripts/check-quarantine.sh'
             }
         }
@@ -153,21 +154,28 @@ bash scripts/check-required-secrets.sh
             }
         }
 
-        // CHK-14: escenarios @quarantine, solo para informar (job `quarantine` de
-        // GitHub Actions). catchError deja el build en SUCCESS y la etapa en
-        // UNSTABLE si fallan: un `inestable` puede fallar y un `defecto-sut`
-        // falla mientras el SUT no se corrija. Si alguno PASA, el log lo avisa:
-        // un `defecto-sut` que pasa indica que el SUT cambió (revisar la spec).
-        // Sin `junit` a propósito: no mezcla estos resultados con los de 'Test'
-        // ni marca el build como UNSTABLE. Corre después de 'Test' (cuyo post ya
-        // publicó y archivó sus reportes) y copia los suyos a quarantine-reports/.
-        // Sin reintentos (CHK-02). Si 'Test' falla, esta etapa no corre.
-        stage('Cuarentena (informativa)') {
+        // CHK-14: escenarios @quarantine (job `quarantine` de GitHub Actions), en una
+        // sola ejecución (sin reintentos, CHK-02). scripts/evaluate-quarantine-run.sh
+        // cruza el rc de Maven, su log y el XML de Surefire con docs/quarantine.md:
+        //   rc 0 -> etapa en verde: un `defecto-sut` que falla por aserción (lo
+        //           esperado) o un `inestable` (informativo); el mensaje queda en el log.
+        //   rc 3 -> un `defecto-sut` PASA: etapa UNSTABLE con build SUCCESS, como
+        //           el ::warning:: de GitHub (el SUT pudo haberse corregido).
+        //   otro -> error real (la cuarentena no mide nada o se rompe: excepción o
+        //           timeout, cero escenarios, sin XML, Maven falló por otra causa):
+        //           FAILURE de la etapa y del build, como el job rojo de GitHub. Se
+        //           rompe el build a propósito: con la etapa sola en rojo y el build
+        //           en verde, una cuarentena que no mide pasaría inadvertida.
+        // Sin `junit` a propósito: no mezcla estos resultados con los de 'Test'.
+        // Corre después de 'Test' (cuyo post ya publicó y archivó sus reportes) y
+        // copia los suyos a quarantine-reports/. Si 'Test' falla, esta etapa no corre.
+        stage('Cuarentena (CHK-14)') {
             options {
                 timeout(time: 20, unit: 'MINUTES')
             }
             steps {
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                script {
+                    int rc = 0
                     withCredentials([
                         string(credentialsId: 'TEST_USER_STANDARD_USERNAME', variable: 'TEST_USER_STANDARD_USERNAME'),
                         string(credentialsId: 'TEST_USER_STANDARD_PASSWORD', variable: 'TEST_USER_STANDARD_PASSWORD'),
@@ -176,9 +184,10 @@ bash scripts/check-required-secrets.sh
                         string(credentialsId: 'TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME', variable: 'TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME'),
                         string(credentialsId: 'TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD', variable: 'TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD')
                     ]) {
-                        sh '''#!/usr/bin/env bash
+                        rc = sh(returnStatus: true, script: '''#!/usr/bin/env bash
 set -euo pipefail
 rm -rf quarantine-reports
+mkdir -p quarantine-reports
 rc=0
 git grep -qE '(^|[[:space:]])@quarantine([[:space:]]|$)' -- src/test/resources/features || rc=$?
 case "$rc" in
@@ -187,28 +196,26 @@ case "$rc" in
   *) echo "git grep terminó con $rc" >&2; exit 2 ;;
 esac
 bash scripts/check-required-secrets.sh
-mvn_rc=0
-./mvnw -B -ntp clean test -Dtest=RunnerTest -Dheadless=true -Dcucumber.filter.tags="@quarantine" || mvn_rc=$?
-mkdir -p quarantine-reports
-cp -R target/surefire-reports target/allure-results target/cucumber-report.html quarantine-reports/ 2>/dev/null || true
-xml=target/surefire-reports/TEST-com.demo.runners.RunnerTest.xml
-if [ ! -f "$xml" ]; then
-  echo "La ejecución de @quarantine no produjo $xml" >&2
+# rc de Maven en la misma orden (PIPESTATUS, por el tee).
+set +e
+./mvnw -B -ntp clean test -Dtest=RunnerTest -Dheadless=true -Dcucumber.filter.tags="@quarantine" 2>&1 | tee quarantine-reports/quarantine.log
+st=("${PIPESTATUS[@]}")
+set -e
+mvn_rc="${st[0]}"
+if [ "${st[1]}" -ne 0 ]; then
+  echo "tee terminó con ${st[1]}: el log de Maven está incompleto" >&2
   exit 1
 fi
-suite="$(grep -o -m1 '<testsuite [^>]*>' "$xml")"
-attr() { printf '%s\\n' "$suite" | grep -oE " $1=\\"[0-9]+\\"" | grep -oE '[0-9]+'; }
-tests="$(attr tests)"; failures="$(attr failures)"; errors="$(attr errors)"; skipped="$(attr skipped)"
-# Cucumber cuenta como skipped los escenarios que el filtro excluye.
-run=$((tests - skipped))
-passed=$((run - failures - errors))
-echo "Cuarentena (CHK-14): ejecutados=$run pasaron=$passed fallaron=$failures errores=$errors"
-[ "$run" -gt 0 ] || echo "AVISO: no se ejecutó ningún escenario @quarantine."
-if [ "$passed" -gt 0 ]; then
-  echo "AVISO: $passed escenario(s) en cuarentena pasaron: revisar docs/quarantine.md (un defecto-sut que pasa indica que el SUT cambió; un inestable no sale con un verde aislado)."
-fi
-exit "$mvn_rc"
-'''
+cp -R target/surefire-reports target/allure-results target/cucumber-report.html quarantine-reports/ 2>/dev/null || true
+exec bash scripts/evaluate-quarantine-run.sh "$mvn_rc" quarantine-reports/quarantine.log
+''')
+                    }
+                    if (rc == 3) {
+                        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                            error('Cuarentena (CHK-14): un defecto-sut pasa; el SUT pudo haberse corregido: revisar la spec y docs/quarantine.md')
+                        }
+                    } else if (rc != 0) {
+                        error("Cuarentena (CHK-14): la ejecución no midió la cuarentena (rc ${rc}); ver el log de la etapa")
                     }
                 }
             }

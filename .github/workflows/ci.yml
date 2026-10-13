@@ -189,6 +189,9 @@ jobs:
       - name: Cuarentena, autoprueba (CHK-14)
         run: bash scripts/tests/check-quarantine-test.sh
 
+      - name: Evaluador del job quarantine, autoprueba (CHK-14)
+        run: bash scripts/tests/evaluate-quarantine-run-test.sh
+
       # Fecha del runner (UTC): una fila con el límite o la revisión vencidos
       # rompe el CI aunque nadie haya tocado el código.
       - name: Cuarentena reglada (CHK-14)
@@ -221,17 +224,19 @@ jobs:
           path: target/pit-reports/
           if-no-files-found: warn
 
-  # CHK-14: los escenarios @quarantine, solo para informar. `continue-on-error`
-  # hace que su fallo no rompa el workflow: un `inestable` puede fallar (es el
-  # motivo de su cuarentena) y un `defecto-sut` falla mientras el sistema bajo
-  # prueba no se corrija. Lo que se vigila es lo contrario: si alguno PASA, el
-  # resumen emite un aviso, porque un `defecto-sut` que pasa indica que el SUT
-  # cambió y hay que revisar la spec y la fila de docs/quarantine.md.
-  # Sin reintentos (CHK-02): una sola ejecución.
+  # CHK-14: los escenarios @quarantine, en una sola ejecución (sin reintentos,
+  # CHK-02) y sin continue-on-error. scripts/evaluate-quarantine-run.sh cruza el
+  # rc de Maven, su log y el XML de Surefire con docs/quarantine.md:
+  #   - verde: un `defecto-sut` que falla por aserción (lo esperado, ::notice::)
+  #     o un `inestable` que falla o pasa (informativo, ::notice::);
+  #   - verde con ::warning::: un `defecto-sut` que PASA (el SUT pudo haberse
+  #     corregido: revisar la spec y la cuarentena);
+  #   - rojo: la cuarentena no mide nada o se rompe (un <error> por excepción o
+  #     timeout, cero escenarios ejecutados, sin XML, Maven falló por otra causa
+  #     que las pruebas, o cualquier resultado que no cuadre).
   quarantine:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: true
     env:
       TEST_USER_STANDARD_USERNAME: ${{ secrets.TEST_USER_STANDARD_USERNAME }}
       TEST_USER_STANDARD_PASSWORD: ${{ secrets.TEST_USER_STANDARD_PASSWORD }}
@@ -273,44 +278,29 @@ jobs:
         if: steps.detect.outputs.present == 'true'
         run: bash scripts/check-required-secrets.sh
 
-      - name: Run @quarantine (headless Chrome)
-        id: run
+      # El rc de Maven se captura en la misma orden (PIPESTATUS, por el tee) y
+      # se evalúa contra el XML: un fallo de compilación no deja XML ni la línea
+      # "Tests run" de RunnerTest, así que no se confunde con un fallo esperado.
+      # rc 3 del evaluador = un defecto-sut pasa: ya emitió el ::warning:: y el
+      # job sigue en verde. Cualquier otro rc distinto de 0 es un error real.
+      - name: Run @quarantine (headless Chrome) y evaluar
         if: steps.detect.outputs.present == 'true'
-        run: >-
-          ./mvnw -B -ntp clean test
-          -Dtest=RunnerTest -Dheadless=true
-          -Dcucumber.filter.tags="@quarantine"
-
-      # Solo cuenta resultados (atributos de <testsuite>); el detalle por
-      # escenario está en el artefacto.
-      - name: Resumen de cuarentena
-        if: always() && steps.detect.outputs.present == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          xml=target/surefire-reports/TEST-com.demo.runners.RunnerTest.xml
-          if [ ! -f "$xml" ]; then
-            echo "::error::La ejecución de @quarantine no produjo $xml"
+          set +e
+          ./mvnw -B -ntp clean test -Dtest=RunnerTest -Dheadless=true -Dcucumber.filter.tags="@quarantine" 2>&1 | tee quarantine.log
+          st=("${PIPESTATUS[@]}")
+          set -e
+          mvn_rc="${st[0]}"
+          if [ "${st[1]}" -ne 0 ]; then
+            echo "::error::tee terminó con ${st[1]}: el log de Maven está incompleto"
             exit 1
           fi
-          suite="$(grep -o -m1 '<testsuite [^>]*>' "$xml")"
-          attr() { printf '%s\n' "$suite" | grep -oE " $1=\"[0-9]+\"" | grep -oE '[0-9]+'; }
-          tests="$(attr tests)"; failures="$(attr failures)"; errors="$(attr errors)"; skipped="$(attr skipped)"
-          # Cucumber cuenta como skipped los escenarios que el filtro excluye.
-          run=$((tests - skipped))
-          passed=$((run - failures - errors))
-          {
-            echo "### Escenarios en cuarentena (CHK-14)"
-            echo "| Ejecutados | Pasaron | Fallaron | Errores |"
-            echo "|---|---|---|---|"
-            echo "| $run | $passed | $failures | $errors |"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [ "$run" -eq 0 ]; then
-            echo "::warning::No se ejecutó ningún escenario @quarantine."
-          fi
-          if [ "$passed" -gt 0 ]; then
-            echo "::warning::$passed escenario(s) en cuarentena pasaron: revisar docs/quarantine.md. Un defecto-sut que pasa indica que el SUT cambió (revisar la spec); un inestable no sale de la cuarentena con un verde aislado."
-          fi
+          rc=0
+          bash scripts/evaluate-quarantine-run.sh --github --summary "$GITHUB_STEP_SUMMARY" "$mvn_rc" quarantine.log || rc=$?
+          if [ "$rc" -eq 3 ]; then rc=0; fi
+          exit "$rc"
 
       - name: Upload quarantine reports
         if: always() && steps.detect.outputs.present == 'true'
@@ -318,6 +308,7 @@ jobs:
         with:
           name: quarantine-reports
           path: |
+            quarantine.log
             target/cucumber-report.html
             target/surefire-reports/
             target/allure-results/
