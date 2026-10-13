@@ -1,6 +1,6 @@
 # ADR-003 — Fuentes de configuración de los valores esperados y de los destinos de red
 
-- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). Se propuso el mismo día con D1 a D4; D5 incorpora la decisión del usuario sobre R-3, tomada en la conversación el 2026-10-13. Está completamente implementado desde el 2026-10-13 (*Enmiendas*, paso 3).
+- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). Se propuso el mismo día con D1 a D4; D5 incorpora la decisión del usuario sobre R-3, tomada en la conversación el 2026-10-13. Está completamente implementado desde el 2026-10-13 (*Enmiendas*, paso 3). Su último P2, R-2, está implementado en `3be5956` como CHK-19, y su control real con Maven queda pendiente del gate (*Enmiendas*, *R-2 implementado*).
 - **Fecha:** 2026-10-13
 - **Autor:** `qa-automation-architect`
 - **Aprueba:** coordinador (Regla 01, nivel 2). `AGENTS.md` y `.claude/rules/` los cambia el usuario (P-01, PI-07). `README.md` no tiene dueño en la matriz: el usuario designa quién lo edita.
@@ -250,7 +250,7 @@ Este ADR se escribió sin ejecutar nada: solo se leyeron archivos y se buscó co
 | # | Supuesto | Lo confirma | Si es falso |
 |---|---|---|---|
 | R-1 | Surefire pasa al JVM de las pruebas las propiedades `-D` de la línea de comandos | Hoy CHK-10 funciona en cada AC (`MEMORY.md`), y el job `e2e-grid` usa `-Dremote.url`. El paso 1 lo vuelve a demostrar | CHK-10 dejaría de fallar en el `Then`. El verifier lo rechaza |
-| R-2 | Un `-D` que llega desde el entorno (`MAVEN_ARGS`, `JAVA_TOOL_OPTIONS`, `JDK_JAVA_OPTIONS`) es deliberado, no un choque accidental de nombres | Documentación de Maven y del JDK. No se ejecutó (B-01) | Para los esperados, D3 lo deja en el log. **P2 (`devops-engineer`):** que los jobs E2E fallen si su log contiene el aviso de D3; exige `tee` en `test`, `e2e-firefox` y `e2e-grid`. Para los destinos no hay aviso (D5): es un riesgo residual aceptado |
+| R-2 | Un `-D` que llega desde el entorno (`MAVEN_ARGS`, `JAVA_TOOL_OPTIONS`, `JDK_JAVA_OPTIONS`) es deliberado, no un choque accidental de nombres | Documentación de Maven y del JDK. No se ejecutó (B-01) | Para los esperados, D3 lo deja en el log. **P2 (`devops-engineer`):** que los jobs E2E fallen si su log contiene el aviso de D3; exige `tee` en `test`, `e2e-firefox` y `e2e-grid`. Para los destinos no hay aviso (D5): es un riesgo residual aceptado. **Implementado** en `3be5956` (CHK-19); el control real con Maven queda pendiente del gate (*Enmiendas*, *R-2 implementado*) |
 | R-3 | `base.url` y `remote.url` siguen aceptando el entorno (`BASE_URL`, `REMOTE_URL`) | Se propuso como P2 → `main` | **Cerrado por D5:** el usuario decidió el 2026-10-13 que solo admitan `-D` y `config.properties` |
 | R-4 | Ninguna clave futura que no sea un esperado ni un destino tendrá un segmento que empiece por `expected` ni terminará en `url` | Revisión de cada clave nueva | Falla cerrado: la clave pierde el entorno. Si dependía solo del entorno, falla con "no tiene valor", o se ejecuta en local si es una URL opcional |
 | R-5 | El aviso de D3 sigue funcionando, aunque vive en una fachada que PIT no muta | La tabla de CHK-10 de regresión exige el aviso en cada ejecución | Si se rompe, solo se pierde la visibilidad. El bloqueo de D2 está en `src/main`, cubierto por PIT |
@@ -282,4 +282,29 @@ Las decisiones no cambian. Con este paso, el ADR queda **completamente implement
   - Cubre la implementación de `2c33885` y la documentación de `2671a20`, los dos firmados (`git log --format='%h %G?'`). Los dos son anteriores a `5329cf1` en `main`.
 - **La CI usa el mismo canal.** El job `e2e-grid`, paso *Run E2E (Selenium Grid, Chrome)*, pasa `-Dheadless=true -Dremote.url=http://localhost:4444`. El `Jenkinsfile` no usa `remote.url` (`git grep -n remote.url -- .github Jenkinsfile`).
 - **Sin confirmar desde aquí:** el run remoto de `e2e-grid` sobre `5329cf1`. No hay `gh` ni red (B-01), así que lo confirma el usuario. No hace falta para cerrar el paso: su criterio admite el Grid local o el job `e2e-grid`.
-- **Sigue abierto (P2):** R-2. Es de `devops-engineer`: que los jobs E2E fallen si su log contiene el aviso de D3.
+- **Sigue abierto (P2):** R-2. Es de `devops-engineer`: que los jobs E2E fallen si su log contiene el aviso de D3. *(Implementado en `3be5956`: enmienda siguiente.)*
+
+### 2026-10-13 — R-2 implementado (CHK-19)
+
+Las decisiones no cambian: D3 sigue siendo un aviso en el log, y R-2 lo convierte en un fallo de la CI, como pedía su P2.
+- **Implementación: `3be5956`** (`devops-engineer`, firmado; `git show --stat 3be5956`).
+  - `scripts/check-no-expected-override.sh` lee el log de Maven de una ejecución E2E y falla si contiene el aviso de D3. Imprime el log, la línea y la clave, nunca el valor (D3).
+  - Falla cerrado si el log falta, está vacío o no tiene la línea `Tests run:` de `RunnerTest` (Regla 04, CHK-19).
+- **Dónde corre:**
+  - En GitHub Actions, en el paso *Sin esperados sobrescritos por -D (ADR-003, R-2)*, después de Maven, en los jobs `test`, `e2e-firefox`, `e2e-grid` y `quarantine`.
+  - En Jenkins, en las etapas `Test` y `Cuarentena (CHK-14)`, después de Maven. Según el *Estado actual* de la Regla 04, corre aunque Maven falle y sin tapar su rc.
+  - La autoprueba (`scripts/tests/check-no-expected-override-test.sh`) corre en el paso *Esperados sobrescritos por -D, autoprueba (ADR-003, R-2)* del job `mutation` y en la etapa `Esperados por -D (ADR-003, R-2)` de Jenkins. Según devops, tiene 32 casos en verde y su sabotaje no deja vivo ninguno de 17 mutantes.
+- **Va más allá de R-2:** R-2 pedía `test`, `e2e-firefox` y `e2e-grid`, y también se cubrieron el job `quarantine` y Jenkins.
+- **Catálogo:** el usuario lo registró como **CHK-19** en la Regla 04 (`cc674a8`). En CHK-10 local el aviso es esperado, así que allí CHK-19 no aplica.
+- **Pendiente del gate (`devops-engineer`), sin hacer:** el control real con Maven. Es el comando de CHK-19 de la Regla 04, primero con el `-D` de un esperado y después sin él:
+
+  ```bash
+  # Con el -D: Maven falla en el Then (CHK-10), y CHK-19 da rc 1 y nombra inventory.expected.title, sin __CONTROL_NEGATIVO__
+  bash -c 'set -o pipefail; ./mvnw -B -ntp clean test -Dheadless=true -Dcucumber.filter.tags="not @quarantine" -Dinventory.expected.title=__CONTROL_NEGATIVO__ 2>&1 | tee test.log'; bash scripts/check-no-expected-override.sh test.log
+  # Sin el -D: CHK-19 da rc 0
+  bash -c 'set -o pipefail; ./mvnw -B -ntp clean test -Dheadless=true -Dcucumber.filter.tags="not @quarantine" 2>&1 | tee test.log'; bash scripts/check-no-expected-override.sh test.log
+  ```
+
+  Cuando el gate registre los dos resultados, R-2 queda cerrado. Hasta entonces, la implementación y la autoprueba están en `3be5956`, pero el control con Maven no se ha ejecutado.
+- **Sin cambios:** los destinos de red siguen sin aviso (D5), y eso sigue siendo un riesgo residual aceptado de R-2. R-2 era el único P2 abierto de este ADR (enmienda anterior).
+- Esta enmienda se escribió sin ejecutar nada (B-01): se comprobaron los nombres de los pasos, los jobs y las etapas con `git grep` sobre `cc674a8`, y los commits con `git show --stat`.

@@ -26,7 +26,8 @@
 #   2  no se pudo evaluar (falla cerrado): argumentos de más, la raíz no es un
 #      directorio o no es la raíz de un repositorio git, git grep terminó con
 #      un código >= 2 o escribió en stderr (índice corrupto, configuración
-#      inválida, git sin PCRE, archivo ilegible), o git ls-files falló.
+#      inválida, git sin PCRE, archivo ilegible), git ls-files falló, o el awk
+#      de la unión por imports terminó con un código distinto de 0.
 #
 # Por qué un directorio de capa ausente es 1 y no 2: es una violación de la
 # estructura que verifica CHK-17 (D6 lo exige como una comprobación más, el
@@ -68,6 +69,16 @@
 # miembro expuesto de una página recibe ni devuelve Navegador.ResultadoClic.
 # Si una página lo expusiera, una acción podría recibirlo con "var" sin nombrar
 # com.demo.transport, y la línea de actions de R6 no lo vería.
+#
+# Selenium en el transporte y herencia (D7, enmienda 2026-10-13, parte 2). En
+# transport, los nombres de Selenium se derivan de los imports de cada archivo
+# (IMP): una línea expuesta (R1-imp) o de herencia (HER, R1-her) incumple si
+# alguno de sus tokens es "openqa" o el nombre simple de un import de org.openqa
+# del mismo archivo, salvo By (union_imports, con awk). Los comodines de
+# Selenium se rechazan (R1-wild), porque no dan nombre; By solo puede ir como
+# parámetro (R1-by); transport, actions y utils no extienden otra clase
+# (R5-ext), como pages (D7-11). Si awk termina con un código distinto de 0, el
+# resultado es 2.
 #
 # Riesgo residual aceptado (D6, R-5): firmas, cabeceras y anotaciones partidas
 # en varias líneas, y texto que no sea espacio, anotación ni modificador antes
@@ -111,14 +122,19 @@ status=0
 errf="$(mktemp)"
 trap 'rm -f "$errf"' EXIT
 
-# git grep: 0 = hay coincidencias (violación), 1 = sin coincidencias, >= 2 = error.
-# -z separa ruta, línea y contenido con NUL; se reescribe como
-# "archivo:línea: R<n>: motivo". --no-color y --no-column aíslan el formato
-# de la configuración del usuario.
-check() {
+# Ejecutor de dos pasadas, con guardas: grep2 <regla> <motivo> <git grep…> deja
+# en $grep_out las coincidencias de las dos pasadas, una por línea, como
+# "archivo<TAB>línea<TAB>contenido" (-z separa ruta, línea y contenido con NUL).
+# git grep: 0 = hay coincidencias, 1 = sin coincidencias, >= 2 = error; rc >= 2
+# o texto en stderr salen con 2. --no-color y --no-column aíslan el formato de
+# la configuración del usuario. Se llama directamente, nunca en $(…), para que
+# su exit 2 termine el script.
+grep_out=""
+grep2() {
   local rule="$1" reason="$2"
   shift 2
-  local pass rc part out=""
+  local pass rc part
+  grep_out=""
   for pass in --untracked versionados; do
     rc=0
     if [ "$pass" = --untracked ]; then
@@ -132,12 +148,94 @@ check() {
       exit 2
     fi
     if [ "$rc" -eq 0 ]; then
-      out="${out}${part}"$'\n'
+      grep_out="${grep_out}${part}"$'\n'
     fi
   done
-  if [ -n "$out" ]; then
-    printf '%s' "$out" | awk -F'\t' -v r="$rule" -v m="$reason" \
+}
+
+# check <regla> <motivo> <git grep…>: cada coincidencia es una violación,
+# impresa como "archivo:línea: R<n>: motivo".
+check() {
+  local rule="$1" reason="$2"
+  shift 2
+  grep2 "$rule" "$reason" "$@"
+  if [ -n "$grep_out" ]; then
+    printf '%s' "$grep_out" | awk -F'\t' -v r="$rule" -v m="$reason" \
       'NF >= 2 { print $1 ":" $2 ": " r ": " m }' | sort -t: -k1,1 -k2,2n | uniq
+    status=1
+  fi
+}
+
+# prefix <tipo> <líneas>: antepone "<tipo><TAB>" a cada línea no vacía.
+prefix() {
+  local line
+  while IFS= read -r line; do
+    if [ -n "$line" ]; then
+      printf '%s\t%s\n' "$1" "$line"
+    fi
+  done <<< "$2"
+}
+
+# Unión por imports (D7, Selenium en el transporte y herencia): une los imports
+# de org.openqa (I) con las líneas candidatas (L) de su mismo archivo. Entrada:
+# tipo<TAB>archivo<TAB>línea<TAB>contenido (el contenido puede tener
+# tabuladores). Variables: -v r=<regla> -v m=<motivo>. Salida:
+# "archivo:línea: <regla>: <motivo>". Un registro de otro tipo sale con 3.
+# Solo awk POSIX (CHK-18).
+UNION_AWK='
+BEGIN { FS = "\t" }
+NF == 0 { next }
+{
+  c = $4
+  for (i = 5; i <= NF; i++) c = c "\t" $i
+}
+$1 == "I" {
+  n = split(c, seg, ";")
+  for (j = 1; j <= n; j++) {
+    if (match(seg[j], /import[ \t]+(static[ \t]+)?org\.openqa\.[A-Za-z0-9_.]+/)) {
+      t = substr(seg[j], RSTART, RLENGTH)
+      sub(/.*\./, "", t)
+      if (t != "" && t != "By") sel[$2 SUBSEP t] = 1
+    }
+  }
+  next
+}
+$1 == "L" { k++; fa[k] = $2; li[k] = $3; co[k] = c; next }
+{ malo = 1 }
+END {
+  if (malo) exit 3
+  for (x = 1; x <= k; x++) {
+    n = split(co[x], tok, "[^A-Za-z0-9_]+")
+    for (j = 1; j <= n; j++) {
+      if (tok[j] == "openqa" || ((fa[x] SUBSEP tok[j]) in sel)) {
+        print fa[x] ":" li[x] ": " r ": " m
+        break
+      }
+    }
+  }
+}
+'
+
+# union_imports <regla> <motivo> <candidatas> -- <rutas>: los dos git grep (IMP y
+# candidatas) pasan por grep2; los registros llegan a awk por una tubería, y un
+# código de awk distinto de 0 sale con 2.
+union_imports() {
+  local rule="$1" reason="$2" cand="$3"
+  shift 3
+  local imps cands recs rc out
+  grep2 "$rule" "$reason" "$IMP" "$@"
+  imps="$grep_out"
+  grep2 "$rule" "$reason" "$cand" "$@"
+  cands="$grep_out"
+  recs="$(prefix I "$imps")"$'\n'"$(prefix L "$cands")"
+  rc=0
+  out="$(printf '%s\n' "$recs" | awk -v r="$rule" -v m="$reason" "$UNION_AWK")" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "check-layers: ERROR: awk terminó con $rc ($rule: $reason)" >&2
+    exit 2
+  fi
+  if [ -n "$out" ]; then
+    printf '%s\n' "$out" | sort -t: -k1,1 -k2,2n | uniq
     status=1
   fi
 }
@@ -155,6 +253,20 @@ check R1 "By en una firma pública de una página" \
 #   … sin interfaces, anotaciones ni records expuestos
 check R1 "interfaz, anotación o record expuesto en transport o pages" \
   "$TIPO" -- "$T/transport" "$T/pages"
+# R1 en transport (Selenium en el transporte y herencia): import de Selenium y línea de herencia
+IMP='\bimport\s+(?:static\s+)?org\.openqa\.'
+HER='\b(?:extends|implements)\b'
+#   … sin comodines de Selenium (los nombres de la unión salen de los imports)
+check R1 "import con comodín de Selenium en transport" \
+  '\bimport\s+(?:static\s+)?org\.openqa\.[\w.\s]*\*' -- "$T/transport"
+#   … By solo como parámetro (después del primer paréntesis)
+check R1 "By fuera de los parámetros de una firma pública del transporte" \
+  "$EXP"'[^(]*\bBy\b' -- "$T/transport"
+#   … unión por imports: candidata con el token openqa o con un nombre importado de org.openqa en su archivo (salvo By)
+union_imports R1 "tipo de Selenium importado o calificado en una firma pública del transporte" \
+  "$EXP" -- "$T/transport"
+union_imports R1 "transport hereda o implementa un tipo de Selenium" \
+  "$HER" -- "$T/transport"
 # R3: steps sin páginas ni transporte; acciones sin páginas en sus firmas públicas
 check R3 "steps nombran pages o transport" \
   'com\.demo\.(pages|transport)\b' -- "$T/steps"
@@ -179,6 +291,9 @@ check R5 "findElement(s) o executeScript fuera de transport" \
   '\bfindElements?\s*\(|\bexecute(Async)?Script\b' -- src ":!$T/transport"
 check R5 "una página extiende una clase" \
   '\bextends\b' -- "$T/pages"
+#   … transport, actions y utils tampoco heredan (Selenium en el transporte y herencia)
+check R5 "una clase de transport, actions o utils extiende otra" \
+  '\bextends\b' -- "$T/transport" "$T/actions" "$T/utils"
 # R6: una línea por fila de D4 (runners excluido; src/main lo garantiza Maven)
 check R6 "transport nombra un paquete fuera de su fila de D4" \
   'com\.demo\.(pages|actions|steps|hooks|runners|data)\b' -- "$T/transport"

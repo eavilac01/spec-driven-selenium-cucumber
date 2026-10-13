@@ -14,7 +14,10 @@
 #     ResultadoClic de D1, con la violación versionada y sin versionar; las
 #     comprobaciones de firmas y tipos (Firmas expuestas, D7) tienen además un
 #     caso en la columna 0, con anotación, con otro modificador y con
-#     protected, y los elementos de MOD los suyos (EXP-*);
+#     protected, y los elementos de MOD los suyos (EXP-*); la unión por imports
+#     (R1-imp, R1-her), R1-wild, R1-by y R5-ext (Selenium en el transporte y
+#     herencia, D7) tienen casos de una línea y de dos (import en la 2 y
+#     declaración en la 3);
 #   - exit 1 con una violación en un archivo versionado que coincide con
 #     .gitignore, y exit 0 si ese archivo no está versionado;
 #   - exit 1 ("directorio:0: D6: …") por cada directorio de capa ausente o
@@ -23,8 +26,9 @@
 #     raíz que no es repo, subdirectorio (también uno con su propio árbol de
 #     capas y una violación fuera de él), raíz inexistente, argumentos de más,
 #     índice corrupto y configuración inválida (git grep rc >= 2), git grep que
-#     termina con rc >= 2 sin escribir en stderr (shim de git en el PATH) y
-#     archivo ilegible (stderr de git grep).
+#     termina con rc >= 2 sin escribir en stderr (shim de git en el PATH),
+#     archivo ilegible (stderr de git grep), el awk de la unión que sale con 3
+#     (shim de awk) y el git grep de HER que falla dentro de la unión.
 # Antes de copiar el repo base, exige que git no lance mantenimiento ni gc
 # automáticos (config efectiva, traza del commit con un control positivo, sin
 # archivos efímeros) y que un cp que pierde un archivo efímero salga con 2.
@@ -409,6 +413,35 @@ allowed() {
   done
 }
 
+# violation2 <id> <regla> <motivo> <archivo> <línea 2> <línea 3>: import en la
+# línea 2 y declaración en la 3; la violación esperada está en la línea 3.
+violation2() {
+  local id="$1" rule="$2" reason="$3" file="$4" l2="$5" l3="$6" mode
+  for mode in versionada sin-versionar; do
+    new_case
+    put "$dir/$file" 'package com.demo.prueba;' "$l2" "$l3"
+    if [ "$mode" = versionada ]; then
+      git -C "$dir" add -- "$file"
+    fi
+    run_script "$dir"
+    expect "$id $rule ${file#"$T/"} ($mode)" 1 "$file:3: $rule: $reason"
+  done
+}
+
+# allowed2 <id> <archivo> <línea 2> <línea 3>: casi-violación de dos líneas.
+allowed2() {
+  local id="$1" file="$2" l2="$3" l3="$4" mode
+  for mode in versionada sin-versionar; do
+    new_case
+    put "$dir/$file" 'package com.demo.prueba;' "$l2" "$l3"
+    if [ "$mode" = versionada ]; then
+      git -C "$dir" add -- "$file"
+    fi
+    run_script "$dir"
+    expect "$id ${file#"$T/"} ($mode)" 0 "check-layers: ok: CHK-17 (R1–R6) sin violaciones"
+  done
+}
+
 # ------------------------------------------------------------------- casos
 # Aislamiento del mantenimiento de git (regresión de git 2.55). Van antes de la
 # primera copia: si fallan, la autoprueba sale con 2 sin copiar nada.
@@ -522,6 +555,36 @@ allowed "ok-26 campo llamado record en una página" "$T/pages/OtraPage.java" \
   '    public String record = "";'
 allowed "ok-27 tipo que termina en record en una página" "$T/pages/OtraPage.java" \
   '    public void guardar(Autorecord registro) {'
+# Selenium en el transporte y herencia (D7, enmienda 2026-10-13, parte 2):
+# token completo, nombres por archivo, interfaces de Java e identificadores.
+allowed2 "ok-28 token completo, no subcadena" "$T/transport/Otro.java" \
+  'import org.openqa.selenium.WebDriver;' \
+  '    public String nombreWebDriver(By localizador) {'
+# ok-29: A.java importa Alert; B.java tiene su propio Alert (nombres por archivo).
+for mode in versionada sin-versionar; do
+  new_case
+  put "$dir/$T/transport/A.java" 'package com.demo.prueba;' \
+    'import org.openqa.selenium.Alert;' '    private Alert alerta;'
+  put "$dir/$T/transport/B.java" 'package com.demo.prueba;' '    public Alert alerta() {'
+  if [ "$mode" = versionada ]; then
+    git -C "$dir" add -- "$T/transport/A.java" "$T/transport/B.java"
+  fi
+  run_script "$dir"
+  expect "ok-29 nombres por archivo transport/A.java y B.java ($mode)" 0 \
+    "check-layers: ok: CHK-17 (R1–R6) sin violaciones"
+done
+allowed2 "ok-30 interfaz de Java en transport" "$T/transport/Otro.java" \
+  'import org.openqa.selenium.WebDriver;' \
+  'public final class Cierre implements AutoCloseable {'
+allowed "ok-31 implements de una interfaz de Java en actions" "$T/actions/OtraActions.java" \
+  'public final class OtraActions implements java.util.function.Supplier<String> {'
+allowed "ok-32 identificadores que contienen extends en utils" "$T/utils/Otro.java" \
+  '        boolean noextends = extendsMenu;'
+allowed "ok-33 comodín de Java en transport" "$T/transport/Otro.java" \
+  'import java.util.*;'
+allowed2 "ok-34 identificadores con implements y extends, y un nombre importado" "$T/transport/Otro.java" \
+  'import org.openqa.selenium.WebDriver;' \
+  '        WebDriver noimplements = extendsX;'
 
 # Un caso negativo por comando de D7 (D7-01…D7-19 son los git grep; D7-20 es
 # la presencia de directorios) y por la ampliación de R3 (R3-param).
@@ -691,6 +754,64 @@ violation "EXP-dos" R6 "ResultadoClic en un miembro público de una página" \
   "$T/pages/BadPage.java" '    @Deprecated final public Navegador.ResultadoClic pulsar() {'
 violation "EXP-ns" R6 "ResultadoClic en un miembro público de una página" \
   "$T/pages/BadPage.java" 'non-sealed public class BadPage implements Supplier<Navegador.ResultadoClic> {'
+# Selenium en el transporte y herencia (D7, enmienda 2026-10-13, parte 2):
+# unión por imports (R1-imp y R1-her), comodines (R1-wild), By fuera de los
+# parámetros (R1-by) y herencia en transport, actions y utils (R5-ext).
+violation2 "R1-imp" R1 "tipo de Selenium importado o calificado en una firma pública del transporte" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.remote.RemoteWebDriver;' \
+  '    public RemoteWebDriver remoto() {'
+violation2 "R1-imp-b" R1 "tipo de Selenium importado o calificado en una firma pública del transporte" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.Alert;' \
+  '    public void aceptar(Alert alerta) {'
+violation2 "R1-imp-c" R1 "tipo de Selenium importado o calificado en una firma pública del transporte" "$T/transport/Bad.java" \
+  'import static org.openqa.selenium.WebDriver.Timeouts;' \
+  '    public Timeouts tiempos() {'
+violation2 "R1-imp-d" R1 "tipo de Selenium importado o calificado en una firma pública del transporte" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.Cookie;' \
+  '    public java.util.Set<Cookie> cookies() {'
+violation2 "R1-imp-e" R1 "tipo de Selenium importado o calificado en una firma pública del transporte" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.Dimension;' \
+  '    @Deprecated protected Dimension tamano() {'
+violation2 "R1-imp-f" R1 "tipo de Selenium importado o calificado en una firma pública del transporte" "$T/transport/Bad.java" \
+  'import java.util.List; import org.openqa.selenium.Alert; import org.openqa.selenium.Point;' \
+  '    public Point posicion() {'
+violation "R1-imp-g" R1 "tipo de Selenium importado o calificado en una firma pública del transporte" \
+  "$T/transport/Bad.java" '    public org.openqa.selenium.Alert alerta() {'
+violation2 "R1-imp-h" R1 "tipo de Selenium importado o calificado en una firma pública del transporte" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.NoSuchElementException;' \
+  '    public void pulsar(By localizador) throws NoSuchElementException {'
+violation2 "R1-her" R1 "transport hereda o implementa un tipo de Selenium" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.chrome.ChromeDriver;' \
+  'final class Bad extends ChromeDriver {'
+violation2 "R1-her-b" R1 "transport hereda o implementa un tipo de Selenium" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.WebDriver;' \
+  'public final class Bad implements WebDriver {'
+violation2 "R1-her-c" R1 "transport hereda o implementa un tipo de Selenium" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.WebDriver;' \
+  'final class Proveedor implements java.util.function.Supplier<WebDriver> {'
+violation "R1-her-d" R1 "transport hereda o implementa un tipo de Selenium" \
+  "$T/transport/Bad.java" 'final class Bad extends org.openqa.selenium.remote.RemoteWebDriver {'
+violation2 "R1-her-e" R1 "transport hereda o implementa un tipo de Selenium" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.JavascriptExecutor;' \
+  '        implements JavascriptExecutor {'
+violation "R1-wild" R1 "import con comodín de Selenium en transport" \
+  "$T/transport/Bad.java" 'import org.openqa.selenium.*;'
+violation "R1-wild-b" R1 "import con comodín de Selenium en transport" \
+  "$T/transport/Bad.java" 'import static org.openqa.selenium.support.ui.ExpectedConditions.*;'
+violation "R1-by" R1 "By fuera de los parámetros de una firma pública del transporte" \
+  "$T/transport/Bad.java" '    public By localizador() {'
+violation "R1-by-b" R1 "By fuera de los parámetros de una firma pública del transporte" \
+  "$T/transport/Bad.java" '    public static final By TITULO = By.className("title");'
+violation "R1-by-c" R1 "By fuera de los parámetros de una firma pública del transporte" \
+  "$T/transport/Bad.java" 'public final class Bad extends By {'
+violation "R1-by-d" R1 "By fuera de los parámetros de una firma pública del transporte" \
+  "$T/transport/Bad.java" '    protected java.util.List<By> localizadores() {'
+violation "R5-ext" R5 "una clase de transport, actions o utils extiende otra" \
+  "$T/actions/Bad.java" 'public final class Bad extends CartPage {'
+violation "R5-ext-b" R5 "una clase de transport, actions o utils extiende otra" \
+  "$T/utils/Bad.java" 'public final class Bad extends ConfigResolver {'
+violation "R5-ext-c" R5 "una clase de transport, actions o utils extiende otra" \
+  "$T/transport/Bad.java" 'final class Bad extends RuntimeException {'
 
 # Archivos que coinciden con .gitignore: --untracked omite incluso los
 # versionados (git 2.53), así que el script hace también una pasada sobre el
@@ -808,6 +929,24 @@ new_case
 run_with_path "$tmp/shim-rc2" "$dir"
 expect "error: git grep termina con 2 sin stderr" 2 \
   're:^check-layers: ERROR: git grep terminó con 2 '
+
+# Unión por imports (D7, Selenium en el transporte y herencia): un awk que sale
+# con 3 da 2 (error-awk), y el git grep de HER pasa por el ejecutor con guardas
+# (error-her: el shim falla solo si un argumento contiene "implements", que
+# solo aparece en HER).
+mkdir -p "$tmp/shim-awk"
+printf '#!/usr/bin/env bash\nexit 3\n' > "$tmp/shim-awk/awk"
+chmod +x "$tmp/shim-awk/awk"
+new_case
+run_with_path "$tmp/shim-awk" "$dir"
+expect "error-awk: el awk de la unión sale con 3" 2 \
+  're:^check-layers: ERROR: awk terminó con 3 '
+
+shim "$tmp/shim-her" 'for a in "$@"; do case "$a" in *implements*) exit 2 ;; esac; done'
+new_case
+run_with_path "$tmp/shim-her" "$dir"
+expect "error-her: el git grep de HER falla dentro de la unión" 2 \
+  "check-layers: ERROR: git grep terminó con 2 (R1: transport hereda o implementa un tipo de Selenium)"
 
 # git grep imprime "failed to stat" y termina con 0 o 1 ante un archivo
 # ilegible: el script lo trata como error por la salida en stderr. Como root

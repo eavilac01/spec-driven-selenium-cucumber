@@ -58,7 +58,7 @@
 
 Las filas marcadas registran la API pública que la tabla original no recogía; las cuatro primeras no se reescriben. Reflejan el `Navegador` de `0de6962` (2026-10-13). Se registró del árbol de trabajo antes del commit, y después se comprobó que coincide (*Enmiendas*, 2026-10-13). Por eso se citan por método y no por línea. Todas cumplen este D1: reciben solo `By` y tipos de Java, no devuelven tipos de Selenium y fallan antes de `iniciar()`.
 
-- **Tope de clics** (`0de6962`). `clickHastaCumplir` y `clickYObservarUrlContiene` pulsan como mucho `MAXIMO_CLICS_POR_ACCION = 3` veces: 1 clic nativo y, como máximo, 2 de respaldo JavaScript.
+- **Tope de clics** (`0de6962`). `clickHastaCumplir` y `clickYObservarUrlContiene` pulsan como mucho `MAXIMO_CLICS_POR_ACCION = 3` veces: 1 clic nativo y, como máximo, 2 de respaldo JavaScript. *(Enmienda 2026-10-13, parte 3: se retira el respaldo JavaScript y queda un solo clic nativo por acción. Lo aplica el engineer; hasta su commit, rige lo que describe este punto. Ver *Enmiendas*, *Preferencias de Chrome y respaldo JavaScript*.)*
   - Con el tope agotado no pulsan más; solo esperan la postcondición dentro del plazo.
   - Si el plazo se agota, `clickHastaCumplir` lanza `TimeoutException` con el localizador, los clics efectivos y el plazo, y nunca con el texto escrito.
   - Antes, el respaldo JavaScript se repetía sin límite dentro del plazo. Un control que alterna su estado (agregar y quitar) podía revertirse con un clic de más.
@@ -193,7 +193,7 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
   - exit 1 con cada directorio de capa ausente;
   - exit 2 con cada error de evaluación de la *Nota de ejecución* de D7.
 
-  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`; 184 desde el commit de la enmienda sobre `ResultadoClic` (según devops). La enmienda *Firmas expuestas* prevé 280 (D7); el total real lo informa devops al implementarla.
+  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`; 184 desde el commit de la enmienda sobre `ResultadoClic` (según devops); 280 desde `df87ada` (enmienda *Firmas expuestas*), con `ok` en 4 implementaciones de awk: mawk, gawk, `gawk --posix` y busybox (según devops). La enmienda *Selenium en el transporte y herencia* prevé 340 (D7); el total real lo informa devops al implementarla.
 - **Dónde corren el script y la autoprueba:**
   - GitHub Actions: job `mutation`, pasos *Capas, autoprueba (CHK-17)* y *Capas (CHK-17)*, en paralelo a la suite y sin secrets (`ci.yml:66-84` en `f7f7a13`);
   - Jenkins: etapa `Capas (CHK-17)`, antes de la suite y fuera de `withCredentials` (`Jenkinsfile:22-29` en `f7f7a13`);
@@ -205,17 +205,19 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
 
 | Regla | Rechaza | Equivalente ArchUnit (esbozo de referencia; no se implementa) |
 |---|---|---|
-| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;`; tipos de Selenium (salvo `By`) en firmas públicas del transporte; `By` en firmas públicas de páginas; interfaces, anotaciones o records expuestos en `transport` o `pages`. "Pública" incluye `protected` (*Firmas expuestas*, enmienda 2026-10-13) | `noClasses().that().resideOutsideOfPackages("..transport..", "..pages..").should().dependOnClassesThat().resideInAPackage("org.openqa..")`; para `..pages..`, lo mismo con `.and(not(equivalentTo(By.class)))`. Firmas: métodos, campos y constructores con `PUBLIC` o `PROTECTED`. Tipos: `noClasses().that().resideInAnyPackage("..transport..", "..pages..").and(modifier(PUBLIC).or(modifier(PROTECTED))).should().beInterfaces().orShould().beRecords()` (una anotación es una interfaz) |
+| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;`; tipos de Selenium (salvo `By`) en firmas públicas del transporte; `By` en firmas públicas de páginas; interfaces, anotaciones o records expuestos en `transport` o `pages`. "Pública" incluye `protected` (*Firmas expuestas*, enmienda 2026-10-13). En `transport` (*Selenium en el transporte y herencia*, enmienda 2026-10-13, parte 2): cualquier tipo de Selenium importado o calificado en una firma expuesta, incluido el `throws`; `By`, solo como parámetro; heredar o implementar un tipo de Selenium; imports de Selenium con comodín | `noClasses().that().resideOutsideOfPackages("..transport..", "..pages..").should().dependOnClassesThat().resideInAPackage("org.openqa..")`; para `..pages..`, lo mismo con `.and(not(equivalentTo(By.class)))`. Firmas: métodos, campos y constructores con `PUBLIC` o `PROTECTED`. Tipos: `noClasses().that().resideInAnyPackage("..transport..", "..pages..").and(modifier(PUBLIC).or(modifier(PROTECTED))).should().beInterfaces().orShould().beRecords()` (una anotación es una interfaz). Transporte: miembros públicos o protegidos sin tipos de `org.openqa..` en el retorno, los parámetros (salvo `By`), el campo o el `throws`, y `noClasses().that().resideInAPackage("..transport..").should().beAssignableTo(resideInAPackage("org.openqa.."))` |
 | R2 | Selenium en `steps` o `actions` (incluida en R1; CHK-03 es su subconjunto rápido) | `noClasses().that().resideInAnyPackage("..steps..", "..actions..").should().dependOnClassesThat().resideInAPackage("org.openqa..")` |
 | R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas públicas, como tipo de retorno o como parámetro (los constructores sí las reciben, D3); interfaces, anotaciones o records expuestos en `actions`. "Pública" incluye `protected` (*Firmas expuestas*) | `noClasses().that().resideInAPackage("..steps..").should().dependOnClassesThat().resideInAnyPackage("..pages..", "..transport..")`. Tipos: lo mismo que en R1, para `..actions..` |
 | R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions` | `noClasses().that().resideInAnyPackage("..transport..", "..pages..", "..actions..").should().dependOnClassesThat().resideInAnyPackage("org.junit..", "io.cucumber..")` |
-| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase | `noClasses().that().resideOutsideOfPackage("..transport..").should().callMethodWhere(target(owner(assignableTo(SearchContext.class).or(assignableTo(JavascriptExecutor.class)))))` |
+| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase; clases de `transport`, `actions` o `utils` que extienden otra (*Selenium en el transporte y herencia*, enmienda 2026-10-13, parte 2) | `noClasses().that().resideOutsideOfPackage("..transport..").should().callMethodWhere(target(owner(assignableTo(SearchContext.class).or(assignableTo(JavascriptExecutor.class)))))`. Herencia: `classes().that().resideInAnyPackage("..transport..", "..pages..", "..actions..", "..utils..")` con una condición propia: `getRawSuperclass()` es `Object` (o `Enum` y `Record` en esos tipos) |
 | R6 | Nombrar un paquete fuera de su fila de D4; secretos fuera de `utils` y `steps` (las unitarias, por CHK-16); `ResultadoClic` en un miembro público de una página (restricción de D1, enmienda del 2026-10-13). "Público" incluye `protected` (*Firmas expuestas*) | `layeredArchitecture().consideringOnlyDependenciesInLayers()` con las filas de D4 (`whereLayer(…).mayOnlyBeAccessedByLayers(…)`) y `slices().matching("com.demo.(*)..").should().beFreeOfCycles()`. Para `ResultadoClic`: métodos y campos públicos o protegidos de `..pages..` sin `Navegador.ResultadoClic` como tipo de retorno, de parámetro o de campo |
 | R7 | Vocabulario de interfaz en las features | No aplica (Gherkin): CHK-04, sin cambios |
 
 Comandos de CHK-17, transcritos de `scripts/check-layers.sh` (la implementación normativa, D6). Cada uno pasa **sin salida** y usa `-P`, como CHK-01.
 
-Enmienda 2026-10-13 (*Firmas expuestas*): el bloque ya incluye `MOD`, `EXP` y `TIPO`, las cinco comprobaciones de firmas reescritas con `EXP` y las dos nuevas de tipos. Se integra en el mismo commit que el script y su autoprueba (D6). Hasta ese commit, CHK-17 es lo que ejecuta el script.
+Enmienda 2026-10-13 (*Firmas expuestas*): el bloque ya incluye `MOD`, `EXP` y `TIPO`, las cinco comprobaciones de firmas reescritas con `EXP` y las dos nuevas de tipos. Se integra en el mismo commit que el script y su autoprueba (D6). Hasta ese commit, CHK-17 es lo que ejecuta el script. *(Integrada en `df87ada`.)*
+
+Enmienda 2026-10-13, parte 2 (*Selenium en el transporte y herencia*): el bloque ya incluye `IMP`, `HER`, `R1-wild`, `R1-by`, las dos uniones por imports (`R1-imp` y `R1-her`) y `R5-ext`. `union_imports` no es un comando de git: es la función del script que define *Unión por imports*. Se integra en el mismo commit que el script y su autoprueba (D6); hasta ese commit, CHK-17 es lo que ejecuta el script (24 comprobaciones en `df87ada`).
 
 ```bash
 T=src/test/java/com/demo
@@ -231,6 +233,16 @@ git grep --untracked -nP "$EXP"'.*\b(Web[A-Z]\w*|SearchContext|JavascriptExecuto
 git grep --untracked -nP "$EXP"'.*\bBy\b' -- "$T/pages"
 #   … sin interfaces, anotaciones ni records expuestos (sus miembros son públicos sin escribir public)
 git grep --untracked -nP "$TIPO" -- "$T/transport" "$T/pages"
+# R1 en transport (Selenium en el transporte y herencia): import de Selenium y línea de herencia
+IMP='\bimport\s+(?:static\s+)?org\.openqa\.'
+HER='\b(?:extends|implements)\b'
+#   … sin comodines de Selenium (los nombres de la unión salen de los imports)
+git grep --untracked -nP '\bimport\s+(?:static\s+)?org\.openqa\.[\w.\s]*\*' -- "$T/transport"
+#   … By solo como parámetro (después del primer paréntesis)
+git grep --untracked -nP "$EXP"'[^(]*\bBy\b' -- "$T/transport"
+#   … unión por imports: candidata con el token openqa o con un nombre importado de org.openqa en su archivo (salvo By)
+union_imports "$EXP" -- "$T/transport"
+union_imports "$HER" -- "$T/transport"
 # R3: steps sin páginas ni transporte; acciones sin páginas en sus firmas públicas (expuestas)
 git grep --untracked -nP 'com\.demo\.(pages|transport)\b' -- "$T/steps"
 #   … página como tipo de retorno
@@ -246,6 +258,8 @@ git grep --untracked -nP '\.expected' -- "$T/transport" "$T/pages" "$T/actions"
 # R5: localización y scripts solo en transport; páginas por composición
 git grep --untracked -nP '\bfindElements?\s*\(|\bexecute(Async)?Script\b' -- src ":!$T/transport"
 git grep --untracked -nP '\bextends\b' -- "$T/pages"
+#   … transport, actions y utils tampoco heredan (Selenium en el transporte y herencia)
+git grep --untracked -nP '\bextends\b' -- "$T/transport" "$T/actions" "$T/utils"
 # R6: una línea por fila de D4 (runners excluido; src/main lo garantiza Maven)
 git grep --untracked -nP 'com\.demo\.(pages|actions|steps|hooks|runners|data)\b' -- "$T/transport"
 git grep --untracked -nP 'com\.demo\.utils\.(?!ConfigReader\b)' -- "$T/transport" "$T/pages"
@@ -491,6 +505,272 @@ Cambiar la avidez de un `.*` (`.*` ↔ `.*?`) es equivalente: que una línea coi
 
 *Comprobación sobre el árbol* (2026-10-13, HEAD `34f8528` y árbol limpio; solo `git grep`, B-01): ver la enmienda *Firmas expuestas*.
 
+**Selenium en el transporte y herencia** (R1 y R5; enmienda 2026-10-13, parte 2). Cierra los dos P2 que dejó *Firmas expuestas* en *Fuera de alcance*.
+
+*Huecos.*
+1. `D7-03` busca en las firmas expuestas del transporte una **lista cerrada** de tipos. No ve `RemoteWebDriver`, `ChromeDriver`, `FirefoxDriver`, `Alert`, `Cookie`, `Dimension` ni ningún tipo que se agregue a Selenium.
+2. Solo `pages` tiene una comprobación de `extends` (`D7-11`). Una clase que hereda de otra expone toda la API pública de la superclase, y quien la usa la alcanza sin nombrarla. Ninguna comprobación de firmas lo ve, porque la línea no tiene `(`:
+
+| Quien hereda | De | La alcanzan sin nombrarla | Regla que se evade |
+|---|---|---|---|
+| `transport` | Selenium (`extends ChromeDriver`, `implements WebDriver`) | `pages` y `hooks` | R1 |
+| `transport` | `config` | `pages` y `hooks` | R6 (filas de `pages` y `hooks`) |
+| `actions` | una página | `steps` | R3 |
+| `utils` | `config` o `data` | `pages`, `steps` y `hooks` | R6 |
+| `steps`, `hooks`, `runners` | — | Nadie: ninguna fila de D4 permite nombrarlos | — |
+
+Además, al implementar una interfaz de Selenium la clase recibe sus métodos `default` y sus tipos anidados, que se usan por nombre simple sin import (dentro de una clase que implementa `WebDriver`, `Options` es `WebDriver.Options`). Ninguna expresión que solo lea el archivo los ve.
+
+*Decisión 1: en `transport`, los nombres de Selenium se derivan de los imports de cada archivo.*
+
+En una línea expuesta de `transport` está prohibido cualquier tipo de Selenium, salvo `By` como parámetro. "Tipo de Selenium" es un token que sea `openqa` o el nombre simple de un import de `org.openqa` del mismo archivo.
+
+**Es completa para declaraciones de una línea.** En un archivo de `transport`, el nombre simple de un tipo de Selenium solo puede estar en alcance de tres formas, y las tres quedan cubiertas:
+- **Un import simple o `static`:** su nombre entra en la lista del archivo.
+- **Un import con comodín:** `R1-wild` lo rechaza.
+- **Un tipo heredado de un supertipo de Selenium:** `R1-her` y `R5-ext` rechazan la herencia.
+
+El paquete `com.demo.transport` no contiene tipos de Selenium. Un nombre calificado contiene el token `openqa`, y un tipo anidado que se escribe con su externo (`WebDriver.Timeouts`) contiene el nombre importado.
+
+| Opción | Veredicto | Motivo |
+|---|---|---|
+| A. Lista derivada de los imports **de cada archivo** (a), sin comodines de Selenium en `transport`, más el token `openqa` para los nombres calificados (c) | **Elegida** | Es abierta: un tipo nuevo de Selenium entra en la lista al importarlo. Compara tokens, así que no arma una expresión regular con texto leído del repositorio, y no depende del orden ni de la longitud de la lista |
+| B. Lista abierta por patrón: la unión de los nombres importados de `org.openqa` en toda la capa (b) | Descartada | Es el mismo mecanismo en dos pasos que A, pero menos preciso: un tipo propio que comparte el nombre simple con uno de Selenium importado en otro archivo da un falso positivo. Si se construye como alternancia de PCRE, además arma una expresión con texto del repositorio (contra el espíritu de PI-04), que hay que validar |
+| C. Solo prohibir los nombres calificados `org.openqa` en las firmas (c) | Descartada como regla única | No ve los nombres simples importados, que son el caso normal. Queda dentro de A como el token `openqa` |
+| D. Ampliar la lista cerrada de `D7-03` | Descartada | Sigue siendo cerrada: falla abierto ante el siguiente tipo, y la API pública de Selenium crece con cada versión |
+| E. Lista blanca de tipos permitidos (`By`, `java.*` y los propios) | Descartada | Por texto no se sabe qué nombre es de `java.*` sin el mismo cruce con los imports, y `java.lang` no se importa. Una lista cerrada de nombres permitidos obliga a enmendar el ADR por cada tipo de Java nuevo (`Duration`, `Optional`) |
+| F. ArchUnit | Descartada | D6: es una dependencia nueva (P-06), exige compilar y el arquitecto no puede ejecutarla. Ninguna evasión real activa su disparador |
+
+- **Comodines.** Hoy no hay ninguno en todo `src` (*Enmiendas*, comprobación sobre `df87ada`). Se prohíben solo los de `org.openqa` y solo en `transport`: fuera de `transport`, `D7-01` y `D7-02` ya los rechazan, y los comodines de Java no ocultan nombres de Selenium.
+- **`By`** queda fuera de la lista derivada, porque es la excepción de D2. Su control es `R1-by`: en una línea expuesta de `transport`, `By` solo puede aparecer después del primer `(`. Así tiene comando la frase de D6 "salvo `By` como parámetro del transporte": hasta ahora `public By x()` y `public static final By X` pasaban.
+- **`throws`** forma parte de la firma. Una excepción de Selenium declarada en un miembro expuesto obliga a quien lo llama a capturar un tipo que no puede importar, así que también se rechaza.
+- **Imports `static`.** Su último segmento entra en la lista, sea un tipo anidado, un método o una constante.
+- **Nombres calificados** en las firmas y la herencia de `transport`: se rechazan todos, también `org.openqa.selenium.By` como parámetro. En las firmas del transporte, Selenium se nombra por import.
+- **`D7-03` se conserva**, con sus casos y su motivo. En código que compila, la unión lo cubre. Se mantiene como una red independiente del awk: si la unión fallara, `D7-03` seguiría viendo los tipos habituales.
+
+*Decisión 2: composición en `transport`, `pages`, `actions` y `utils`, y ninguna herencia de Selenium en `transport`.*
+
+| Opción | Veredicto | Motivo |
+|---|---|---|
+| A. Prohibir `extends` en `transport`, `actions` y `utils`, como ya se hace en `pages` (`R5-ext`), y además heredar o implementar un tipo de Selenium en `transport`, con la unión por imports (`R1-her`) | **Elegida** | Cierra las cuatro filas de riesgo de la tabla con una expresión que ya existe (`D7-11`) y con el mismo mecanismo que la Decisión 1. Es el estilo de D1–D3: `Navegador`, las páginas y las acciones componen. Hoy no hay ningún `extends` ni `implements` en `src` |
+| B. Prohibir solo la herencia de tipos de Selenium | Descartada | No cierra `actions` → páginas, `utils` → `config` o `data`, ni `transport` → `config` |
+| C. Prohibir solo `implements` de interfaces de Selenium | Descartada | No ve `extends ChromeDriver` ni ninguna de las filas que no son de Selenium |
+| D. Prohibir `extends` e `implements` en todas las capas que se consumen | Descartada | Una interfaz de Java (`AutoCloseable`, `Supplier<String>`) no expone nada que no esté escrito en el archivo, donde ya lo ven las comprobaciones de firmas (los métodos `default` de Java solo usan tipos de Java). Sumaría falsos positivos sin cerrar ningún hueco |
+| E. Exigir `final` en las clases | Descartada | `final` impide que otra clase herede de esta, pero no que esta herede de otra. Además, reconocer por texto una declaración de clase es frágil (*Firmas expuestas*, Decisión 1, opción D) |
+| F. Incluir `steps`, `hooks` y `runners` | Descartada | Ninguna fila de D4 permite nombrarlos, así que lo que hereden no llega a otra capa. Cucumber, además, rechaza heredar de una clase que define steps o hooks |
+
+- **`implements` de interfaces de Java** sigue permitido en todas las capas. Solo se rechaza el de Selenium en `transport`.
+- **`R1-her` también mira `extends`**, aunque `R5-ext` ya lo rechaza en `transport`. Así el motivo impreso es el preciso, y Selenium sigue protegido si algún día `R5-ext` admite excepciones propias.
+- **Coste.** En `transport`, `actions` y `utils` tampoco caben una excepción propia (`extends RuntimeException`) ni los límites genéricos (`<T extends …>`, `? extends`). Hoy no hay ninguno. Si una spec los necesita, se reabre por enmienda (por ejemplo, para exceptuar `extends RuntimeException`), nunca se relaja la regla.
+- **`src/main`** queda fuera de CHK-17, porque D4 deja `config` y `data` a Maven y a CHK-15. Una clase de `data` que extendiera una de `config` expondría `config` a `actions` y a `steps`. Hoy no hay ningún `extends` en `src`, así que se acepta como riesgo residual. **Disparador:** el primer `extends` en `src/main`.
+
+*Expresiones.* `IMP` y `HER` se definen una sola vez, como `MOD`, `EXP` y `TIPO`:
+
+```text
+IMP = \bimport\s+(?:static\s+)?org\.openqa\.
+HER = \b(?:extends|implements)\b
+```
+
+Con estas cinco son 29 comprobaciones (*Nota de ejecución*):
+
+| ID (autoprueba) | Regla | Ámbito | Expresión | Motivo impreso |
+|---|---|---|---|---|
+| `R1-wild` (nueva) | R1 | `transport` | `\bimport\s+(?:static\s+)?org\.openqa\.[\w.\s]*\*` | import con comodín de Selenium en transport |
+| `R1-by` (nueva) | R1 | `transport` | `EXP[^(]*\bBy\b` | By fuera de los parámetros de una firma pública del transporte |
+| `R1-imp` (nueva) | R1 | `transport` | Unión por imports, con `EXP` como candidatas | tipo de Selenium importado o calificado en una firma pública del transporte |
+| `R1-her` (nueva) | R1 | `transport` | Unión por imports, con `HER` como candidatas | transport hereda o implementa un tipo de Selenium |
+| `R5-ext` (nueva) | R5 | `transport`, `actions` y `utils` | `\bextends\b` | una clase de transport, actions o utils extiende otra |
+
+- En `R1-wild`, `[\w.\s]*` admite espacios entre los segmentos (`org.openqa.selenium. *`), y se detiene en `;`, así que `import org.openqa.selenium.By; /* … */` no coincide.
+- En `R1-by`, `[^(]*` cubre el tipo de retorno, el tipo de un campo y la cláusula de herencia de una clase expuesta (`public final class X extends By`). `EXP` consume una anotación con argumentos, así que su `(` no corta la búsqueda antes de tiempo.
+- `HER` no exige `class` en la misma línea, así que una cláusula `extends` o `implements` en su propia línea también se ve.
+
+*Unión por imports* (`R1-imp` y `R1-her`). `union_imports <candidatas> -- <rutas>` imprime `archivo:línea: R1: motivo` por cada línea candidata que contenga el token `openqa` o un nombre importado de `org.openqa` en su mismo archivo:
+1. **Dos `git grep` con guardas.** Uno con `IMP` y otro con las candidatas, sobre las mismas rutas. Los dos usan el ejecutor de dos pasadas de `check`, con las mismas guardas (rc ≥ 2 o stderr → 2). El ejecutor se factoriza, no se copia, igual que `EXP`.
+2. **Entrada del awk.** Cada línea llega como un registro `tipo<TAB>archivo<TAB>línea<TAB>contenido`: `I` para las líneas de `IMP` y `L` para las candidatas. La forma de etiquetarlos es libre, sin extensiones de GNU, pero los registros llegan por una tubería o por un temporal, **nunca por sustitución de procesos** (`<(…)`), porque su código de salida se pierde.
+3. **Errores.** Si awk termina con un código distinto de 0, el script escribe `check-layers: ERROR: awk terminó con <rc> (<regla>: <motivo>)` en stderr y sale con 2. Si hay salida, se ordena y se depura como en `check`, y el estado pasa a 1.
+4. **Nombres.** En cada segmento de una línea `I` (separado por `;`) que contenga `import [static] org.openqa.<ruta>`, el nombre es el último identificador de `<ruta>`. `By` no entra, y un comodín no da nombre (lo rechaza `R1-wild`).
+5. **Violación.** Una línea `L` incumple si alguno de sus tokens (secuencias máximas de `[A-Za-z0-9_]`) es `openqa` o un nombre de su archivo. La comparación es por token completo, no por subcadena.
+6. **Orden.** Se evalúa en `END`, así que el resultado no depende del orden de los registros.
+
+Programa de referencia. Usa solo awk POSIX (CHK-18): `match` con dos argumentos, `split` con un separador de cadena y ningún nombre exclusivo de gawk. devops puede reorganizarlo, pero si cambia la semántica de los puntos 3 a 6, este ADR se corrige antes del commit (D6).
+
+```awk
+# union_imports: une los imports de org.openqa (I) con las líneas candidatas (L).
+# Entrada: tipo<TAB>archivo<TAB>línea<TAB>contenido (el contenido puede tener tabuladores).
+# Variables: -v r=<regla> -v m=<motivo>. Salida: "archivo:línea: <regla>: <motivo>".
+BEGIN { FS = "\t" }
+NF == 0 { next }
+{
+  c = $4
+  for (i = 5; i <= NF; i++) c = c "\t" $i
+}
+$1 == "I" {
+  n = split(c, seg, ";")
+  for (j = 1; j <= n; j++) {
+    if (match(seg[j], /import[ \t]+(static[ \t]+)?org\.openqa\.[A-Za-z0-9_.]+/)) {
+      t = substr(seg[j], RSTART, RLENGTH)
+      sub(/.*\./, "", t)
+      if (t != "" && t != "By") sel[$2 SUBSEP t] = 1
+    }
+  }
+  next
+}
+$1 == "L" { k++; fa[k] = $2; li[k] = $3; co[k] = c; next }
+{ malo = 1 }
+END {
+  if (malo) exit 3
+  for (x = 1; x <= k; x++) {
+    n = split(co[x], tok, "[^A-Za-z0-9_]+")
+    for (j = 1; j <= n; j++) {
+      if (tok[j] == "openqa" || ((fa[x] SUBSEP tok[j]) in sel)) {
+        print fa[x] ":" li[x] ": " r ": " m
+        break
+      }
+    }
+  }
+}
+```
+
+*Casos de autoprueba.* Cada archivo empieza con `package com.demo.prueba;` en la línea 1:
+- **Casos de una línea:** la línea va en la 2, con `violation` o `allowed`, como en *Firmas expuestas*.
+- **Casos de dos líneas:** el import va en la 2 y la declaración en la 3, con un ayudante nuevo. La línea esperada es `archivo:3: R<n>: motivo`.
+- **`ok-29`:** son dos archivos en el mismo caso.
+- Todos se ejecutan en sus dos modos (versionado y sin versionar).
+
+Son 22 casos negativos y 7 permitidos, es decir, 58 ejecuciones, más 2 casos de error: 340 en total. Los casos vigentes no cambian.
+
+```java
+// ===== Deben fallar (violation) =====
+// R1-imp · R1 · transport/Bad.java · línea 3 · subpaquete, fuera de la lista cerrada de D7-03
+import org.openqa.selenium.remote.RemoteWebDriver;
+    public RemoteWebDriver remoto() {
+// R1-imp-b · R1 · transport/Bad.java · línea 3 · parámetro
+import org.openqa.selenium.Alert;
+    public void aceptar(Alert alerta) {
+// R1-imp-c · R1 · transport/Bad.java · línea 3 · import static de un tipo anidado
+import static org.openqa.selenium.WebDriver.Timeouts;
+    public Timeouts tiempos() {
+// R1-imp-d · R1 · transport/Bad.java · línea 3 · argumento de tipo
+import org.openqa.selenium.Cookie;
+    public java.util.Set<Cookie> cookies() {
+// R1-imp-e · R1 · transport/Bad.java · línea 3 · anotación y protected (EXP)
+import org.openqa.selenium.Dimension;
+    @Deprecated protected Dimension tamano() {
+// R1-imp-f · R1 · transport/Bad.java · línea 3 · tres imports en una línea: Selenium ni va primero ni es el único
+import java.util.List; import org.openqa.selenium.Alert; import org.openqa.selenium.Point;
+    public Point posicion() {
+// R1-imp-g · R1 · transport/Bad.java · línea 2 · nombre calificado, sin import
+    public org.openqa.selenium.Alert alerta() {
+// R1-imp-h · R1 · transport/Bad.java · línea 3 · throws
+import org.openqa.selenium.NoSuchElementException;
+    public void pulsar(By localizador) throws NoSuchElementException {
+// R1-her · R1 · transport/Bad.java · línea 3 · extends de paquete
+import org.openqa.selenium.chrome.ChromeDriver;
+final class Bad extends ChromeDriver {
+// R1-her-b · R1 · transport/Bad.java · línea 3 · implements expuesto
+import org.openqa.selenium.WebDriver;
+public final class Bad implements WebDriver {
+// R1-her-c · R1 · transport/Bad.java · línea 3 · Selenium como argumento de tipo de una interfaz de Java
+import org.openqa.selenium.WebDriver;
+final class Proveedor implements java.util.function.Supplier<WebDriver> {
+// R1-her-d · R1 · transport/Bad.java · línea 2 · nombre calificado, sin import
+final class Bad extends org.openqa.selenium.remote.RemoteWebDriver {
+// R1-her-e · R1 · transport/Bad.java · línea 3 · cláusula en su propia línea
+import org.openqa.selenium.JavascriptExecutor;
+        implements JavascriptExecutor {
+// R1-wild · R1 · transport/Bad.java · línea 2
+import org.openqa.selenium.*;
+// R1-wild-b · R1 · transport/Bad.java · línea 2 · static
+import static org.openqa.selenium.support.ui.ExpectedConditions.*;
+// R1-by · R1 · transport/Bad.java · línea 2 · retorno
+    public By localizador() {
+// R1-by-b · R1 · transport/Bad.java · línea 2 · campo
+    public static final By TITULO = By.className("title");
+// R1-by-c · R1 · transport/Bad.java · línea 2 · herencia de una clase expuesta
+public final class Bad extends By {
+// R1-by-d · R1 · transport/Bad.java · línea 2 · argumento de tipo, protected
+    protected java.util.List<By> localizadores() {
+// R5-ext · R5 · actions/Bad.java · línea 2
+public final class Bad extends CartPage {
+// R5-ext-b · R5 · utils/Bad.java · línea 2
+public final class Bad extends ConfigResolver {
+// R5-ext-c · R5 · transport/Bad.java · línea 2 · también una excepción propia
+final class Bad extends RuntimeException {
+
+// ===== Deben pasar (allowed) =====
+// ok-28 · transport/Otro.java · líneas 2 y 3 · token completo, no subcadena
+import org.openqa.selenium.WebDriver;
+    public String nombreWebDriver(By localizador) {
+// ok-29 · transport/A.java (líneas 2 y 3) y transport/B.java (línea 2) · nombres por archivo: B tiene su propio Alert
+import org.openqa.selenium.Alert;
+    private Alert alerta;
+    public Alert alerta() {
+// ok-30 · transport/Otro.java · líneas 2 y 3 · interfaz de Java
+import org.openqa.selenium.WebDriver;
+public final class Cierre implements AutoCloseable {
+// ok-31 · actions/OtraActions.java · implements de una interfaz de Java en actions
+public final class OtraActions implements java.util.function.Supplier<String> {
+// ok-32 · utils/Otro.java · identificadores que contienen extends
+        boolean noextends = extendsMenu;
+// ok-33 · transport/Otro.java · comodín de Java
+import java.util.*;
+// ok-34 · transport/Otro.java · líneas 2 y 3 · identificadores que contienen implements y extends, con un nombre importado
+import org.openqa.selenium.WebDriver;
+        WebDriver noimplements = extendsX;
+```
+
+*Casos de error* (exit 2, con su mensaje):
+- `error-awk`: un awk falso en el `PATH` que sale con 3 (con un shim, como el de `git`). Debe dar 2 y la línea `re:^check-layers: ERROR: awk terminó con 3 `.
+- `error-her`: el shim de `git` sale con 2, sin escribir en stderr, solo cuando sus argumentos contienen `implements`, que solo aparece en `HER`. Debe dar 2 y `check-layers: ERROR: git grep terminó con 2 (R1: transport hereda o implementa un tipo de Selenium)`. Demuestra que la unión pasa por el ejecutor con guardas, y no solo los `check` anteriores.
+
+*Mutantes que deben morir* (sabotaje de devops). Los de awk solo los puede ejecutar devops; los de `git grep` se comprobaron sobre este ADR (*Enmiendas*).
+
+| Mutante | Casos que lo matan |
+|---|---|
+| U1. Sin `R1-imp` | `R1-imp` a `-h` |
+| U2. Candidatas de `R1-imp` con `^\s*public\b` en lugar de `EXP` | `R1-imp-e` |
+| U3. `IMP` anclado al principio de la línea (`^\s*import`) | `R1-imp-f` |
+| U4. Solo el primer import de cada línea (sin recorrer los segmentos) | `R1-imp-f` |
+| U5. Sin `(?:static\s+)?` en `IMP` o en el awk | `R1-imp-c` |
+| U6. Sin el token `openqa` | `R1-imp-g` y `R1-her-d` |
+| U7. El nombre es el primer segmento tras `org.openqa.` y no el último | Todos los casos de `R1-imp` y `R1-her` con import |
+| U8. Comparación por subcadena en lugar de token completo | `ok-28` |
+| U9. Nombres de toda la capa, sin el archivo en la clave | `ok-29` |
+| U10. `By` entra en la lista | `valido` (`public void click(By locator)` del árbol base) |
+| U11. Toda línea es candidata | `valido` (`private WebDriver driver;` y los propios imports) |
+| U12. Sin `R1-her` | `R1-her` a `-e` |
+| U13. `HER` sin `extends` | `R1-her` y `R1-her-d` |
+| U14. `HER` sin `implements` | `R1-her-b`, `-c` y `-e` |
+| U15. Sin el `\b` inicial o sin el final de `HER` | `ok-34` |
+| U16. `R1-her` sin unión: toda línea de herencia es violación | `ok-30` |
+| U17. No se comprueba el código de salida de awk | `error-awk` |
+| U18. La unión no usa el ejecutor con guardas | `error-her` |
+| W1. Sin `R1-wild` | `R1-wild` y `-b` |
+| W2. `R1-wild` sin `(?:static\s+)?` | `R1-wild-b` |
+| W3. `R1-wild` sin `org\.openqa\.` (cualquier comodín) | `ok-33` |
+| B1. Sin `R1-by` | `R1-by` a `-d` |
+| B2. En `R1-by`, `[^(]*` pasa a `.*` | `valido` y `ok-28` |
+| B3. `R1-by` con `^\s*public\b` en lugar de `EXP` | `R1-by-d` |
+| X1. Sin `R5-ext` | `R5-ext` a `-c` |
+| X2. `R5-ext` sin `transport`, sin `actions` o sin `utils` | `R5-ext-c`, `R5-ext` o `R5-ext-b` |
+| X3. `R5-ext` busca también `implements` | `ok-30` y `ok-31` |
+| X4. Sin el `\b` inicial o sin el final de `R5-ext` | `ok-32` |
+
+Cambiar la avidez de un cuantificador es equivalente, igual que en *Firmas expuestas*.
+
+*Riesgo residual aceptado (D6, R-5):*
+- firmas expuestas partidas en varias líneas: solo se ve la línea con el modificador de acceso;
+- un tipo de Selenium que llegue por otra biblioteca, fuera de `org.openqa` (P-06 exige un ADR antes de agregarla);
+- herencia en `src/main` (ver la Decisión 2).
+
+*Falsos positivos, que fallan cerrado:*
+- una línea expuesta de `transport` con un cuerpo que use un nombre de Selenium o un método importado con `static`;
+- `org.openqa.selenium.By` calificado como parámetro: se importa;
+- un import de `org.openqa` dentro de un comentario o de una cadena, que agrega su nombre a la lista;
+- un comentario o una cadena con `extends` en `transport`, `actions` o `utils` (D6: los comentarios cuentan como texto);
+- límites genéricos y excepciones propias en esas tres capas (ver la Decisión 2).
+
 **Nota de ejecución** (`scripts/check-layers.sh:11-39`, `:103-128`; eran `:10-38` y `:93-118` antes de la enmienda sobre `ResultadoClic`):
 - **Dos pasadas por comando.** Cada `git grep` corre con `--untracked` (lo no versionado, respetando `.gitignore`) y sin él (los archivos del índice), y los resultados se unen sin duplicados. Motivo: con git 2.53, `--untracked` recorre el árbol de trabajo sin leer el índice y omite los archivos versionados que coinciden con `.gitignore`.
 - **stderr es error.** Con un archivo ilegible, `git grep` imprime "failed to stat" y aun así termina con 0 o 1. Por eso cualquier texto en su stderr da 2.
@@ -504,7 +784,10 @@ Cambiar la avidez de un `.*` (`.*` ↔ `.*?`) es equivalente: que una línea coi
   - el de `ResultadoClic` en páginas (`D1-rc`);
   - el `git ls-files` de directorios (`D7-20`).
 - **24 comprobaciones** desde la enmienda *Firmas expuestas*: las 22 anteriores, `R1-tipos` y `R3-tipos`. Desde esa enmienda, el script se cita por nombre (su cabecera y la función `check`), no por línea.
-- **Límite de PCRE.** Si una expresión agota el límite de backtracking de PCRE, `git grep` escribe `match limit exceeded` en stderr, y CHK-17 da 2: falla cerrado, nunca abierto. Las siete expresiones de *Firmas expuestas* recorren todos los archivos versionados sin agotarlo (enmienda *Firmas expuestas*).
+- **29 comprobaciones** desde la enmienda *Selenium en el transporte y herencia*: las 24 anteriores, `R1-wild`, `R1-by`, `R1-imp`, `R1-her` y `R5-ext`.
+  - `R1-imp` y `R1-her` unen dos `git grep` con awk (*Unión por imports*).
+  - Si awk termina con un código distinto de 0, CHK-17 da 2 y el mensaje nombra awk, la regla y el motivo.
+- **Límite de PCRE.** Si una expresión agota el límite de backtracking de PCRE, `git grep` escribe `match limit exceeded` en stderr, y CHK-17 da 2: falla cerrado, nunca abierto. Las siete expresiones de *Firmas expuestas* recorren todos los archivos versionados sin agotarlo (enmienda *Firmas expuestas*), y las cinco nuevas de *Selenium en el transporte y herencia* también (su enmienda).
 
 ### D8. Configuración pura del navegador en `src/main` (paso independiente)
 
@@ -522,6 +805,13 @@ Cierra el otro pendiente heredado del ADR-001.
 
   No cambia el POM ni las pruebas existentes del ADR-001.
 - **Restricción:** el ancho y el alto se leen solo en modo headless, como hoy (`:72-77`).
+- **Ajustes de Chrome contra interferencias del propio navegador** *(enmienda 2026-10-13, parte 3)*. `BrowserSettings` también decide, como lógica pura, qué ajustes recibe Chrome, y `DriverFactory` solo los traduce:
+  - **`--disable-component-update`**, en los argumentos de Chrome (`8d7ce8b`, registrado en D1 con el contrato de `abrir`).
+  - **`chromePreferences()`** (`3bab4b2`): para Chrome devuelve `profile.password_manager_leak_detection=false`; para Firefox, un mapa vacío; es inmutable. `DriverFactory` la aplica con `ChromeOptions.setExperimentalOption("prefs", …)`.
+    - **Motivo:** tras el inicio de sesión, la comprobación de contraseñas filtradas de Chrome abre un aviso que en headless no se ve y que, mientras está abierto, descarta los clics y las teclas nativos dirigidos a la página. Era la causa de los clics que terminaban en el respaldo JavaScript de D1 (`MEMORY.md` la tenía como "sin aislar").
+    - **Evidencia** (engineer; no se ejecutó aquí, B-01). Según el coordinador, los clics con respaldo pasaron de 36 de 153 a 0 de 156 en Chrome local, con carga y sin ella, y en el Grid. Según el mensaje de `3bab4b2`: un A/B intercalado dio 0 de 6 clics con respaldo con la preferencia, frente a 3 de 6 sin ella; CHK-08 ×2 con `Tests run: 189, Failures: 0, Errors: 0, Skipped: 1`; PIT 132/132.
+    - **Pruebas:** tres pruebas unitarias nuevas en `BrowserSettingsTest` (`chromeDisablesPasswordLeakDetectionInEveryMode`, `firefoxHasNoChromePreferences` y `chromePreferencesAreImmutable`), dentro de PIT (CHK-11).
+    - **Límite:** las pruebas unitarias fijan el nombre y el valor de la preferencia, pero no pueden probar que Chrome la respete. Chrome ignora en silencio una preferencia que no reconoce. Si una versión futura la renombra, solo lo detecta la E2E, y solo si nada tapa el síntoma: por eso se retira el respaldo JavaScript del clic (*Enmiendas*, *Preferencias de Chrome y respaldo JavaScript*).
 
 ## Alternativas consideradas
 
@@ -684,7 +974,7 @@ Las decisiones de fondo y el estado no cambian. Con este cierre, el ADR queda **
   - `BrowserSettings` está en `src/main/java/com/demo/config/`, con 27 pruebas unitarias, y `DriverFactory` solo traduce.
   - PIT da 89/89, y D6 del ADR-001 sigue en `BUILD FAILURE`. Los 4 `requireNonNull`, que PIT no muta, se validaron con control negativo manual.
 - **Reglas y agentes:** todos los cambios están aplicados (*Cambios propuestos*).
-- **Abiertos (P2):** R-4 (solo Jenkins) y R-8 (Q-*). R-3 y R-6 se cerraron en remoto (enmienda *R-3 y R-6 cerrados en remoto*). Desde el 2026-10-13, también los dos P2 que deja abiertos la enmienda *Firmas expuestas*: la lista cerrada de tipos de R1 en `transport` y el `extends` fuera de `pages`.
+- **Abiertos (P2):** R-4 (solo Jenkins) y R-8 (Q-*). R-3 y R-6 se cerraron en remoto (enmienda *R-3 y R-6 cerrados en remoto*). Desde el 2026-10-13, también los dos P2 que deja abiertos la enmienda *Firmas expuestas*: la lista cerrada de tipos de R1 en `transport` y el `extends` fuera de `pages`. Los aborda la enmienda *Selenium en el transporte y herencia* (propuesta el 2026-10-13), y se cierran con el commit que la integre junto al script.
 
 ### 2026-10-10 — R-4 confirmado en GitHub Actions
 
@@ -882,6 +1172,127 @@ Las decisiones de fondo y el estado no cambian: D7 se alinea con el script, que 
   public final class Navegador extends ChromeDriver {
   public final class CompraActions extends CartPage {
   ```
+
+  *(2026-10-13: los dos los aborda la enmienda *Selenium en el transporte y herencia*.)*
 - **Reglas y agentes (opcional; usuario, P-01).** D7 ya define "pública", así que el texto actual sigue siendo correcto. Si el usuario quiere que lo diga:
   - `.claude/agents/qa-automation-architect.md`, filas R1 y R3: agregar "(públicas o protegidas; sin interfaces, anotaciones ni records expuestos en `transport`, `pages` y `actions`)";
   - `.claude/rules/04-quality-checks.md`, descripción de CHK-17: agregar "firmas expuestas con anotaciones, otro orden de modificadores o `protected`, y sin interfaces, anotaciones ni records expuestos".
+- *(Trazabilidad, 2026-10-13: el usuario aplicó los textos de reglas y agentes en `7083d19`. "Ese commit" es `df87ada`, firmado: contiene esta enmienda, el script y la autoprueba (`git show --stat df87ada`). Según devops, la autoprueba da 280 casos en verde con mawk, gawk, `gawk --posix` y busybox, y el sabotaje no deja ningún sobreviviente en 28 ejecuciones de mutante: E1–E13, E14 en cada una de las siete comprobaciones, T1–T6 y T7 en cada una de sus dos rutas.)*
+
+### 2026-10-13 — Selenium en el transporte y herencia (CHK-17, R1 y R5)
+
+**Propuesta** del `qa-automation-architect` el 2026-10-13, a petición del coordinador (P2 que dejó la enmienda *Firmas expuestas* en *Fuera de alcance*). La aprueba el coordinador (Regla 01, nivel 2). Las decisiones de fondo no cambian: D7 completa R1 en `transport` y extiende a más capas la composición que R5 ya exigía a `pages`.
+
+- **Qué cambia en D7:**
+  - las filas R1 y R5 de la tabla, con sus equivalentes ArchUnit de referencia;
+  - el bloque de comandos: `IMP`, `HER`, `R1-wild`, `R1-by`, las uniones `R1-imp` y `R1-her`, y `R5-ext`;
+  - la subsección *Selenium en el transporte y herencia*: huecos, dos decisiones con sus opciones, expresiones, la unión por imports con su programa awk de referencia, 22 casos negativos, 7 permitidos y 2 de error, 28 mutantes y riesgo residual;
+  - la *Nota de ejecución*: 29 comprobaciones, el código de salida de awk y el límite de PCRE.
+  - Fuera de D7, D6 suma los casos previstos, y se corrige su total de *Firmas expuestas*: 280 casos, en verde con 4 implementaciones de awk sobre `df87ada` (según devops).
+- **Integración (D6).** El script y la autoprueba son de `devops-engineer`. Esta enmienda se integra **en el mismo commit** que ellos.
+  - Hasta ese commit, CHK-17 es lo que ejecuta el script: 24 comprobaciones.
+  - Si la implementación se aparta de D7 en una expresión, un motivo, un caso o la semántica de la unión (puntos 3 a 6), se corrige el ADR antes del commit. La regla nunca se relaja.
+- **Comprobación sobre `src`** (2026-10-13, solo `git grep`, B-01). Se ejecutó sobre `HEAD` tres veces, a medida que avanzaba: en `df87ada`, en `cc674a8` y en `3bab4b2`.
+  - Entre `df87ada` y `cc674a8`, `src` y los dos scripts de CHK-17 no cambian (`git diff --stat df87ada cc674a8 -- src scripts/check-layers.sh scripts/tests/check-layers-test.sh` no da salida).
+  - `3bab4b2` cambia `BrowserSettings`, su prueba y una línea de un método privado de `DriverFactory` (enmienda siguiente). Los resultados de abajo son los mismos en los tres commits.
+  - **No hay violaciones.** Todas estas búsquedas dan rc=1, sin salida:
+    - `R1-wild`, `R1-by` y `HER` sobre `transport`, y `R5-ext` sobre `transport`, `actions` y `utils`;
+    - cualquier import con comodín en todo `src` (`\bimport\s+(?:static\s+)?[\w.\s]*\*`);
+    - `\b(?:extends|implements)\b` en todo `src`, incluido `src/main`.
+  - **Unión, hecha a mano.** `IMP` lista 17 imports: 6 en `DriverFactory.java` y 11 en `Navegador.java`, uno de ellos `By`.
+    - Las líneas `EXP` de `Navegador.java` con alguno de sus 10 nombres (sin `By`) o con `openqa` dan rc=1.
+    - `DriverFactory.java` no tiene ninguna línea `EXP` (rc=1): es de paquete.
+    - `openqa` en una línea `EXP` o `HER` de `transport` da rc=1.
+  - **Clases.** Todas las clases públicas de `transport`, `pages`, `actions`, `utils`, `steps` y `hooks` son `final`, y `DriverFactory` y `XPathLiteral` son `final` de paquete. Solo `RunnerTest` no es `final`, y queda fuera de las reglas nuevas (`git grep -nP '\b(class|interface|record|enum)\s+\w' HEAD -- src/test/java/com/demo`).
+  - **Límite de PCRE.** `IMP`, `HER`, `R1-wild`, `R1-by` y `R5-ext` recorren con `git grep -lP` todos los archivos versionados de `src`, `scripts`, `docs` y `.github`, sin texto en stderr.
+- **Control positivo de los casos,** sobre este ADR (líneas del bloque de casos):
+  - `R1-wild` encuentra sus 2 casos y no `ok-33`.
+  - `R1-by` encuentra sus 4 y no `ok-28`.
+  - `IMP` encuentra las 17 líneas de import de los casos, incluida la de tres imports.
+  - `EXP` encuentra las 8 candidatas de `R1-imp`, y no el campo `private` de `ok-29` ni `ok-34`.
+  - `HER` encuentra los 5 casos `R1-her*` y no `ok-32` ni `ok-34`.
+  - `R5-ext` encuentra sus 3 casos, y no `ok-30`, `ok-31`, `ok-32` ni `ok-34`.
+  - `D7-03` no encuentra ninguno de los 8 casos `R1-imp*`: es el hueco que se cierra.
+  - `TIPO` no encuentra ninguno de los casos nuevos.
+- **Control de los mutantes de `git grep`,** sobre el mismo bloque:
+  - W2 pierde `R1-wild-b`; W3 suma `ok-33`;
+  - B2 suma `ok-28`; B3 pierde `R1-by-d`;
+  - U3 pierde la línea de tres imports de `R1-imp-f`, y U5 la de `R1-imp-c`; U2 pierde `R1-imp-e`;
+  - U13 pierde `R1-her` y `R1-her-d`, y U15 suma `ok-34`;
+  - X3 suma `ok-30` y `ok-31`, y X4 suma `ok-32`.
+  - Los mutantes del awk (U4, U6–U11 y U16–U17) y los de cableado (U1, U12, U18, W1, B1, X1 y X2) los ejecuta devops: B-01 no permite correr awk ni el script.
+- **Cambios del engineer sin commit.** Se revisaron en dos momentos, de solo lectura (`git grep --untracked`, limitado a `src`):
+  - **Primero:** el diagnóstico de clics en `transport` y `hooks`, con `DiagnosticoClic.java` sin versionar. No violan las reglas nuevas: `DiagnosticoClic` es una clase de paquete sin líneas `EXP`, y no hay herencia ni comodines.
+  - **Después:** ese diagnóstico ya no está en el árbol. Los cambios sin commit pasaron a ser `BrowserSettings` y su prueba (`src/main` y `config`, fuera de CHK-17) y una línea dentro de un método privado de `DriverFactory`. Tampoco violan las reglas nuevas: `DriverFactory` sigue sin líneas `EXP`, sin herencia y sin comodines (rc=1). Esos cambios son hoy `3bab4b2`, y al cerrar esta enmienda `src` no tiene cambios sin commit.
+- **Criterio de cierre** (`devops-engineer`):
+  1. `scripts/check-layers.sh` define `IMP` y `HER` una sola vez, con el texto exacto de D7. Suma `R1-wild`, `R1-by`, `R1-imp` y `R1-her` después de `R1-tipos`, y `R5-ext` después de `D7-11`, con los motivos de la tabla. La unión reutiliza el ejecutor de dos pasadas de `check` y cumple los puntos 1 a 6 de *Unión por imports*.
+  2. La autoprueba suma los 22 casos negativos y los 7 permitidos de D7, en sus dos modos, y los 2 de error. Los casos vigentes no cambian: 340 casos previstos, con exit 0 con mawk, gawk, `gawk --posix` y busybox (matriz de CHK-18). `bash scripts/check-awk-portability.sh` da exit 0.
+  3. Sabotaje: cada mutante de la tabla (U1–U18, W1–W3, B1–B3 y X1–X4, con X2, U15 y X4 en cada una de sus variantes) hace fallar al menos un caso. Se adjunta la tabla mutante → casos en rojo, y ninguno sobrevive.
+  4. `bash scripts/check-layers.sh` da 0 sobre HEAD.
+  5. La CI no cambia: CHK-17 sigue en el job `mutation` y en la etapa `Capas (CHK-17)` del `Jenkinsfile`.
+- **Reglas y agentes (usuario, P-01).** D7 es la definición normativa, así que el texto actual no es falso, pero la fila R5 queda incompleta. Texto propuesto:
+  - `.claude/agents/qa-automation-architect.md`, fila R1: agregar "en `transport`, tipos de Selenium importados o calificados en firmas expuestas (`By`, solo como parámetro), herencia o implementación de tipos de Selenium e imports de Selenium con comodín";
+  - la misma fila R5: "páginas que extienden una clase" pasa a "clases de `transport`, `pages`, `actions` o `utils` que extienden otra";
+  - `.claude/rules/04-quality-checks.md`, descripción de CHK-17: agregar "tipos de Selenium importados en firmas del transporte y herencia en `transport`, `actions` y `utils`".
+
+### 2026-10-13 — Preferencias de Chrome (D8) y respaldo JavaScript del clic (D1)
+
+**Propuesta** del `qa-automation-architect` el 2026-10-13, a petición del coordinador. La aprueba el coordinador (Regla 01, nivel 2), y va en la misma entrega que la enmienda anterior. Es la "parte 3" que citan D1 y D8.
+
+**1. Registro en D8 de `chromePreferences()`** (`3bab4b2`, firmado; `git show --stat 3bab4b2`: `BrowserSettings`, `BrowserSettingsTest` y `DriverFactory`). Detalle, motivo y evidencia en D8, junto a `--disable-component-update`. Cumple D8: la decisión es pura y está en `src/main`, y `DriverFactory` solo traduce. CHK-15 y CHK-17 no cambian: `DriverFactory` ya podía nombrar `config`, y el cambio no agrega líneas expuestas, herencia ni comodines. Se comprobó con las expresiones de la enmienda anterior, primero sobre el árbol antes del commit y después sobre `3bab4b2`; todas dan rc=1.
+
+**2. Decisión: se retira el respaldo JavaScript del clic.** Cada acción hace **un solo clic nativo** y espera su postcondición hasta el tiempo máximo. Si no se cumple, falla.
+
+*Hechos:*
+- El respaldo (D1, *Tope de clics*) existía porque Chrome "perdía" clics nativos. La causa ya se conoce y se corrige en la capa más baja posible, la configuración pura del navegador (D8).
+- Con la corrección, el respaldo no se usa: 0 de 156 clics, según el coordinador. Con 0 casos en 156, la tasa por clic queda acotada, con un 95 % de confianza, por debajo de ~1,9 % (regla del tres: 3/156). Eso no es cero.
+- Chrome ignora en silencio una preferencia que no reconoce, y las pruebas unitarias no pueden probar que la respete (D8, *Límite*).
+
+| Opción | Veredicto | Motivo |
+|---|---|---|
+| A. Mantenerlo como está (1 nativo y hasta 2 JS, log INFO) | Descartada | Es lo que ocultó la causa: con el respaldo, 36 de 153 clics nativos se perdían sin que la suite dejara de estar en verde. Si Chrome renombra la preferencia, o aparece otro aviso que se trague la entrada, el síntoma vuelve sin que nada falle. Además, `arguments[0].click()` entrega el evento sin pasar por el hit-testing del navegador. La postcondición se sigue exigiendo, pero el clic JS puede alcanzarla con un control que un usuario no podría pulsar: es un **verde falso** sobre la interacción, aunque no sobre el resultado. Y un control que alterna su estado puede revertirse con un clic de más (D1) |
+| B. Subir el log a WARN | Descartada | Solo lo ve quien lee el log de una ejecución en verde. Para que falle haría falta un control de log como CHK-19, que mantendría vivo un código que no debería ejecutarse nunca, con su verde falso |
+| C. Que usar el respaldo haga fallar la prueba | Converge con D | Si usarlo falla, el clic JS ya no aporta nada: basta con no darlo. De C se conserva el mensaje, que nombra la causa conocida |
+| D. Quitarlo: un clic nativo por acción | **Elegida** | Falla cerrado: si la preferencia deja de funcionar, el primer clic tras el inicio de sesión agota el plazo en rojo, en CHK-08 y en la CI, con un mensaje que apunta a D8. Quita la vía del verde falso, el riesgo de revertir un control que alterna y un `executeScript` (superficie de PI-05). Es coherente con CHK-02 y con R-2 de este ADR: ante una pérdida de estabilidad se diagnostica, nunca se repite la acción |
+| E. Repetir el clic de forma nativa en lugar de con JS | Descartada | Pasa por el hit-testing, pero sigue repitiendo la acción dentro del paso. Ocultaría una carrera del SUT (un control pulsado antes de estar listo) y conserva el riesgo de revertir un control que alterna. Si el aviso vuelve, el clic nativo repetido también se pierde, así que no protege nada |
+
+*Coste aceptado.* Una pérdida de clics nativos que no explique la preferencia (por ejemplo, en Firefox, que no se midió) pasará a dar rojo en lugar de verde. Es lo que se busca:
+- se diagnostica;
+- si hace falta mientras tanto, entra en la cuarentena reglada como `inestable` (CHK-14);
+- nunca se vuelve a agregar un respaldo sin una enmienda de este ADR.
+
+*Escritura (`escribir` y `esperarValorEstable`).* Tiene un respaldo equivalente: una reescritura nativa y después un `SCRIPT_ESCRIBIR_INPUT_CONTROLADO` por JS, con un log INFO de las correcciones. El aviso de Chrome también descartaba teclas, así que aplica el mismo criterio, **condicionado a datos**: la evidencia de `3bab4b2` y del coordinador solo cuenta clics.
+- El engineer mide las correcciones de escritura con la preferencia, en la misma muestra que los clics.
+- Si son 0, se retiran también la reescritura y el script JS en el mismo cambio: `escribir` escribe una vez y espera el valor estable; si no llega, falla.
+- Si no son 0, la escritura queda como está, y el engineer reporta los datos al arquitecto (P1) para decidir por enmienda. La decisión del clic no espera a la de la escritura.
+
+*Contrato que cambia en D1* (lo aplica el engineer; D1 se actualiza cuando el verifier lo apruebe):
+- `clickHastaCumplir`, `clickYObservarUrlContiene` y los cuatro `clickYEsperar…`: esperan a que el control sea clicable, hacen **un** clic nativo y esperan la postcondición hasta el tiempo máximo.
+  - Se retiran `MAXIMO_CLICS_POR_ACCION`, el método privado `pulsar` y su `executeScript("arguments[0].click();", …)`.
+  - `desplazarA` y `SCRIPT_LEER_CODIGO_PAGINA_ERROR` no cambian.
+- `ResultadoClic` conserva sus tres valores:
+  - `NO_AVANZO` pasa a ser "tras el clic nativo, la URL no se alcanzó";
+  - `NO_DISPONIBLE` sigue siendo "no hubo clic".
+  - `CartPage` no cambia.
+- El `TimeoutException` de `clickHastaCumplir` conserva el localizador, el plazo y los clics efectivos (0 o 1).
+  - Con 1 clic sin efecto, añade una pista fija: "el clic nativo no tuvo efecto; si ocurre en Chrome tras iniciar sesión, revisar las preferencias de Chrome (ADR-002, D8)".
+  - Nunca lleva texto del SUT ni el texto escrito (PI-05 y PI-09).
+- El log INFO de "clics efectivos" desaparece, porque ya no hay más de un clic. Se conservan los INFO de `clickYObservarUrlContiene`.
+
+*Verificación (cada paso deja la suite en verde):*
+1. CHK-01, CHK-03, CHK-07 y CHK-17 en verde.
+2. CHK-08 ×2 con el mismo `Tests run` que en `3bab4b2` (189).
+3. Para acumular muestra, CHK-08 tres veces más en Chrome local, al menos una con la máquina cargada, y el job `e2e-grid`. Ninguna puede fallar por un clic sin efecto.
+4. Firefox local (`-Dbrowser=firefox`, con el geckodriver de snap) o el job `e2e-firefox`, en verde.
+5. CHK-09 y CHK-10 de regresión de `@AC-COMPRA-01` y `@AC-LOGIN-01`.
+6. **Control negativo manual** (como el de `XPathLiteral`): sin la preferencia (cambio local, sin commit), una ejecución de un AC con clics tras el inicio de sesión debe fallar en rojo, con `TimeoutException` y la pista de D8, y no pasar en verde.
+   - Se repite hasta observar el fallo, como mucho 5 veces: en el A/B de `3bab4b2`, 3 de 6 clics lo necesitaron.
+   - Si no falla en 5, se reporta, porque el síntoma no se reprodujo.
+   - Con el código de `3bab4b2`, el mismo control pasa en verde gracias al respaldo. Esa diferencia es la evidencia.
+7. CHK-11 sin cambios: `Navegador` está fuera de PIT.
+8. Gate CRÍTICO de devops, porque toca `transport`.
+
+*Efecto en otros artefactos:*
+- `MEMORY.md` dice "tope de 3 clics por acción (1 nativo + 2 JS, con log INFO)" y tiene como P2 la causa del respaldo JS. Lo actualiza el coordinador al cerrar.
+- `README.md` describe el respaldo JavaScript del clic y de la escritura en su párrafo de postcondiciones (`README.md:292` en `3bab4b2`). Dice que "no convierte un fallo real en un falso positivo", lo que vale para el resultado pero no para la interacción (opción A). Tras el cambio se reescribe; lo edita quien designe el usuario.
+- **P2 (devops):** que los jobs con Chrome registren la versión del navegador, como ya hace el paso *Firefox version* del job `e2e-firefox`. Así, un rojo tras actualizar Chrome se asocia con su versión.
