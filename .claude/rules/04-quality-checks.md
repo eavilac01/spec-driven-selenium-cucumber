@@ -13,7 +13,7 @@ Comprobaciones deterministas que los agentes citan por ID. Una CHK en rojo es un
 | CHK-07 | Compilación | Código de salida 0 | engineer, devops |
 | CHK-08 | Suite completa | `BUILD SUCCESS` (devops la corre **2 veces** con el mismo `Tests run`) | engineer, devops |
 | CHK-09 | Escenario independiente | Verde solo y dentro de la suite | engineer, verifier |
-| CHK-10 | Control negativo | **Falla** con `AssertionFailedError` en el `Then` | verifier |
+| CHK-10 | Control negativo | **Falla** con `AssertionFailedError` en el `Then` o, en las pruebas de contrato del transporte (ADR-004), en la prueba indicada | verifier |
 | CHK-11 | Mutación (alcance del ADR-001: todo `src/main/java`) | Puntaje ≥ 80 % en la ejecución y la guarda en 0 (`mutations.xml` presente, sin `Skipping project`); cada mutante sobreviviente de las clases tocadas, justificado | verifier, devops |
 | CHK-12 | Trazabilidad SDD: `Spec:` hacia una spec `aprobada`, `@AC-` y `@tec-` en cada escenario, cada `@AC-` existe en la spec y cada AC verificable tiene escenario | Exit 0; con exit 1 imprime `archivo:línea: motivo` | designer, devops |
 | CHK-13 | Pipelines válidos | Sin error | devops |
@@ -47,6 +47,8 @@ git grep -nE "ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16}|BEGIN [A-Z ]*PRIVATE KEY"
 ./mvnw -B -ntp test -Dheadless=true -Dcucumber.filter.tags="@AC-XXX-NN"
 # CHK-10 (la clave sale del valor esperado que verifica el Then)
 ./mvnw -B -ntp test -Dheadless=true -Dcucumber.filter.tags="@AC-XXX-NN" -D<clave.esperada>=__CONTROL_NEGATIVO__
+# CHK-10, pruebas de contrato del transporte (ADR-004, D6): la clave sale del esperado que verifica la prueba; en los contadores, otro entero
+./mvnw -B -ntp test -Dheadless=true -Dtest='NavegadorContractTest' -D<contract.expected.clave>=__CONTROL_NEGATIVO__
 # CHK-11 (con la guarda contra el "Skipping project" de PIT, que da BUILD SUCCESS sin mutar nada)
 rm -rf target/pit-reports
 bash -c 'set -o pipefail; ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage 2>&1 | tee pit.log' && bash scripts/check-mutation-report.sh pit.log

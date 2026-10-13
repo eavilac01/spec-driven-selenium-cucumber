@@ -7,9 +7,9 @@
 | Coordinador (sesión principal) | Lista de tareas; `MEMORY.md`; specs **solo** para marcar `aprobada` por orden explícita del usuario | Todo, excepto `.env` | Comandos de lectura; `git push` solo con el gate aprobado |
 | `qa-automation-architect` | `docs/adr/` | Todo, excepto `.env` | Solo B-01 |
 | `qa-test-designer` | `docs/specs/`, `src/test/resources/features/` | `src/test/java/`, `config.properties` | Solo B-01 |
-| `qa-automation-engineer` | `src/test/java/`, `src/main/java/` (lógica pura, ADR-001), `src/test/resources/config.properties`, `.env.example` | `docs/` | `./mvnw` y `git grep`/`git status`/`git diff` |
+| `qa-automation-engineer` | `src/test/java/`, `src/main/java/` (lógica pura, ADR-001), `src/test/resources/config.properties`, `src/test/resources/contract/` (páginas locales de las pruebas de contrato del transporte, ADR-004), `.env.example` | `docs/` | `./mvnw` y `git grep`/`git status`/`git diff` |
 | `qa-test-verifier` | **Nada** | Todo, excepto `.env` | `./mvnw`, `git grep`/`git diff`/`git status`, el script de mutación, `scripts/check-layers.sh` y su autoprueba (solo escribe en un temporal fuera del repo) |
-| `devops-engineer` | `.github/`, `Jenkinsfile`, `docker-compose.yml`, `pom.xml` (solo plugins de ejecución y calidad), `junit-platform.properties`, `scripts/`, `docs/quarantine.md`, `.claude/devops-gate.json` | Todo, excepto `.env` | `./mvnw`, `git`, `docker compose`, `scripts/` |
+| `devops-engineer` | `.github/`, `Jenkinsfile`, `docker-compose.yml`, `pom.xml` (solo plugins de ejecución y calidad), `.mvn/wrapper/` (versión y checksum del Maven Wrapper), `junit-platform.properties`, `scripts/`, `docs/quarantine.md`, `.claude/devops-gate.json` | Todo, excepto `.env` | `./mvnw`, `git`, `docker compose`, `scripts/` |
 
 ## B-01 — Bash de solo lectura
 Arquitecto y diseñador tienen `Bash` **solo** para buscar: `git grep`, `git ls-files`, `git diff`, `git log` y `git show`. Prohibidos la redirección (`>`, `>>`, `tee`), `sed -i`, `rm`, `mv`, `cp`, `./mvnw` y cualquier acceso a la red.
