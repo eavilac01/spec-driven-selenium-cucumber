@@ -196,7 +196,12 @@ Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-00
 │   ├── hooks/           # gate DevOps y protección de .claude/**, CLAUDE.md, MEMORY.md, AGENTS.md y .github/** frente a escrituras por Bash (+ pruebas)
 │   └── settings.json
 ├── .env.example
-├── .github/workflows/ci.yml
+├── .github
+│   ├── workflows/ci.yml
+│   ├── ISSUE_TEMPLATE/   # defecto del framework y divergencia sistema/spec
+│   └── PULL_REQUEST_TEMPLATE.md
+├── CONTRIBUTING.md      # flujo SDD, comprobaciones locales y PR de forks
+├── SECURITY.md          # reporte privado de vulnerabilidades y alcance
 ├── .mvn/wrapper/maven-wrapper.properties
 ├── AGENTS.md
 ├── CLAUDE.md
@@ -677,6 +682,10 @@ El repositorio incluye un equipo de subagentes de Claude Code (`.claude/agents/`
 - **Comprobaciones deterministas:** catálogo CHK-01…19 (sleep, reintentos, capas, control negativo, mutación, trazabilidad, cuarentena, portabilidad de awk, esperados por `-D`), un hook que bloquea `git push` sin el gate DevOps y otro que impide modificar por Bash la configuración de los agentes y los workflows del CI (`.claude/rules/02` y `04`).
 
 Índice, justificación de roles y asignación de modelo: [`.claude/agents/README.md`](.claude/agents/README.md).
+
+## Contribuir y seguridad
+
+Las contribuciones siguen el flujo SDD y las comprobaciones de [CONTRIBUTING.md](CONTRIBUTING.md). En los pull requests desde un fork el CI omite los E2E, porque no reciben secrets, y un mantenedor los ejecuta antes de fusionar. Las vulnerabilidades se reportan en privado según [SECURITY.md](SECURITY.md), nunca en un issue público.
 
 ## Licencia
 

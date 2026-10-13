@@ -70,6 +70,7 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 
 ## Documentación
 - `README.md` — arquitectura, decisiones técnicas, ejecución local, Grid y CI.
+- `CONTRIBUTING.md` y `SECURITY.md` — cómo contribuir (SDD, CHK locales, PR de forks) y cómo reportar vulnerabilidades en privado.
 - `CLAUDE.md` y `.claude/agents/README.md` — coordinación del equipo de agentes QE.
 - `.claude/rules/01-spec-driven-development.md` — ciclo de vida de specs y trazabilidad.
 - `.claude/rules/02-agent-permissions.md` — qué puede y qué no puede hacer cada agente.
