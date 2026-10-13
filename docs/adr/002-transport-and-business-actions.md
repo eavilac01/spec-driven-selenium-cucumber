@@ -58,7 +58,7 @@
 
 Las filas marcadas registran la API pública que la tabla original no recogía; las cuatro primeras no se reescriben. Reflejan el `Navegador` de `0de6962` (2026-10-13). Se registró del árbol de trabajo antes del commit, y después se comprobó que coincide (*Enmiendas*, 2026-10-13). Por eso se citan por método y no por línea. Todas cumplen este D1: reciben solo `By` y tipos de Java, no devuelven tipos de Selenium y fallan antes de `iniciar()`.
 
-- **Tope de clics** (`0de6962`). `clickHastaCumplir` y `clickYObservarUrlContiene` pulsan como mucho `MAXIMO_CLICS_POR_ACCION = 3` veces: 1 clic nativo y, como máximo, 2 de respaldo JavaScript. *(Enmienda 2026-10-13, parte 3: se retira el respaldo JavaScript y queda un solo clic nativo por acción. Lo aplica el engineer; hasta su commit, rige lo que describe este punto. Ver *Enmiendas*, *Preferencias de Chrome y respaldo JavaScript*.)*
+- **Tope de clics** (`0de6962`). `clickHastaCumplir` y `clickYObservarUrlContiene` pulsan como mucho `MAXIMO_CLICS_POR_ACCION = 3` veces: 1 clic nativo y, como máximo, 2 de respaldo JavaScript. *(Enmienda 2026-10-13, parte 3: se retira el respaldo JavaScript y queda un solo clic nativo por acción. Lo aplica el engineer; hasta su commit, rige lo que describe este punto. Ver *Enmiendas*, *Preferencias de Chrome y respaldo JavaScript*.)* *(Aplicado en `d569a34`, junto con el retiro del respaldo de escritura; verificación en curso.)*
   - Con el tope agotado no pulsan más; solo esperan la postcondición dentro del plazo.
   - Si el plazo se agota, `clickHastaCumplir` lanza `TimeoutException` con el localizador, los clics efectivos y el plazo, y nunca con el texto escrito.
   - Antes, el respaldo JavaScript se repetía sin límite dentro del plazo. Un control que alterna su estado (agregar y quitar) podía revertirse con un clic de más.
@@ -193,7 +193,7 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
   - exit 1 con cada directorio de capa ausente;
   - exit 2 con cada error de evaluación de la *Nota de ejecución* de D7.
 
-  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`; 184 desde el commit de la enmienda sobre `ResultadoClic` (según devops); 280 desde `df87ada` (enmienda *Firmas expuestas*), con `ok` en 4 implementaciones de awk: mawk, gawk, `gawk --posix` y busybox (según devops). La enmienda *Selenium en el transporte y herencia* prevé 340 (D7); el total real lo informa devops al implementarla.
+  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`; 184 desde el commit de la enmienda sobre `ResultadoClic` (según devops); 280 desde `df87ada` (enmienda *Firmas expuestas*), con `ok` en 4 implementaciones de awk: mawk, gawk, `gawk --posix` y busybox (según devops). Desde `7d9477f` (enmienda *Selenium en el transporte y herencia*) son 340, con `ok` en las mismas 4 implementaciones de awk (según devops).
 - **Dónde corren el script y la autoprueba:**
   - GitHub Actions: job `mutation`, pasos *Capas, autoprueba (CHK-17)* y *Capas (CHK-17)*, en paralelo a la suite y sin secrets (`ci.yml:66-84` en `f7f7a13`);
   - Jenkins: etapa `Capas (CHK-17)`, antes de la suite y fuera de `withCredentials` (`Jenkinsfile:22-29` en `f7f7a13`);
@@ -217,7 +217,7 @@ Comandos de CHK-17, transcritos de `scripts/check-layers.sh` (la implementación
 
 Enmienda 2026-10-13 (*Firmas expuestas*): el bloque ya incluye `MOD`, `EXP` y `TIPO`, las cinco comprobaciones de firmas reescritas con `EXP` y las dos nuevas de tipos. Se integra en el mismo commit que el script y su autoprueba (D6). Hasta ese commit, CHK-17 es lo que ejecuta el script. *(Integrada en `df87ada`.)*
 
-Enmienda 2026-10-13, parte 2 (*Selenium en el transporte y herencia*): el bloque ya incluye `IMP`, `HER`, `R1-wild`, `R1-by`, las dos uniones por imports (`R1-imp` y `R1-her`) y `R5-ext`. `union_imports` no es un comando de git: es la función del script que define *Unión por imports*. Se integra en el mismo commit que el script y su autoprueba (D6); hasta ese commit, CHK-17 es lo que ejecuta el script (24 comprobaciones en `df87ada`).
+Enmienda 2026-10-13, parte 2 (*Selenium en el transporte y herencia*): el bloque ya incluye `IMP`, `HER`, `R1-wild`, `R1-by`, las dos uniones por imports (`R1-imp` y `R1-her`) y `R5-ext`. `union_imports` no es un comando de git: es la función del script que define *Unión por imports*. Se integra en el mismo commit que el script y su autoprueba (D6); hasta ese commit, CHK-17 es lo que ejecuta el script (24 comprobaciones en `df87ada`). *(Integrada en `7d9477f`.)*
 
 ```bash
 T=src/test/java/com/demo
@@ -241,8 +241,8 @@ git grep --untracked -nP '\bimport\s+(?:static\s+)?org\.openqa\.[\w.\s]*\*' -- "
 #   … By solo como parámetro (después del primer paréntesis)
 git grep --untracked -nP "$EXP"'[^(]*\bBy\b' -- "$T/transport"
 #   … unión por imports: candidata con el token openqa o con un nombre importado de org.openqa en su archivo (salvo By)
-union_imports "$EXP" -- "$T/transport"
-union_imports "$HER" -- "$T/transport"
+union_imports R1 "tipo de Selenium importado o calificado en una firma pública del transporte" "$EXP" -- "$T/transport"
+union_imports R1 "transport hereda o implementa un tipo de Selenium" "$HER" -- "$T/transport"
 # R3: steps sin páginas ni transporte; acciones sin páginas en sus firmas públicas (expuestas)
 git grep --untracked -nP 'com\.demo\.(pages|transport)\b' -- "$T/steps"
 #   … página como tipo de retorno
@@ -585,7 +585,7 @@ Con estas cinco son 29 comprobaciones (*Nota de ejecución*):
 - En `R1-by`, `[^(]*` cubre el tipo de retorno, el tipo de un campo y la cláusula de herencia de una clase expuesta (`public final class X extends By`). `EXP` consume una anotación con argumentos, así que su `(` no corta la búsqueda antes de tiempo.
 - `HER` no exige `class` en la misma línea, así que una cláusula `extends` o `implements` en su propia línea también se ve.
 
-*Unión por imports* (`R1-imp` y `R1-her`). `union_imports <candidatas> -- <rutas>` imprime `archivo:línea: R1: motivo` por cada línea candidata que contenga el token `openqa` o un nombre importado de `org.openqa` en su mismo archivo:
+*Unión por imports* (`R1-imp` y `R1-her`). `union_imports <regla> <motivo> <candidatas> -- <rutas>` imprime `archivo:línea: <regla>: <motivo>` por cada línea candidata que contenga el token `openqa` o un nombre importado de `org.openqa` en su mismo archivo. Es la firma de `scripts/check-layers.sh` desde `7d9477f`, donde el ejecutor de dos pasadas se llama `grep2`:
 1. **Dos `git grep` con guardas.** Uno con `IMP` y otro con las candidatas, sobre las mismas rutas. Los dos usan el ejecutor de dos pasadas de `check`, con las mismas guardas (rc ≥ 2 o stderr → 2). El ejecutor se factoriza, no se copia, igual que `EXP`.
 2. **Entrada del awk.** Cada línea llega como un registro `tipo<TAB>archivo<TAB>línea<TAB>contenido`: `I` para las líneas de `IMP` y `L` para las candidatas. La forma de etiquetarlos es libre, sin extensiones de GNU, pero los registros llegan por una tubería o por un temporal, **nunca por sustitución de procesos** (`<(…)`), porque su código de salida se pierde.
 3. **Errores.** Si awk termina con un código distinto de 0, el script escribe `check-layers: ERROR: awk terminó con <rc> (<regla>: <motivo>)` en stderr y sale con 2. Si hay salida, se ordena y se depura como en `check`, y el estado pasa a 1.
@@ -974,7 +974,7 @@ Las decisiones de fondo y el estado no cambian. Con este cierre, el ADR queda **
   - `BrowserSettings` está en `src/main/java/com/demo/config/`, con 27 pruebas unitarias, y `DriverFactory` solo traduce.
   - PIT da 89/89, y D6 del ADR-001 sigue en `BUILD FAILURE`. Los 4 `requireNonNull`, que PIT no muta, se validaron con control negativo manual.
 - **Reglas y agentes:** todos los cambios están aplicados (*Cambios propuestos*).
-- **Abiertos (P2):** R-4 (solo Jenkins) y R-8 (Q-*). R-3 y R-6 se cerraron en remoto (enmienda *R-3 y R-6 cerrados en remoto*). Desde el 2026-10-13, también los dos P2 que deja abiertos la enmienda *Firmas expuestas*: la lista cerrada de tipos de R1 en `transport` y el `extends` fuera de `pages`. Los aborda la enmienda *Selenium en el transporte y herencia* (propuesta el 2026-10-13), y se cierran con el commit que la integre junto al script.
+- **Abiertos (P2):** R-4 (solo Jenkins) y R-8 (Q-*). R-3 y R-6 se cerraron en remoto (enmienda *R-3 y R-6 cerrados en remoto*). Desde el 2026-10-13, también los dos P2 que deja abiertos la enmienda *Firmas expuestas*: la lista cerrada de tipos de R1 en `transport` y el `extends` fuera de `pages`. Los aborda la enmienda *Selenium en el transporte y herencia* (propuesta el 2026-10-13), y se cierran con el commit que la integre junto al script. *(Cerrados en `7d9477f`.)*
 
 ### 2026-10-10 — R-4 confirmado en GitHub Actions
 
@@ -1234,6 +1234,8 @@ Las decisiones de fondo y el estado no cambian: D7 se alinea con el script, que 
   - `.claude/agents/qa-automation-architect.md`, fila R1: agregar "en `transport`, tipos de Selenium importados o calificados en firmas expuestas (`By`, solo como parámetro), herencia o implementación de tipos de Selenium e imports de Selenium con comodín";
   - la misma fila R5: "páginas que extienden una clase" pasa a "clases de `transport`, `pages`, `actions` o `utils` que extienden otra";
   - `.claude/rules/04-quality-checks.md`, descripción de CHK-17: agregar "tipos de Selenium importados en firmas del transporte y herencia en `transport`, `actions` y `utils`".
+  - *(Texto definitivo para pegar, 2026-10-13: ver la enmienda *Preferencias de Chrome (D8) y respaldo JavaScript del clic (D1)*, punto 4.)*
+- *(Trazabilidad, 2026-10-13: "ese commit" es `7d9477f`, firmado. Contiene esta enmienda, la de ADR-003 sobre R-2, el script y la autoprueba (`git show --stat 7d9477f`). El script sigue D7: `IMP` y `HER` definidos una vez, las cinco comprobaciones con sus motivos, `union_imports` sobre el ejecutor `grep2` y el programa awk de referencia sin cambios. Según devops, la autoprueba da 340 casos en verde con mawk, gawk, `gawk --posix` y busybox, y el sabotaje no deja vivo ninguno de 33 mutantes, contando las variantes de los mutantes de la tabla.)*
 
 ### 2026-10-13 — Preferencias de Chrome (D8) y respaldo JavaScript del clic (D1)
 
@@ -1295,4 +1297,72 @@ Las decisiones de fondo y el estado no cambian: D7 se alinea con el script, que 
 *Efecto en otros artefactos:*
 - `MEMORY.md` dice "tope de 3 clics por acción (1 nativo + 2 JS, con log INFO)" y tiene como P2 la causa del respaldo JS. Lo actualiza el coordinador al cerrar.
 - `README.md` describe el respaldo JavaScript del clic y de la escritura en su párrafo de postcondiciones (`README.md:292` en `3bab4b2`). Dice que "no convierte un fallo real en un falso positivo", lo que vale para el resultado pero no para la interacción (opción A). Tras el cambio se reescribe; lo edita quien designe el usuario.
-- **P2 (devops):** que los jobs con Chrome registren la versión del navegador, como ya hace el paso *Firefox version* del job `e2e-firefox`. Así, un rojo tras actualizar Chrome se asocia con su versión.
+- **P2 (devops):** que los jobs con Chrome registren la versión del navegador, como ya hace el paso *Firefox version* del job `e2e-firefox`. Así, un rojo tras actualizar Chrome se asocia con su versión. *(Hecho en `f6af291`: pasos *Chrome version* en los jobs `test` y `quarantine`, y *Chrome version (contenedor del Grid)* en `e2e-grid`.)*
+
+**3. Aplicado: `d569a34`** (firmado; `git show --stat d569a34`: solo `Navegador.java`). La verificación sigue en curso (verifier y gate).
+- **Qué hace el commit:**
+  - cada acción da un clic nativo y espera su postcondición (`clicNativoUnicoHastaCumplir`);
+  - el fallo lleva el localizador, el plazo, los clics efectivos (0 o 1) y, con 1, la pista fija `PISTA_ENTRADA_NATIVA_SIN_EFECTO` hacia D8;
+  - `escribir` escribe una vez y espera a que el campo conserve el valor; si no, falla con la misma pista y sin el texto (PI-09).
+  - Se retiran el tope de clics, el clic JS, la reescritura nativa y el script de escritura JS.
+  - En `transport` solo quedan dos `executeScript`: el `scrollIntoView` de `desplazarA` y el de `ejecutarScriptConstante` (`git grep -n executeScript HEAD -- src/test/java/com/demo/transport`).
+- **Evidencia del engineer** (según el coordinador y el mensaje de `d569a34`; no se ejecutó aquí, B-01):
+  - **Escrituras:** antes del cambio, 0 de 48 escrituras corregidas en 3 ejecuciones. Se cumplió la condición del punto 2 para retirar también el respaldo de escritura.
+  - **Suite:** 189 pruebas en verde en CHK-08 ×2, en 3 ejecuciones más (una con carga), en Firefox y en el Grid.
+  - **Control negativo** sin la preferencia, con el servicio de comprobación respondiendo 200: el código nuevo queda en rojo con la pista de D8, y el de `3bab4b2` en verde gracias al respaldo.
+- **Lectura de la tabla de D1** desde `d569a34`, sin reescribir sus filas:
+  - "el mismo clic con respaldo (`clickHastaCumplir`)" se lee como "un clic nativo";
+  - en `ResultadoClic`, "tras al menos un clic efectivo" se lee como "tras el clic nativo".
+- **CHK-17 sobre HEAD (`f6af291`):** las expresiones nuevas siguen dando rc=1, y la unión hecha a mano sobre los 11 imports de `Navegador.java` también.
+
+**4. Decisión: el fallo de `CartPage.iniciarCheckout` debe llevar la pista de D8.**
+
+*Hecho.* `iniciarCheckout` obtiene el resultado con `clickYObservarUrlContiene` (por el método privado `pulsarTramitar`). Con `NO_AVANZO`, compone su propia `IllegalStateException` ("La compra no avanzó a los datos de envío tras pulsar el botón de tramitar (resultado: NO_AVANZO)"), sin la pista. Tampoco la lleva el INFO de `clickYObservarUrlContiene`: solo registra el localizador y los clics efectivos. **Hoy la pista no aparece en ningún punto de ese camino** (`d569a34`), a diferencia de las demás páginas, que exigen avanzar con `clickYEsperarUrlContiene` (`CheckoutPage` e `InventoryPage`).
+
+| Opción | Veredicto | Motivo |
+|---|---|---|
+| A. `iniciarCheckout` usa `clickYEsperarUrlContiene`, como `CheckoutPage` e `InventoryPage` | **Elegida** | El fallo sale del transporte, con la pista de D8 en un solo sitio y sin API nueva. Con 0 clics, el mensaje dice que el control nunca estuvo visible y habilitado, que es lo que decía `NO_DISPONIBLE`. `esperarCarritoListo` se sigue llamando antes, así que la prueba de que el carrito cargó no cambia. `ResultadoClic` queda solo para `intentarIniciarCheckout`, que es quien tolera los tres resultados |
+| B. `CartPage` agrega la pista a su `IllegalStateException` | Descartada | La página tendría que saber de Chrome y de sus preferencias, que son cosas del transporte y de D8, y duplicaría el texto: dos sitios que mantener |
+| C. `Navegador` expone la pista (constante o método públicos) para que las páginas la compongan | Descartada | Agrega API pública al transporte solo para diagnóstico, y cada página que observe un resultado tendría que acordarse de usarla |
+| D. Solo agregar la pista al INFO de `clickYObservarUrlContiene` | Descartada como solución única | El mensaje del fallo, que es lo que se lee en el reporte, seguiría sin ella. Se adopta como complemento por el riesgo de abajo |
+| E. No hacer nada | Descartada | Un rojo en ese clic no apuntaría a la causa conocida, a diferencia de cualquier otro clic que exige avanzar |
+
+*Riesgo relacionado: verde falso en AC-COMPRA-09.* `intentarIniciarCheckout` acepta `NO_AVANZO` sin fallar. Después, `CompraActions.avanzaADatosDeEnvio` lee `permaneceEnCarrito` y el `Then` de AC-COMPRA-09 exige "no avanza".
+- Un clic nativo tragado por el navegador da exactamente eso: el escenario pasaría, aunque el SUT, que hoy sí avanza (defecto conocido), no lo haya impedido.
+- Con el respaldo JS, el segundo clic lo compensaba. Sin él, el riesgo depende solo de la preferencia de D8.
+- Hoy el escenario está en cuarentena `defecto-sut`, así que el síntoma sería un escenario en cuarentena que pasa. El job `quarantine` avisa cuando eso ocurre, y el aviso podría leerse como "el SUT se corrigió".
+- **Mitigación (opción D como complemento):** el INFO de `clickYObservarUrlContiene` con `NO_AVANZO` y 1 clic suma la misma pista fija. Así, quien revise ese aviso ve la causa posible en el log antes de retirar la cuarentena.
+- **Descartado:** una prueba positiva de que el clic llegó (por ejemplo, el foco en el botón tras el clic). Depende del navegador y ningún AC lo pide hoy (SDD-02). Se reabre si la cuarentena de AC-COMPRA-09 se revisa con este síntoma.
+
+*Contrato para el engineer:*
+- `CartPage.iniciarCheckout` llama a `esperarCarritoListo` y después a `navegador.clickYEsperarUrlContiene(BOTON_CHECKOUT, ConfigReader.getRequired("route.checkout.information"))`.
+- Se retira `pulsarTramitar`, que solo usaba `iniciarCheckout`.
+- `intentarIniciarCheckout` no cambia.
+- En `Navegador.clickYObservarUrlContiene`, el INFO del caso `NO_AVANZO` (1 clic) suma `PISTA_ENTRADA_NATIVA_SIN_EFECTO`. El del caso `NO_DISPONIBLE` no cambia.
+- Ni el mensaje ni el log llevan texto del SUT (PI-05).
+
+*Verificación:*
+- CHK-01, CHK-03, CHK-07 y CHK-17;
+- CHK-08 ×2 con el mismo `Tests run`;
+- CHK-09 y CHK-10 de `@AC-COMPRA-03` (tramitar);
+- `git grep -n ResultadoClic -- src/test/java/com/demo/pages` lista solo `intentarIniciarCheckout`;
+- el control negativo sin la preferencia, si alcanza el clic de tramitar, muestra la pista de D8 en el mensaje del fallo.
+
+**5. Textos para reglas y agentes, listos para pegar** (usuario, P-01). Sustituyen las propuestas de *Reglas y agentes* de las enmiendas *Firmas expuestas* y *Selenium en el transporte y herencia*:
+- `.claude/agents/qa-automation-architect.md`, fila R1:
+
+  ```markdown
+  | R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;` (excepción permanente); en `transport`, tipos de Selenium importados o calificados en firmas expuestas (`By`, solo como parámetro), heredar o implementar un tipo de Selenium e imports de Selenium con comodín; `By` en firmas expuestas de páginas; interfaces, anotaciones o records expuestos en `transport` o `pages`. "Expuesta" = pública o protegida, con anotaciones y modificadores en cualquier orden (ADR-002, D7, *Firmas expuestas* y *Selenium en el transporte y herencia*) |
+  ```
+
+- La misma tabla, fila R5:
+
+  ```markdown
+  | R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; clases de `transport`, `pages`, `actions` o `utils` que extienden otra |
+  ```
+
+- `.claude/rules/04-quality-checks.md`, fila CHK-17:
+
+  ```markdown
+  | CHK-17 | Capas (ADR-002): R1–R6 de D7, incluidas páginas como parámetro en acciones y `ResultadoClic` en miembros expuestos de páginas; las firmas expuestas incluyen anotaciones, cualquier orden de modificadores y `protected`, y en `transport`, `pages` y `actions` no hay interfaces, anotaciones ni records expuestos (D7, *Firmas expuestas*); en `transport`, ningún tipo de Selenium importado o calificado en firmas expuestas ni en la herencia, `By` solo como parámetro y sin comodines de Selenium, y `transport`, `actions` y `utils` no extienden clases (D7, *Selenium en el transporte y herencia*); falla cerrado (directorios de capa, `git grep` con rc ≥ 2 o con stderr, awk de la unión con rc ≠ 0) | Exit 0 en el script y en su autoprueba | engineer, verifier, devops |
+  ```
