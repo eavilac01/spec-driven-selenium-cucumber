@@ -519,7 +519,7 @@ Para comprobar la evidencia durante desarrollo, puede cambiarse temporalmente un
 
 ### GitHub Actions
 
-`.github/workflows/ci.yml` corre en cada `push` y `pull request` a `main` (y manualmente con `workflow_dispatch`), con permisos mínimos (`contents: read`). Tiene cuatro jobs en paralelo:
+`.github/workflows/ci.yml` corre en cada `push` y `pull request` a `main` (y manualmente con `workflow_dispatch`), con permisos mínimos (`contents: read`). Tiene cinco jobs en paralelo:
 
 | Job | Qué hace | Secrets |
 |---|---|---|
@@ -543,7 +543,7 @@ Los escenarios corren en paralelo con 2 hilos (`src/test/resources/junit-platfor
 
 ### Jenkins
 
-El `Jenkinsfile` declarativo está listo para un servidor Jenkins, aunque todavía no se ha ejecutado en uno real. Reproduce los jobs `test` y `mutation` de GitHub Actions:
+El `Jenkinsfile` declarativo está listo para un servidor Jenkins, aunque todavía no se ha ejecutado en uno real. Reproduce los jobs `test`, `mutation` y `quarantine` de GitHub Actions (Firefox y Grid se cubren solo en GitHub):
 
 1. `Checkout` del commit bajo prueba.
 2. `Traceability SDD (CHK-12)`, `Capas (CHK-17)` y `Cuarentena reglada (CHK-14)`.
