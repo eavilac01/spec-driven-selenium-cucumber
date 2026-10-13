@@ -39,6 +39,7 @@ final class DriverFactory {
     private static WebDriver createChromeDriver(BrowserSettings settings) {
         ChromeOptions options = new ChromeOptions();
         options.addArguments(settings.arguments());
+        options.setExperimentalOption("prefs", settings.chromePreferences());
 
         return settings.remoteUrl().isPresent()
                 ? new RemoteWebDriver(settings.remoteUrl().get(), options)

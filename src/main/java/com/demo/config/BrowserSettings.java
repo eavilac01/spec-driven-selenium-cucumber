@@ -6,6 +6,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.IntSupplier;
@@ -17,8 +18,15 @@ import java.util.function.IntSupplier;
  * valida el navegador, interpreta la URL remota (vacía significa ejecución local) y deriva
  * los argumentos de arranque. El ancho y el alto se piden solo en modo headless, como antes
  * de extraer la clase; por eso llegan como proveedores y no como enteros.</p>
+ *
+ * <p>Chrome lleva además la preferencia de perfil que desactiva la comprobación de contraseñas filtradas:
+ * tras un inicio de sesión, su aviso modal (invisible en headless) hace que el navegador descarte los clics y
+ * las teclas nativos dirigidos a la página mientras está abierto.</p>
  */
 public final class BrowserSettings {
+
+    /** Preferencia de perfil de Chrome que activa la comprobación de contraseñas filtradas tras un envío. */
+    private static final String CHROME_LEAK_DETECTION_PREFERENCE = "profile.password_manager_leak_detection";
 
     /** Navegadores soportados. */
     public enum Browser {
@@ -30,12 +38,15 @@ public final class BrowserSettings {
     private final boolean headless;
     private final URL remoteUrl;
     private final List<String> arguments;
+    private final Map<String, Object> chromePreferences;
 
-    private BrowserSettings(Browser browser, boolean headless, URL remoteUrl, List<String> arguments) {
+    private BrowserSettings(Browser browser, boolean headless, URL remoteUrl, List<String> arguments,
+                            Map<String, Object> chromePreferences) {
         this.browser = browser;
         this.headless = headless;
         this.remoteUrl = remoteUrl;
         this.arguments = arguments;
+        this.chromePreferences = chromePreferences;
     }
 
     /**
@@ -79,7 +90,12 @@ public final class BrowserSettings {
         String trimmedRemoteUrl = remoteUrl.trim();
         URL parsedRemoteUrl = trimmedRemoteUrl.isBlank() ? null : toUrl(trimmedRemoteUrl);
 
-        return new BrowserSettings(selectedBrowser, headless, parsedRemoteUrl, List.copyOf(arguments));
+        Map<String, Object> chromePreferences = selectedBrowser == Browser.CHROME
+                ? Map.of(CHROME_LEAK_DETECTION_PREFERENCE, false)
+                : Map.of();
+
+        return new BrowserSettings(selectedBrowser, headless, parsedRemoteUrl, List.copyOf(arguments),
+                chromePreferences);
     }
 
     public Browser browser() {
@@ -98,6 +114,11 @@ public final class BrowserSettings {
     /** Argumentos de arranque en orden; inmutable. */
     public List<String> arguments() {
         return arguments;
+    }
+
+    /** Preferencias del perfil de Chrome; vacío con Firefox; inmutable. */
+    public Map<String, Object> chromePreferences() {
+        return chromePreferences;
     }
 
     private static URL toUrl(String remoteUrl) {

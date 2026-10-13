@@ -9,6 +9,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
@@ -130,6 +131,31 @@ class BrowserSettingsTest {
 
         assertTrue(settings.headless());
         assertEquals(List.of("-headless", "--width=1280", "--height=720"), settings.arguments());
+    }
+
+    // --- Preferencias del perfil de Chrome ---
+
+    @Test
+    void chromeDisablesPasswordLeakDetectionInEveryMode() {
+        Map<String, Object> expected = Map.of("profile.password_manager_leak_detection", false);
+
+        assertEquals(expected, of("chrome", "", true).chromePreferences());
+        assertEquals(expected, of("chrome", "", false).chromePreferences());
+        assertEquals(expected, of("chrome", "http://grid:4444", true).chromePreferences());
+    }
+
+    @Test
+    void firefoxHasNoChromePreferences() {
+        assertEquals(Map.of(), of("firefox", "", true).chromePreferences());
+        assertEquals(Map.of(), of("firefox", "http://grid:4444", false).chromePreferences());
+    }
+
+    @Test
+    void chromePreferencesAreImmutable() {
+        BrowserSettings settings = of("chrome", "", true);
+
+        assertThrows(UnsupportedOperationException.class,
+                () -> settings.chromePreferences().put("profile.password_manager_leak_detection", true));
     }
 
     // --- Dimensiones: se piden solo en headless ---
