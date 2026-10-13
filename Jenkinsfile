@@ -212,6 +212,9 @@ exit "$override_rc"
         // Sin `junit` a propósito: no mezcla estos resultados con los de 'Test'.
         // Corre después de 'Test' (cuyo post ya publicó y archivó sus reportes) y
         // copia los suyos a quarantine-reports/. Si 'Test' falla, esta etapa no corre.
+        // quarantine.log queda en la raíz del workspace y no se archiva, igual que
+        // test.log en 'Test': los artefactos no pasan por el enmascarado de
+        // credenciales de la consola (el log ya está, enmascarado, en la consola).
         // ADR-003, R-2: tras el evaluador corre el control del aviso de D3. Un
         // error real del evaluador conserva su rc; si el evaluador da 0 o 3 y el
         // log tiene el aviso (o no se puede evaluar), sale con el rc del control
@@ -233,7 +236,7 @@ exit "$override_rc"
                     ]) {
                         rc = sh(returnStatus: true, script: '''#!/usr/bin/env bash
 set -euo pipefail
-rm -rf quarantine-reports
+rm -rf quarantine-reports quarantine.log
 mkdir -p quarantine-reports
 rc=0
 git grep -qE '(^|[[:space:]])@quarantine([[:space:]]|$)' -- src/test/resources/features || rc=$?
@@ -245,7 +248,7 @@ esac
 bash scripts/check-required-secrets.sh
 # rc de Maven en la misma orden (PIPESTATUS, por el tee).
 set +e
-./mvnw -B -ntp clean test -Dtest=RunnerTest -Dheadless=true -Dcucumber.filter.tags="@quarantine" 2>&1 | tee quarantine-reports/quarantine.log
+./mvnw -B -ntp clean test -Dtest=RunnerTest -Dheadless=true -Dcucumber.filter.tags="@quarantine" 2>&1 | tee quarantine.log
 st=("${PIPESTATUS[@]}")
 set -e
 mvn_rc="${st[0]}"
@@ -255,9 +258,9 @@ if [ "${st[1]}" -ne 0 ]; then
 fi
 cp -R target/surefire-reports target/allure-results target/cucumber-report.html quarantine-reports/ 2>/dev/null || true
 eval_rc=0
-bash scripts/evaluate-quarantine-run.sh "$mvn_rc" quarantine-reports/quarantine.log || eval_rc=$?
+bash scripts/evaluate-quarantine-run.sh "$mvn_rc" quarantine.log || eval_rc=$?
 override_rc=0
-bash scripts/check-no-expected-override.sh quarantine-reports/quarantine.log || override_rc=$?
+bash scripts/check-no-expected-override.sh quarantine.log || override_rc=$?
 if [ "$eval_rc" -ne 0 ] && [ "$eval_rc" -ne 3 ]; then
   exit "$eval_rc"
 fi

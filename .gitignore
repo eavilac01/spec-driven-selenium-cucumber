@@ -1,5 +1,7 @@
 target/
 allure-results/
+# Reportes de la etapa 'Cuarentena (CHK-14)' del Jenkinsfile
+quarantine-reports/
 
 # Credenciales y configuración local sensible
 .env
