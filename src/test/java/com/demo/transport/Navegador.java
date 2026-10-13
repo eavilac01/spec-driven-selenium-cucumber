@@ -149,7 +149,9 @@ public final class Navegador {
      * alcanzó; y {@link ResultadoClic#NO_DISPONIBLE}: el control no estuvo visible y habilitado en todo el tiempo
      * máximo, así que no hubo clic. Quien lo llama decide si "no disponible" es un resultado
      * válido; para que no sea un falso positivo debe comprobar antes que el resto de la página sí cargó.
-     * Registra a nivel INFO el número de clics efectivos, nunca datos del escenario.
+     * Registra a nivel INFO el número de clics efectivos, nunca datos del escenario; con
+     * {@link ResultadoClic#NO_AVANZO} añade la pista de D8, porque un clic nativo descartado por el navegador
+     * también da ese resultado.
      */
     public ResultadoClic clickYObservarUrlContiene(By localizador, String fragmentoUrl) {
         verificarIniciado();
@@ -161,8 +163,13 @@ public final class Navegador {
             return ResultadoClic.AVANZO;
         } catch (TimeoutException exception) {
             int clics = clicsEfectivos.get();
-            logger.info("El clic en {} no avanzó; clics efectivos: {}", localizador, clics);
-            return clics == 0 ? ResultadoClic.NO_DISPONIBLE : ResultadoClic.NO_AVANZO;
+            if (clics == 0) {
+                logger.info("El clic en {} no avanzó; clics efectivos: {}", localizador, clics);
+                return ResultadoClic.NO_DISPONIBLE;
+            }
+            logger.info("El clic en {} no avanzó; clics efectivos: {}; {}", localizador, clics,
+                    PISTA_ENTRADA_NATIVA_SIN_EFECTO);
+            return ResultadoClic.NO_AVANZO;
         }
     }
 

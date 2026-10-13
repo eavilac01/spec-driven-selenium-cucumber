@@ -28,12 +28,10 @@ public final class CartPage {
 
     /** Pulsa el botón de tramitar y exige que la compra avance a los datos de envío. */
     public void iniciarCheckout() {
-        Navegador.ResultadoClic resultado = pulsarTramitar();
-        if (resultado != Navegador.ResultadoClic.AVANZO) {
-            throw new IllegalStateException(
-                    "La compra no avanzó a los datos de envío tras pulsar el botón de tramitar (resultado: %s)"
-                            .formatted(resultado));
-        }
+        esperarCarritoListo();
+        navegador.clickYEsperarUrlContiene(
+                BOTON_CHECKOUT,
+                ConfigReader.getRequired("route.checkout.information"));
     }
 
     /**
@@ -77,13 +75,6 @@ public final class CartPage {
         esperarCarritoListo();
         By botonQuitar = By.xpath(XPATH_BOTON_QUITAR.formatted(XPathLiteral.de(nombreProducto)));
         navegador.clickYEsperarInvisible(botonQuitar);
-    }
-
-    private Navegador.ResultadoClic pulsarTramitar() {
-        esperarCarritoListo();
-        return navegador.clickYObservarUrlContiene(
-                BOTON_CHECKOUT,
-                ConfigReader.getRequired("route.checkout.information"));
     }
 
     /** El carrito está listo cuando su URL, su título, su contenedor y el botón de tramitar son visibles. */
