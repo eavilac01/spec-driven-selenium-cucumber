@@ -51,14 +51,14 @@
 | Interacción con postcondición | `click(By)`, `clickYEsperarTexto(By, String)`, `clickYEsperarUrlContiene(By, String)`, `escribir(By, String)`, `desplazarA(By)` | `BasePage.java:47-66`, `:149-152` |
 | Lectura | `esperarVisible(By)` (sin retorno), `texto(By): String`, `textos(By): List<String>`, `esVisible(By): boolean`, `esperarInvisible(By)` | `BasePage.java:43-45`, `:68-70`, `:127-143` |
 | Navegación, lectura inmediata *(enmienda 2026-10-13)* | `urlContiene(String): boolean`, sin espera | Nuevo en `146df90` |
-| Interacción con postcondición *(enmienda 2026-10-13)* | `clickYEsperarVisible(By, By)`, `clickYEsperarVisibleOUrlContiene(By, By, String)` y `clickYEsperarInvisible(By)`: usan el mismo clic con respaldo (`clickHastaCumplir`) que `clickYEsperarTexto` y `clickYEsperarUrlContiene`, con otra postcondición. `clickYEsperarInvisible` exige antes que el control esté visible, para que un localizador que no coincide no dé por cumplida la ausencia | Nuevos en `146df90`. La visibilidad previa, en el árbol del 2026-10-13 |
-| Interacción observada *(enmienda 2026-10-13)* | `clickYObservarUrlContiene(By, String): ResultadoClic`, con el `enum` anidado `ResultadoClic { AVANZO, NO_AVANZO, NO_DISPONIBLE }`. No exige la postcondición: `AVANZO` = la URL se alcanzó; `NO_AVANZO` = no se alcanzó tras al menos un clic efectivo; `NO_DISPONIBLE` = el control no estuvo visible y habilitado en el plazo, y no hubo clic. Quien lo llama decide si `NO_DISPONIBLE` es un resultado válido, y antes debe probar que el resto de la página cargó | Nuevo en `146df90`, donde la falta de clics lanzaba `IllegalStateException`. `NO_DISPONIBLE` sustituye a esa excepción en el árbol del 2026-10-13 |
-| Lectura *(enmienda 2026-10-13)* | `apareceEnTiempoMaximo(By): boolean`: espera, hasta el plazo, a que el elemento sea visible. `existeEnTiempoMaximo(By): boolean`: espera, hasta el plazo, a que el elemento esté presente en el DOM, visible o no. Ninguna de las dos falla si el elemento no llega | `apareceEnTiempoMaximo`: nuevo en `146df90`. `existeEnTiempoMaximo`: árbol del 2026-10-13 |
+| Interacción con postcondición *(enmienda 2026-10-13)* | `clickYEsperarVisible(By, By)`, `clickYEsperarVisibleOUrlContiene(By, By, String)` y `clickYEsperarInvisible(By)`: usan el mismo clic con respaldo (`clickHastaCumplir`) que `clickYEsperarTexto` y `clickYEsperarUrlContiene`, con otra postcondición. `clickYEsperarInvisible` exige antes que el control esté visible, para que un localizador que no coincide no dé por cumplida la ausencia | Nuevos en `146df90`. La visibilidad previa, en `0de6962` |
+| Interacción observada *(enmienda 2026-10-13)* | `clickYObservarUrlContiene(By, String): ResultadoClic`, con el `enum` anidado `ResultadoClic { AVANZO, NO_AVANZO, NO_DISPONIBLE }`. No exige la postcondición: `AVANZO` = la URL se alcanzó; `NO_AVANZO` = no se alcanzó tras al menos un clic efectivo; `NO_DISPONIBLE` = el control no estuvo visible y habilitado en el plazo, y no hubo clic. Quien lo llama decide si `NO_DISPONIBLE` es un resultado válido, y antes debe probar que el resto de la página cargó | Nuevo en `146df90`, donde la falta de clics lanzaba `IllegalStateException`. `NO_DISPONIBLE` sustituye a esa excepción en `0de6962` |
+| Lectura *(enmienda 2026-10-13)* | `apareceEnTiempoMaximo(By): boolean`: espera, hasta el plazo, a que el elemento sea visible. `existeEnTiempoMaximo(By): boolean`: espera, hasta el plazo, a que el elemento esté presente en el DOM, visible o no. Ninguna de las dos falla si el elemento no llega | `apareceEnTiempoMaximo`: nuevo en `146df90`. `existeEnTiempoMaximo`: `0de6962` |
 | Lectura estable *(enmienda 2026-10-13)* | `contarEstable(By): int`: devuelve el conteo cuando se repite en 2 sondeos consecutivos. `esVisibleEstable(By): boolean`: devuelve `true` en cuanto el elemento es visible, y `false` solo tras 2 sondeos consecutivos sin verlo. Las dos están acotadas por el plazo, sirven para afirmar ausencias y conteos, y exigen que el llamador haya comprobado antes que la página cargó | Árbol del 2026-10-13. `contarEstable` sustituye a `contar(By): int`, la lectura inmediata de `146df90` |
 
-Las filas marcadas registran la API pública que la tabla original no recogía; las cuatro primeras no se reescriben. Reflejan el `Navegador` del árbol de trabajo del 2026-10-13, que dejó `qa-automation-engineer` y estaba sin commit al redactar esta enmienda. Por eso se citan por método y no por línea. Todas cumplen este D1: reciben solo `By` y tipos de Java, no devuelven tipos de Selenium y fallan antes de `iniciar()`.
+Las filas marcadas registran la API pública que la tabla original no recogía; las cuatro primeras no se reescriben. Reflejan el `Navegador` de `0de6962` (2026-10-13). Se registró del árbol de trabajo antes del commit, y después se comprobó que coincide (*Enmiendas*, 2026-10-13). Por eso se citan por método y no por línea. Todas cumplen este D1: reciben solo `By` y tipos de Java, no devuelven tipos de Selenium y fallan antes de `iniciar()`.
 
-- **Tope de clics** (árbol del 2026-10-13). `clickHastaCumplir` y `clickYObservarUrlContiene` pulsan como mucho `MAXIMO_CLICS_POR_ACCION = 3` veces: 1 clic nativo y, como máximo, 2 de respaldo JavaScript.
+- **Tope de clics** (`0de6962`). `clickHastaCumplir` y `clickYObservarUrlContiene` pulsan como mucho `MAXIMO_CLICS_POR_ACCION = 3` veces: 1 clic nativo y, como máximo, 2 de respaldo JavaScript.
   - Con el tope agotado no pulsan más; solo esperan la postcondición dentro del plazo.
   - Si el plazo se agota, `clickHastaCumplir` lanza `TimeoutException` con el localizador, los clics efectivos y el plazo, y nunca con el texto escrito.
   - Antes, el respaldo JavaScript se repetía sin límite dentro del plazo. Un control que alterna su estado (agregar y quitar) podía revertirse con un clic de más.
@@ -74,16 +74,17 @@ Las filas marcadas registran la API pública que la tabla original no recogía; 
     - `<url>` es la que recibió `abrir`, que las páginas componen desde la configuración (`LoginPage.abrir`, `InventoryPage.solicitarDirectamente`).
     - `<código>` sale solo de un patrón `net::ERR_[A-Z0-9_]+`. Si no hay uno válido, es `código no disponible`.
     - Nunca incluye texto de la página ni del driver (PI-05). Se registra en ERROR.
-  - En el árbol del 2026-10-13, el caso 1 registra además un DEBUG con SLF4J que solo lleva el nombre de la clase de la excepción y el código validado. No lleva el texto del driver ni la causa (PI-05, PI-09).
+  - Desde `0de6962`, el caso 1 registra además un DEBUG con SLF4J que solo lleva el nombre de la clase de la excepción y el código validado. No lleva el texto del driver ni la causa (PI-05, PI-09).
+  - Desde `0de6962`, el código del mensaje del driver solo se extrae si está completo. Un código seguido de otro carácter de palabra (por ejemplo `net::ERR_ABCdef`) se descarta en lugar de truncarse, y el mensaje dice `código no disponible`. Su detección como fallo de navegación no cambia.
   - No reintenta (CHK-02).
   - **Dónde vive la lógica.** Clasificar el mensaje y la URL, validar el código y componer el mensaje es lógica pura. Vive en `src/main/java/com/demo/config/BrowserErrorPage.java`, con pruebas unitarias y PIT. Cumple el criterio D1 del ADR-001, porque un defecto en sus guardas pasaría inadvertido para la suite. La arista `transport` → `config` ya la permite D4.
   - El mismo commit agrega `--disable-component-update` a los argumentos de Chrome en `BrowserSettings` (D8).
 - **`ResultadoClic`** es un tipo de Java del transporte, no de Selenium, así que cumple R1. Solo lo usan las páginas, dentro de su código: `CartPage.iniciarCheckout`, su método privado `pulsarTramitar` y `CartPage.intentarIniciarCheckout`.
-  - En el árbol del 2026-10-13, `intentarIniciarCheckout` solo acepta "no se puede tramitar" (`NO_DISPONIBLE`) con prueba positiva: el carrito cargó y el botón de tramitar está presente en el DOM (`existeEnTiempoMaximo`) pero deshabilitado u oculto.
+  - Desde `0de6962`, `intentarIniciarCheckout` solo acepta "no se puede tramitar" (`NO_DISPONIBLE`) con prueba positiva: el carrito cargó y el botón de tramitar está presente en el DOM (`existeEnTiempoMaximo`) pero deshabilitado u oculto.
   - Si el botón no existe, falla cerrado con `IllegalStateException`, porque un botón eliminado no se distingue de un localizador roto.
   - El estado lo observa después `permaneceEnCarrito`.
   - **Restricción (enmienda 2026-10-13):** ningún método público de una página recibe ni devuelve `ResultadoClic`. Si una página lo expusiera, una acción podría recibirlo con `var` sin nombrar `com.demo.transport`, y R6 no lo vería: es el punto ciego que D6 cierra en el origen.
-  - Se cumple, en `afb6693` y en el árbol del 2026-10-13: `git grep -nP '^\s*public\b.*\bResultadoClic\b' -- src/test/java/com/demo/pages` no da salida (rc=1). Incorporarla a CHK-17 queda como P2 (*Enmiendas*, 2026-10-13).
+  - Se cumple, en `afb6693` y en `0de6962`: `git grep -nP '^\s*public\b.*\bResultadoClic\b' -- src/test/java/com/demo/pages` no da salida (rc=1). Incorporarla a CHK-17 queda como P2 (*Enmiendas*, 2026-10-13).
 
 - **Algoritmos de sincronización.** Los de `BasePage.java:72-125` (clic y escritura con sus respaldos) se **mueven sin cambios**, y el diff se revisa como movimiento (*Criterio de verificación*).
 - **Lo que no puede cambiar al moverlos:**
@@ -479,7 +480,12 @@ El estado del ADR y D1–D8 no cambian. **Enmienda aprobada por el coordinador e
   - el DEBUG de `abrir`.
   - Además, un cambio privado: `esperarValorEstable` registra en INFO cuántas correcciones hicieron falta, sin el texto escrito.
   - El registro debía corresponder a los blobs `7432d07…` y luego `83ff5b8…` que citó el coordinador, pero ninguno está en la base de objetos (`git diff` y `git show` responden `bad object`), y `git hash-object` no está en B-01. Por eso se registró el archivo leído del árbol tras el segundo aviso. Quien haga el commit confirma que coincide, y su hash completa esta enmienda.
-- Las condiciones de `Navegador` del *Criterio de verificación* se cumplen en `afb6693` y en el árbol del 2026-10-13.
+  - **Completado: `0de6962`** (2026-10-13, firmado). Contiene estos cambios en `Navegador`, `CartPage` (`NO_DISPONIBLE` falla cerrado sin el botón) e `InventoryPage` (`BOTONES_QUITAR`).
+    - También contiene la extracción estricta del código en `BrowserErrorPage`, con sus pruebas, y un ajuste de `BrowserSettingsTest`.
+    - La API pública de `Navegador` en `0de6962` es la de la tabla de D1, incluido `existeEnTiempoMaximo` (`git grep -n "public " 0de6962 -- src/test/java/com/demo/transport/Navegador.java`).
+    - `git diff --stat 0de6962 HEAD -- src/test/java/com/demo/transport/Navegador.java src/test/java/com/demo/pages/CartPage.java` no da salida.
+    - El verifier lo aprobó, según el coordinador.
+- Las condiciones de `Navegador` del *Criterio de verificación* se cumplen en `afb6693` y en el árbol del 2026-10-13, hoy `0de6962`.
   - El primer argumento de cada `executeScript` es una constante o un literal: los de `desplazarA`, `esperarValorEstable` y el respaldo de clic (en `afb6693`, `Navegador.java:161`, `:224`, `:327` y `:355-358`; en el árbol, el respaldo vive en el método privado `pulsar`).
   - `ejecutarScriptConstante` recibe el script por parámetro, pero su único llamador le pasa `SCRIPT_LEER_CODIGO_PAGINA_ERROR`.
   - Se comprueba con `git grep -n -e "executeScript" -e "ejecutarScriptConstante(" -- src/test/java/com/demo/transport`.
@@ -549,8 +555,14 @@ El estado del ADR y D1–D8 no cambian. **Enmienda aprobada por el coordinador e
 - CHK-10: sin cambios. Sigue siendo el control de la rama que queda.
 - `README.md:317` ("se convierte de forma segura en un literal XPath") pasa a decir que el valor se inserta entre comillas simples y que uno con comilla simple se rechaza. `README.md` no tiene dueño en la matriz: el usuario designa quién lo edita.
 
+*Aplicado (2026-10-13):*
+- **`25865e8`** (firmado): solo cambia `XPathLiteral.java`, como pide el paso 2 (`git show --stat 25865e8`).
+  - El código es el del paso 1: el mensaje es literal, y el `'…'` se devuelve sin más ramas.
+  - El verifier lo aprobó, incluidos los pasos 2 y 3, según el coordinador.
+- **`2671a20`**: `README.md` (hoy `:318`) describe las comillas simples y el rechazo al instante.
+
 **3. Referencias estables a CI.**
 - Las citas `ci.yml:<línea>` y `Jenkinsfile:<línea>` quedaron desfasadas con cada job y etapa nuevos. Desde esta fecha, este ADR cita la CI por el nombre del job, del paso o de la etapa.
 - Las citas con número de línea que quedan son registro histórico e indican su commit: *Contexto* (fila de la configuración del navegador), D6, R-4 y la enmienda de los pasos 1 a 3.
 
-**Pendientes (P2):** la restricción de `ResultadoClic` en CHK-17 (`devops-engineer`, parte 1) y `README.md:317` (usuario, parte 2).
+**Pendientes (P2):** la restricción de `ResultadoClic` en CHK-17 (`devops-engineer`, parte 1) y `README.md:317` (usuario, parte 2). *(Al cierre del 2026-10-13: `README.md:317` está hecho en `2671a20`. La restricción de `ResultadoClic` la implementa devops, y D7 se enmendará con su regla exacta.)*

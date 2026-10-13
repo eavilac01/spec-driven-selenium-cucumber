@@ -130,6 +130,8 @@ Las citas `archivo:línea` son de `afb6693`. Los archivos citados no cambian en 
 
 ## Cambios propuestos a documentación
 
+Todos están aplicados (2026-10-13): `AGENTS.md` y `README.md` en `2671a20`, y la aclaración opcional de PI-08 en `4f3a7a2`. Las líneas de la columna *Archivo* son las de antes de esos commits.
+
 | Archivo | Cambio | Quién |
 |---|---|---|
 | `AGENTS.md:48` | "Configuración con precedencia `-D` > variable de entorno > `config.properties`; los valores esperados (`*.expected*`) y las URL (`base.url`, `remote.url`) solo aceptan `-D` y `config.properties` (ADR-003); los valores esperados salen de la spec." `AGENTS.md:20` ya usa `-Dremote.url` y no cambia | Usuario (P-01) |
@@ -143,10 +145,10 @@ Las citas `archivo:línea` son de `afb6693`. Los archivos citados no cambian en 
 | Paso | Dueño | Qué | Verde si | Estado |
 |---|---|---|---|---|
 | 0 | Coordinador | Aprueba este ADR | — | Hecho (aprobado por el coordinador, 2026-10-13; D5 por decisión del usuario, 2026-10-13) |
-| 1 | `qa-automation-engineer` | D1 a D3 y D5, en un commit: primero las pruebas, después `ConfigResolver` y `ConfigReader` (*Pasos para el engineer*) | *Criterio de verificación* | Pendiente |
-| 2 | `qa-test-verifier` | *Criterio de verificación* completo | APROBADO | Pendiente |
-| 3 | `devops-engineer` | Gate. Es CRÍTICO: toca `src/main/java/com/demo/config/`. Incluye `-Dremote.url` contra el Grid local (`docker compose`) o el job `e2e-grid` en verde | APROBADO | Pendiente |
-| 4 | Usuario | *Cambios propuestos a documentación* | — | Pendiente |
+| 1 | `qa-automation-engineer` | D1 a D3 y D5, en un commit: primero las pruebas, después `ConfigResolver` y `ConfigReader` (*Pasos para el engineer*) | *Criterio de verificación* | Hecho (`2c33885`, *Enmiendas*) |
+| 2 | `qa-test-verifier` | *Criterio de verificación* completo | APROBADO | Hecho (APROBADO, según el coordinador: controles positivos, CHK-10 de regresión y PIT 129/129) |
+| 3 | `devops-engineer` | Gate. Es CRÍTICO: toca `src/main/java/com/demo/config/`. Incluye `-Dremote.url` contra el Grid local (`docker compose`) o el job `e2e-grid` en verde | APROBADO | En curso (2026-10-13) |
+| 4 | Usuario | *Cambios propuestos a documentación* | — | Hecho (`2671a20` y, PI-08, `4f3a7a2`) |
 
 ### Pasos para el engineer
 
@@ -252,3 +254,21 @@ Este ADR se escribió sin ejecutar nada: solo se leyeron archivos y se buscó co
 | R-3 | `base.url` y `remote.url` siguen aceptando el entorno (`BASE_URL`, `REMOTE_URL`) | Se propuso como P2 → `main` | **Cerrado por D5:** el usuario decidió el 2026-10-13 que solo admitan `-D` y `config.properties` |
 | R-4 | Ninguna clave futura que no sea un esperado ni un destino tendrá un segmento que empiece por `expected` ni terminará en `url` | Revisión de cada clave nueva | Falla cerrado: la clave pierde el entorno. Si dependía solo del entorno, falla con "no tiene valor", o se ejecuta en local si es una URL opcional |
 | R-5 | El aviso de D3 sigue funcionando, aunque vive en una fachada que PIT no muta | La tabla de CHK-10 de regresión exige el aviso en cada ejecución | Si se rompe, solo se pierde la visibilidad. El bloqueo de D2 está en `src/main`, cubierto por PIT |
+
+## Enmiendas
+
+### 2026-10-13 — Implementación (pasos 1, 2 y 4)
+
+Las decisiones no cambian.
+- **Paso 1, `2c33885`** (firmado). Toca solo `ConfigResolver`, `ConfigResolverTest` y `ConfigReader` (`git show --stat 2c33885`). Contiene:
+  - `EXPECTED_KEY` y `NETWORK_DESTINATION_KEY` con las expresiones de D1 y D5 (`ConfigResolver.java:27`, `:29`);
+  - la regla única `acceptsEnvironment` (`:130`), consultada en `resolve` (`:117`);
+  - `overridesExpectedValue` (`:104`);
+  - en `ConfigReader`, el aviso de D3 con `ConcurrentHashMap.newKeySet()` y sin el valor (`ConfigReader.java:20`, `:63-64`).
+  - `ConfigResolverTest` reemplaza el caso del P2 por `environmentDoesNotOverrideExpectedKeys` y suma pruebas para los casos a–m. Agrega `networkDestinationOnlyInEnvironmentIsAbsent`, que no estaba en los pasos.
+  - Las citas son de `2c33885`.
+- **Paso 2:** APROBADO del verifier, según el coordinador, con los controles positivos de D2 y D5, la CHK-10 de regresión con el aviso y PIT 129/129.
+- **Paso 4:**
+  - `2671a20` aplica en `AGENTS.md:48` y en `README.md` (hoy `:298`, `:304` y `:308`) los textos de *Cambios propuestos a documentación*.
+  - `4f3a7a2` aplica la aclaración opcional de PI-08 (`.claude/rules/03-prompt-injection.md:35`).
+- **Pendiente:** el paso 3. Es el gate CRÍTICO de `devops-engineer`, con `-Dremote.url` contra el Grid.
