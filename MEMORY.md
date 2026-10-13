@@ -6,7 +6,7 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 - Suite 146 en verde (local, `not @quarantine`): 21 E2E (22 AC de login y compra) + 125 unitarias; PIT 91/91.
 - Specs `docs/specs/login.md` y `compra.md` con todos sus AC verificables y cubiertos (valores ratificados tras exploración, 2026-10-10).
 - CHK-10 demostrado en cada AC: cada control negativo falla en el `Then`.
-- AC-COMPRA-09 en cuarentena `defecto-sut` (SauceDemo deja comprar con carrito vacío); CHK-14 y job `quarantine` informativo.
+- AC-COMPRA-09 en cuarentena `defecto-sut` (SauceDemo deja comprar con carrito vacío); CHK-14; el job `quarantine` (`evaluate-quarantine-run.sh`) queda verde con el fallo esperado y rojo solo ante errores reales.
 - Package `com.demo`, Maven Wrapper, reportes Allure y HTML de Cucumber.
 - Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…17).
 - ADR-001 (mutación con PIT) completo: `src/main` puro (`ConfigResolver`, `DotEnvParser`, `SecretResolver`, `BrowserSettings`, `Credentials`); PIT 89/89; job `mutation` con guarda de reporte.
@@ -48,4 +48,4 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 ## Próximos pasos
 1. P1 (engineer): `Navegador.abrir` debe fallar al instante ante una página de error de Chrome (`net::ERR_*`); probar `--disable-component-update`. Flake solo bajo carga (PIT en paralelo).
 2. P2: API nueva de `Navegador` en la tabla del ADR-002; `XPathLiteral` sin pruebas; `clickHastaCumplir` sin acotar; lecturas inmediatas de "no se muestra"; AC-COMPRA-09 si el SUT deshabilita el botón; naming `long` de Cucumber.
-3. P2: el entorno puede sobrescribir claves `*.expected*`; R-4 abierto solo para Jenkins (sin servidor).
+3. P2: el entorno puede sobrescribir claves `*.expected*`; R-4 abierto solo para Jenkins (sin servidor); decidir si un `<error>` en una cuarentena `inestable` debe ser solo aviso.

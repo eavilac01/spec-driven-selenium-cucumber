@@ -214,11 +214,13 @@ Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-00
 ├── scripts
 │   ├── check-layers.sh            # CHK-17: reglas de capas
 │   ├── check-mutation-report.sh   # CHK-11: guarda del reporte de PIT
+│   ├── check-quarantine.sh        # CHK-14: registro de cuarentena frente a @quarantine
+│   ├── evaluate-quarantine-run.sh # evalúa el job quarantine (fallo esperado vs. error real)
 │   ├── check-required-secrets.sh  # CI/Jenkins: nombra los secrets que faltan
 │   ├── check-traceability.sh      # CHK-12: escenario → spec aprobada
 │   ├── check-unit-purity.sh       # CHK-15/16: src/main puro y unitarias aisladas
 │   ├── wait-for-grid.sh           # espera activa a que el Grid esté listo
-│   └── tests/check-layers-test.sh # autoprueba de CHK-17
+│   └── tests/                     # autopruebas de CHK-17, CHK-14 y del evaluador de cuarentena
 ├── src/main/java/com/demo      # lógica pura, sin E/S (ADR-001)
 │   ├── config
 │   │   ├── BrowserSettings.java
@@ -525,7 +527,7 @@ Para comprobar la evidencia durante desarrollo, puede cambiarse temporalmente un
 | `e2e-firefox` | Los escenarios E2E en Firefox headless | Sí |
 | `e2e-grid` | Los escenarios E2E contra un Selenium Grid (`selenium/standalone-chrome`), con espera activa a que esté listo | Sí |
 | `mutation` | CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
-| `quarantine` | Solo los escenarios `@quarantine`, de forma **informativa** (`continue-on-error`): no bloquea el pipeline y avisa si alguno empieza a pasar | Sí |
+| `quarantine` | Solo los escenarios `@quarantine`, evaluados por `scripts/evaluate-quarantine-run.sh` contra `docs/quarantine.md`: **verde** si un `defecto-sut` falla por aserción (lo esperado); **verde con aviso** si un `defecto-sut` pasa (revisar la spec); **rojo** solo si la cuarentena no mide nada (error o timeout, cero escenarios, sin reporte o fallo de compilación) | Sí |
 
 Cada job publica sus reportes como artefactos aunque falle. Los jobs con secrets los verifican al inicio con `scripts/check-required-secrets.sh`, que solo nombra las variables que faltan.
 
@@ -547,7 +549,7 @@ El `Jenkinsfile` declarativo está listo para un servidor Jenkins, aunque todav�
 2. `Traceability SDD (CHK-12)`, `Capas (CHK-17)` y `Cuarentena reglada (CHK-14)`.
 3. `Mutation (CHK-11)`: PIT con la guarda de reporte, sin credenciales.
 4. `Test`: la suite sin `@quarantine`; recibe credenciales.
-5. `Cuarentena (informativa)`: solo los escenarios `@quarantine`; si fallan, la etapa queda inestable sin romper el build. También recibe credenciales.
+5. `Cuarentena (CHK-14)`: solo los escenarios `@quarantine`, con la misma evaluación que en GitHub. Fallo esperado: etapa verde. Un `defecto-sut` que pasa: etapa inestable. Error real: falla el build. También recibe credenciales.
 6. `post` de `Test`: publica JUnit y Allure y archiva los reportes, aunque una prueba falle. `Mutation` archiva su reporte y `pit.log`. El `post` global limpia el espacio de trabajo.
 
 Incluye límites de tiempo globales y por etapa, descarte de builds antiguos y builds no concurrentes. Los bloques de shell de varias órdenes corren en bash con `set -euo pipefail`, y todos usan comillas simples para que Groovy no interpole ningún valor.
@@ -610,7 +612,7 @@ Una prueba nunca se desactiva ni se borra para que el pipeline pase. La única v
 | `inestable` | Una prueba falla de forma intermitente sin cambios de código | Máximo 14 días | Se corrige la causa raíz |
 | `defecto-sut` | La aplicación incumple la spec (defecto conocido del sistema bajo prueba) | Revisión cada 90 días | La aplicación se corrige: el escenario pasa y se quita la etiqueta |
 
-Hoy hay un caso: **AC-COMPRA-09**. La regla de negocio dice que no se puede comprar con el carrito vacío, pero SauceDemo lo permite. La prueba exige la regla, así que falla y deja el defecto visible en el job `quarantine` sin bloquear el resto del pipeline.
+Hoy hay un caso: **AC-COMPRA-09**. La regla de negocio dice que no se puede comprar con el carrito vacío, pero SauceDemo lo permite. La prueba exige la regla, así que falla por aserción y el job `quarantine` lo reporta como **fallo esperado** (en verde, con una nota en el resumen del run). Si algún día SauceDemo se corrige, el escenario pasará y el job emitirá un aviso para revisar la spec y quitarlo de la cuarentena.
 
 ## Solución de problemas
 
