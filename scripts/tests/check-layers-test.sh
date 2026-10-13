@@ -11,7 +11,10 @@
 #     ResultadoClic público en transport y solo dentro de una página);
 #   - exit 1, con la línea "archivo:línea: R<n>: motivo" esperada, por cada
 #     comando de D7, por la ampliación de R3 y por la restricción de
-#     ResultadoClic de D1, con la violación versionada y sin versionar;
+#     ResultadoClic de D1, con la violación versionada y sin versionar; las
+#     comprobaciones de firmas y tipos (Firmas expuestas, D7) tienen además un
+#     caso en la columna 0, con anotación, con otro modificador y con
+#     protected, y los elementos de MOD los suyos (EXP-*);
 #   - exit 1 con una violación en un archivo versionado que coincide con
 #     .gitignore, y exit 0 si ese archivo no está versionado;
 #   - exit 1 ("directorio:0: D6: …") por cada directorio de capa ausente o
@@ -485,6 +488,40 @@ allowed "ok-10 método público con ResultadoClic como sufijo" "$T/pages/OtraPag
   '    public boolean esResultadoClic() {'
 allowed "ok-11 método público con ResultadoClic como prefijo" "$T/pages/OtraPage.java" \
   '    public int ResultadoClicados() {'
+# Firmas expuestas (D7, enmienda 2026-10-13): casi-coincidencias de EXP (MOD,
+# modificador de acceso y \b final) y de TIPO (\b, \s+ y \w final).
+allowed "ok-12 anotación y private en una página" "$T/pages/OtraPage.java" \
+  '    @SuppressWarnings("unused") private Navegador.ResultadoClic pulsar() {'
+allowed "ok-13 miembro de paquete con modificador en una página" "$T/pages/OtraPage.java" \
+  '    static Navegador.ResultadoClic pulsar() {'
+allowed "ok-14 variable local con final en una página" "$T/pages/OtraPage.java" \
+  '        final Navegador.ResultadoClic resultado = pulsar();'
+allowed "ok-15 identificador que termina en public en una página" "$T/pages/OtraPage.java" \
+  '        boolean nonpublic = resultado == Navegador.ResultadoClic.AVANZO;'
+allowed "ok-16 identificador que empieza por protected en una página" "$T/pages/OtraPage.java" \
+  '        protectedMode(Navegador.ResultadoClic.AVANZO);'
+allowed "ok-17 comentario de línea en una página" "$T/pages/OtraPage.java" \
+  '    // @Override public Navegador.ResultadoClic pulsar() {'
+allowed "ok-18 Javadoc en una página" "$T/pages/OtraPage.java" \
+  '     * static public Navegador.ResultadoClic pulsar() no es API de la página'
+allowed "ok-19 cadena en una página" "$T/pages/OtraPage.java" \
+  '        String plantilla = "@Override public Navegador.ResultadoClic x()";'
+allowed "ok-20 constructor anotado de acciones con páginas (D3)" "$T/actions/OtraActions.java" \
+  '    @Inject public OtraActions(LoginPage loginPage) {'
+allowed "ok-21 constructor protegido de acciones con páginas" "$T/actions/OtraActions.java" \
+  '    protected OtraActions(LoginPage loginPage) {'
+allowed "ok-22 método privado anotado de acciones con una página" "$T/actions/OtraActions.java" \
+  '    @SuppressWarnings("unused") private void usar(LoginPage pagina) {'
+allowed "ok-23 interfaz privada en transport" "$T/transport/Otro.java" \
+  '    private interface Condicion { boolean cumple(); }'
+allowed "ok-24 record de paquete en una página" "$T/pages/OtraPage.java" \
+  '    record Fila(String nombre, int cantidad) {}'
+allowed "ok-25 método que empieza por record en una página" "$T/pages/OtraPage.java" \
+  '    public void recordar() {'
+allowed "ok-26 campo llamado record en una página" "$T/pages/OtraPage.java" \
+  '    public String record = "";'
+allowed "ok-27 tipo que termina en record en una página" "$T/pages/OtraPage.java" \
+  '    public void guardar(Autorecord registro) {'
 
 # Un caso negativo por comando de D7 (D7-01…D7-19 son los git grep; D7-20 es
 # la presencia de directorios) y por la ampliación de R3 (R3-param).
@@ -584,6 +621,76 @@ violation "D1-rc-c" R6 "ResultadoClic en un miembro público de una página" \
   "$T/pages/BadPage.java" '    public void decidir(Navegador.ResultadoClic resultado) {'
 violation "D1-rc-d" R6 "ResultadoClic en un miembro público de una página" \
   "$T/pages/BadPage.java" '    public static final Navegador.ResultadoClic INICIAL = null;'
+# Firmas expuestas (D7, enmienda 2026-10-13): en cada comprobación de firmas,
+# public en la columna 0, una anotación o un modificador delante y protected.
+violation "D7-03-col0" R1 "tipo de Selenium en una firma pública del transporte" \
+  "$T/transport/Bad.java" 'public WebElement buscar(By locator) {'
+violation "D7-03-anot" R1 "tipo de Selenium en una firma pública del transporte" \
+  "$T/transport/Bad.java" '    @Override public WebElement buscar(By locator) {'
+violation "D7-03-mod" R1 "tipo de Selenium en una firma pública del transporte" \
+  "$T/transport/Bad.java" '    static public WebDriver crear() {'
+violation "D7-03-prot" R1 "tipo de Selenium en una firma pública del transporte" \
+  "$T/transport/Bad.java" '    protected WebDriver driver() {'
+violation "D7-04-col0" R1 "By en una firma pública de una página" \
+  "$T/pages/BadPage.java" 'public void pulsar(By locator) {'
+violation "D7-04-anot" R1 "By en una firma pública de una página" \
+  "$T/pages/BadPage.java" '    @Deprecated public void pulsar(By locator) {'
+violation "D7-04-mod" R1 "By en una firma pública de una página" \
+  "$T/pages/BadPage.java" '    final public void pulsar(By locator) {'
+violation "D7-04-prot" R1 "By en una firma pública de una página" \
+  "$T/pages/BadPage.java" '    protected static final By TITULO = By.className("title");'
+# Interfaces, anotaciones y records expuestos en transport y pages (R1-tipos).
+violation "R1-tipos" R1 "interfaz, anotación o record expuesto en transport o pages" \
+  "$T/pages/BadPage.java" 'public interface Pulsable {'
+violation "R1-tipos-b" R1 "interfaz, anotación o record expuesto en transport o pages" \
+  "$T/pages/BadPage.java" '    public @interface Marca {'
+violation "R1-tipos-c" R1 "interfaz, anotación o record expuesto en transport o pages" \
+  "$T/pages/BadPage.java" '    static public record Estado(boolean visible) {}'
+violation "R1-tipos-d" R1 "interfaz, anotación o record expuesto en transport o pages" \
+  "$T/pages/BadPage.java" '    protected interface Pulsable {'
+violation "R1-tipos-e" R1 "interfaz, anotación o record expuesto en transport o pages" \
+  "$T/transport/Bad.java" '    @FunctionalInterface public interface Condicion {'
+violation "D7-06-col0" R3 "página en el tipo de retorno de un método público de actions" \
+  "$T/actions/Bad.java" 'public LoginPage pagina() {'
+violation "D7-06-anot" R3 "página en el tipo de retorno de un método público de actions" \
+  "$T/actions/Bad.java" '    @Deprecated public LoginPage pagina() {'
+violation "D7-06-mod" R3 "página en el tipo de retorno de un método público de actions" \
+  "$T/actions/Bad.java" '    synchronized public LoginPage pagina() {'
+violation "D7-06-prot" R3 "página en el tipo de retorno de un método público de actions" \
+  "$T/actions/Bad.java" '    protected LoginPage pagina() {'
+violation "R3-param-col0" R3 "página como parámetro de un método público de actions" \
+  "$T/actions/Bad.java" 'public void usar(LoginPage pagina) {'
+violation "R3-param-anot" R3 "página como parámetro de un método público de actions" \
+  "$T/actions/Bad.java" '    @Override public void usar(LoginPage pagina) {'
+violation "R3-param-mod" R3 "página como parámetro de un método público de actions" \
+  "$T/actions/Bad.java" '    final public void usar(LoginPage pagina) {'
+violation "R3-param-prot" R3 "página como parámetro de un método público de actions" \
+  "$T/actions/Bad.java" '    protected void usar(LoginPage pagina) {'
+# Interfaces, anotaciones y records expuestos en actions (R3-tipos).
+violation "R3-tipos" R3 "interfaz, anotación o record expuesto en actions" \
+  "$T/actions/Bad.java" 'public interface Flujo {'
+violation "R3-tipos-b" R3 "interfaz, anotación o record expuesto en actions" \
+  "$T/actions/Bad.java" '    public record Resumen(String total, int cantidad) {}'
+violation "R3-tipos-c" R3 "interfaz, anotación o record expuesto en actions" \
+  "$T/actions/Bad.java" '    @Deprecated protected interface Paso {'
+violation "D1-rc-col0" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" 'public Navegador.ResultadoClic pulsar() {'
+violation "D1-rc-anot" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" '    @Override public ResultadoClic x() {'
+violation "D1-rc-mod" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" '    static public Navegador.ResultadoClic pulsar() {'
+violation "D1-rc-prot" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" '    protected Navegador.ResultadoClic pulsar() {'
+# Elementos de MOD: anotación con argumentos, calificada, dos elementos antes
+# de public y non-sealed (columna 0).
+violation "EXP-args" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" '    @Deprecated(since = "1") public Navegador.ResultadoClic pulsar() {'
+violation "EXP-calif" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" '    @java.lang.Deprecated public Navegador.ResultadoClic pulsar() {'
+violation "EXP-dos" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" '    @Deprecated final public Navegador.ResultadoClic pulsar() {'
+violation "EXP-ns" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" 'non-sealed public class BadPage implements Supplier<Navegador.ResultadoClic> {'
 
 # Archivos que coinciden con .gitignore: --untracked omite incluso los
 # versionados (git 2.53), así que el script hace también una pasada sobre el

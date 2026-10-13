@@ -4,8 +4,8 @@
 # Uso: bash scripts/check-layers.sh [raíz]   (raíz por defecto: .)
 #
 # Ejecuta los comandos de D7 tal como están especificados (git grep
-# --untracked -nP, con exclusiones ":!") más una ampliación de R3 y la
-# restricción de ResultadoClic de D1 (ver abajo).
+# --untracked -nP, con exclusiones ":!"), incluidas la ampliación de R3, la
+# restricción de ResultadoClic de D1 y las firmas expuestas (ver abajo).
 # Cada comando pasa si no produce salida.
 #
 # Cada comando corre en dos pasadas, y la salida se une sin duplicados:
@@ -41,27 +41,37 @@
 # La presencia de los directorios de capa usa git ls-files: exige archivos
 # versionados (o en el índice).
 #
-# Ampliación de R3 (separada de D7 a propósito; el arquitecto enmendará D7):
-# el comando de D7 '^\s*public\b[^(]*\b\w+Page\b[^(]*\(' solo detecta una
-# página en el tipo de retorno: no ve "public void usar(LoginPage pagina) {".
-# El comando adicional busca un tipo *Page (en mayúscula, para no confundirlo
-# con un nombre de variable) después del "(" de un método público de actions.
-# Los constructores sí deben recibir páginas (D3), así que se excluyen con
-# (?!\s+\w+\s*\(): un constructor es el único miembro con un solo
-# identificador entre "public" y "("; un método lleva además el tipo de
-# retorno. Busca hasta el final de la línea (no se detiene en ")"), así que una
-# anotación con argumentos no oculta el parámetro; a cambio, una línea con
-# cuerpo que cree una página da un falso positivo, que falla cerrado.
-# Riesgo residual aceptado (D6, R-5): firmas partidas en varias líneas.
+# Firmas expuestas (D7, enmienda 2026-10-13). En R1, R3 y R6, una firma o un
+# miembro "público" es una declaración expuesta: una línea que, después de
+# espacios, anotaciones y modificadores, lleva public o protected (EXP). MOD es
+# un elemento de ese prefijo: una anotación, simple o calificada, con o sin
+# argumentos, o un modificador (non-sealed o cualquier palabra en minúsculas;
+# una lista cerrada fallaría abierto ante un modificador nuevo). TIPO es una
+# interfaz, una anotación (@interface) o un record expuestos: sus miembros son
+# públicos sin escribir public, así que en transport, pages y actions se
+# rechazan (R1-tipos y R3-tipos). MOD, EXP y TIPO se definen una sola vez, y
+# las siete comprobaciones de firmas y tipos los usan.
+# Una línea que empieza por "//", "*", una cadena o un nombre en mayúscula no
+# coincide con EXP: pasan comentarios, cadenas, variables locales y miembros
+# privados o de paquete.
+#
+# R3 en acciones: el tipo de retorno se busca hasta el primer "("; la página
+# como parámetro, como un tipo *Page (en mayúscula, para no confundirlo con un
+# nombre de variable) después del "(" de un método expuesto. Los constructores
+# sí reciben páginas (D3) y se excluyen con (?!\s+\w+\s*\(): un constructor es
+# el único miembro con un solo identificador entre el modificador de acceso y
+# "(". Busca hasta el final de la línea, así que una anotación con argumentos
+# no oculta el parámetro; a cambio, una línea con cuerpo que cree una página da
+# un falso positivo, que falla cerrado.
 #
 # Restricción de D1 (enmienda 2026-10-13), en la fila de pages de R6: ningún
-# miembro público de una página recibe ni devuelve Navegador.ResultadoClic.
+# miembro expuesto de una página recibe ni devuelve Navegador.ResultadoClic.
 # Si una página lo expusiera, una acción podría recibirlo con "var" sin nombrar
-# com.demo.transport, y la línea de actions de R6 no lo vería. La expresión
-# '^\s*public\b.*\bResultadoClic\b' cubre el tipo de retorno, los parámetros y
-# los campos públicos, calificado (Navegador.ResultadoClic) o importado. El uso
-# dentro del cuerpo o en un método privado no empieza por "public" y pasa.
-# Mismo riesgo residual: una firma pública partida en varias líneas.
+# com.demo.transport, y la línea de actions de R6 no lo vería.
+#
+# Riesgo residual aceptado (D6, R-5): firmas, cabeceras y anotaciones partidas
+# en varias líneas, y texto que no sea espacio, anotación ni modificador antes
+# del modificador de acceso.
 #
 # Solo bash, coreutils, git (con PCRE), grep y awk POSIX (compatible con mawk).
 set -euo pipefail
@@ -91,6 +101,11 @@ if [ "$(cd "$toplevel" && pwd -P)" != "$(pwd -P)" ]; then
 fi
 
 T=src/test/java/com/demo
+# Declaración expuesta (Firmas expuestas, D7): espacios, anotaciones y
+# modificadores antes de public o protected.
+MOD='(?:@[\w.]+(?:\(.*\))?|non-sealed|[a-z]+)\s+'
+EXP='^\s*(?:'"$MOD"')*(?:public|protected)\b'
+TIPO="$EXP"'.*\b(?:interface|record)\s+\w'
 status=0
 
 errf="$(mktemp)"
@@ -132,19 +147,26 @@ check R1 "Selenium fuera de transport y pages" \
   'org\.openqa' -- src ":!$T/transport" ":!$T/pages"
 check R1 "en pages solo se permite 'import org.openqa.selenium.By;'" \
   'org\.openqa(?!\.selenium\.By;$)' -- "$T/pages"
-# R1: firmas públicas
+# R1: firmas públicas (expuestas)
 check R1 "tipo de Selenium en una firma pública del transporte" \
-  '^\s*public\b.*\b(Web[A-Z]\w*|SearchContext|JavascriptExecutor|TakesScreenshot|Capabilities|\w+Options)\b' -- "$T/transport"
+  "$EXP"'.*\b(Web[A-Z]\w*|SearchContext|JavascriptExecutor|TakesScreenshot|Capabilities|\w+Options)\b' -- "$T/transport"
 check R1 "By en una firma pública de una página" \
-  '^\s*public\b.*\bBy\b' -- "$T/pages"
+  "$EXP"'.*\bBy\b' -- "$T/pages"
+#   … sin interfaces, anotaciones ni records expuestos
+check R1 "interfaz, anotación o record expuesto en transport o pages" \
+  "$TIPO" -- "$T/transport" "$T/pages"
 # R3: steps sin páginas ni transporte; acciones sin páginas en sus firmas públicas
 check R3 "steps nombran pages o transport" \
   'com\.demo\.(pages|transport)\b' -- "$T/steps"
+#   … página como tipo de retorno
 check R3 "página en el tipo de retorno de un método público de actions" \
-  '^\s*public\b[^(]*\b\w+Page\b[^(]*\(' -- "$T/actions"
-# R3 (ampliación, fuera de D7): página como parámetro; constructores exceptuados
+  "$EXP"'[^(]*\b\w+Page\b[^(]*\(' -- "$T/actions"
+#   … página como parámetro (constructores exceptuados)
 check R3 "página como parámetro de un método público de actions" \
-  '^\s*public\b(?!\s+\w+\s*\()[^(]*\(.*\b[A-Z]\w*Page\b' -- "$T/actions"
+  "$EXP"'(?!\s+\w+\s*\()[^(]*\(.*\b[A-Z]\w*Page\b' -- "$T/actions"
+#   … sin interfaces, anotaciones ni records expuestos
+check R3 "interfaz, anotación o record expuesto en actions" \
+  "$TIPO" -- "$T/actions"
 # R4: JUnit, Cucumber y esperados en su sitio
 check R4 "JUnit fuera de steps, runners y las pruebas unitarias" \
   'org\.junit' -- src ":!$T/steps" ":!$T/runners" ":!$T/config" ":!$T/data"
@@ -166,7 +188,7 @@ check R6 "pages nombra un paquete fuera de su fila de D4" \
   'com\.demo\.(actions|steps|hooks|runners|config|data)\b' -- "$T/pages"
 # R6 (restricción de D1, enmienda 2026-10-13): ResultadoClic no sale de pages
 check R6 "ResultadoClic en un miembro público de una página" \
-  '^\s*public\b.*\bResultadoClic\b' -- "$T/pages"
+  "$EXP"'.*\bResultadoClic\b' -- "$T/pages"
 check R6 "actions nombra un paquete fuera de su fila de D4" \
   'com\.demo\.(transport|utils|steps|hooks|runners|config)\b' -- "$T/actions"
 check R6 "steps nombra un paquete fuera de su fila de D4" \

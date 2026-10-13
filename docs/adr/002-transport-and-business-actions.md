@@ -193,7 +193,7 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
   - exit 1 con cada directorio de capa ausente;
   - exit 2 con cada error de evaluación de la *Nota de ejecución* de D7.
 
-  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`; 184 desde el commit de la enmienda sobre `ResultadoClic` (según devops).
+  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`; 184 desde el commit de la enmienda sobre `ResultadoClic` (según devops). La enmienda *Firmas expuestas* prevé 280 (D7); el total real lo informa devops al implementarla.
 - **Dónde corren el script y la autoprueba:**
   - GitHub Actions: job `mutation`, pasos *Capas, autoprueba (CHK-17)* y *Capas (CHK-17)*, en paralelo a la suite y sin secrets (`ci.yml:66-84` en `f7f7a13`);
   - Jenkins: etapa `Capas (CHK-17)`, antes de la suite y fuera de `withCredentials` (`Jenkinsfile:22-29` en `f7f7a13`);
@@ -205,30 +205,40 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
 
 | Regla | Rechaza | Equivalente ArchUnit (esbozo de referencia; no se implementa) |
 |---|---|---|
-| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;`; tipos de Selenium (salvo `By`) en firmas públicas del transporte; `By` en firmas públicas de páginas | `noClasses().that().resideOutsideOfPackages("..transport..", "..pages..").should().dependOnClassesThat().resideInAPackage("org.openqa..")`; para `..pages..`, lo mismo con `.and(not(equivalentTo(By.class)))` |
+| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;`; tipos de Selenium (salvo `By`) en firmas públicas del transporte; `By` en firmas públicas de páginas; interfaces, anotaciones o records expuestos en `transport` o `pages`. "Pública" incluye `protected` (*Firmas expuestas*, enmienda 2026-10-13) | `noClasses().that().resideOutsideOfPackages("..transport..", "..pages..").should().dependOnClassesThat().resideInAPackage("org.openqa..")`; para `..pages..`, lo mismo con `.and(not(equivalentTo(By.class)))`. Firmas: métodos, campos y constructores con `PUBLIC` o `PROTECTED`. Tipos: `noClasses().that().resideInAnyPackage("..transport..", "..pages..").and(modifier(PUBLIC).or(modifier(PROTECTED))).should().beInterfaces().orShould().beRecords()` (una anotación es una interfaz) |
 | R2 | Selenium en `steps` o `actions` (incluida en R1; CHK-03 es su subconjunto rápido) | `noClasses().that().resideInAnyPackage("..steps..", "..actions..").should().dependOnClassesThat().resideInAPackage("org.openqa..")` |
-| R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas públicas, como tipo de retorno o como parámetro (los constructores sí las reciben, D3) | `noClasses().that().resideInAPackage("..steps..").should().dependOnClassesThat().resideInAnyPackage("..pages..", "..transport..")` |
+| R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas públicas, como tipo de retorno o como parámetro (los constructores sí las reciben, D3); interfaces, anotaciones o records expuestos en `actions`. "Pública" incluye `protected` (*Firmas expuestas*) | `noClasses().that().resideInAPackage("..steps..").should().dependOnClassesThat().resideInAnyPackage("..pages..", "..transport..")`. Tipos: lo mismo que en R1, para `..actions..` |
 | R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions` | `noClasses().that().resideInAnyPackage("..transport..", "..pages..", "..actions..").should().dependOnClassesThat().resideInAnyPackage("org.junit..", "io.cucumber..")` |
 | R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase | `noClasses().that().resideOutsideOfPackage("..transport..").should().callMethodWhere(target(owner(assignableTo(SearchContext.class).or(assignableTo(JavascriptExecutor.class)))))` |
-| R6 | Nombrar un paquete fuera de su fila de D4; secretos fuera de `utils` y `steps` (las unitarias, por CHK-16); `ResultadoClic` en un miembro público de una página (restricción de D1, enmienda del 2026-10-13) | `layeredArchitecture().consideringOnlyDependenciesInLayers()` con las filas de D4 (`whereLayer(…).mayOnlyBeAccessedByLayers(…)`) y `slices().matching("com.demo.(*)..").should().beFreeOfCycles()`. Para `ResultadoClic`: métodos y campos públicos de `..pages..` sin `Navegador.ResultadoClic` como tipo de retorno, de parámetro o de campo |
+| R6 | Nombrar un paquete fuera de su fila de D4; secretos fuera de `utils` y `steps` (las unitarias, por CHK-16); `ResultadoClic` en un miembro público de una página (restricción de D1, enmienda del 2026-10-13). "Público" incluye `protected` (*Firmas expuestas*) | `layeredArchitecture().consideringOnlyDependenciesInLayers()` con las filas de D4 (`whereLayer(…).mayOnlyBeAccessedByLayers(…)`) y `slices().matching("com.demo.(*)..").should().beFreeOfCycles()`. Para `ResultadoClic`: métodos y campos públicos o protegidos de `..pages..` sin `Navegador.ResultadoClic` como tipo de retorno, de parámetro o de campo |
 | R7 | Vocabulario de interfaz en las features | No aplica (Gherkin): CHK-04, sin cambios |
 
-Comandos de CHK-17, transcritos de `scripts/check-layers.sh` (la implementación normativa, D6). Cada uno pasa **sin salida** y usa `-P`, como CHK-01:
+Comandos de CHK-17, transcritos de `scripts/check-layers.sh` (la implementación normativa, D6). Cada uno pasa **sin salida** y usa `-P`, como CHK-01.
+
+Enmienda 2026-10-13 (*Firmas expuestas*): el bloque ya incluye `MOD`, `EXP` y `TIPO`, las cinco comprobaciones de firmas reescritas con `EXP` y las dos nuevas de tipos. Se integra en el mismo commit que el script y su autoprueba (D6). Hasta ese commit, CHK-17 es lo que ejecuta el script.
 
 ```bash
 T=src/test/java/com/demo
+# Declaración expuesta (Firmas expuestas): espacios, anotaciones y modificadores antes de public o protected
+MOD='(?:@[\w.]+(?:\(.*\))?|non-sealed|[a-z]+)\s+'
+EXP='^\s*(?:'"$MOD"')*(?:public|protected)\b'
+TIPO="$EXP"'.*\b(?:interface|record)\s+\w'
 # R1: Selenium solo en transport; en pages, solo el import de By
 git grep --untracked -nP 'org\.openqa' -- src ":!$T/transport" ":!$T/pages"
 git grep --untracked -nP 'org\.openqa(?!\.selenium\.By;$)' -- "$T/pages"
-# R1: firmas públicas
-git grep --untracked -nP '^\s*public\b.*\b(Web[A-Z]\w*|SearchContext|JavascriptExecutor|TakesScreenshot|Capabilities|\w+Options)\b' -- "$T/transport"
-git grep --untracked -nP '^\s*public\b.*\bBy\b' -- "$T/pages"
-# R3: steps sin páginas ni transporte; acciones sin páginas en sus firmas públicas
+# R1: firmas públicas (expuestas)
+git grep --untracked -nP "$EXP"'.*\b(Web[A-Z]\w*|SearchContext|JavascriptExecutor|TakesScreenshot|Capabilities|\w+Options)\b' -- "$T/transport"
+git grep --untracked -nP "$EXP"'.*\bBy\b' -- "$T/pages"
+#   … sin interfaces, anotaciones ni records expuestos (sus miembros son públicos sin escribir public)
+git grep --untracked -nP "$TIPO" -- "$T/transport" "$T/pages"
+# R3: steps sin páginas ni transporte; acciones sin páginas en sus firmas públicas (expuestas)
 git grep --untracked -nP 'com\.demo\.(pages|transport)\b' -- "$T/steps"
 #   … página como tipo de retorno
-git grep --untracked -nP '^\s*public\b[^(]*\b\w+Page\b[^(]*\(' -- "$T/actions"
+git grep --untracked -nP "$EXP"'[^(]*\b\w+Page\b[^(]*\(' -- "$T/actions"
 #   … página como parámetro (constructores exceptuados)
-git grep --untracked -nP '^\s*public\b(?!\s+\w+\s*\()[^(]*\(.*\b[A-Z]\w*Page\b' -- "$T/actions"
+git grep --untracked -nP "$EXP"'(?!\s+\w+\s*\()[^(]*\(.*\b[A-Z]\w*Page\b' -- "$T/actions"
+#   … sin interfaces, anotaciones ni records expuestos
+git grep --untracked -nP "$TIPO" -- "$T/actions"
 # R4: JUnit, Cucumber y esperados en su sitio
 git grep --untracked -nP 'org\.junit' -- src ":!$T/steps" ":!$T/runners" ":!$T/config" ":!$T/data"
 git grep --untracked -nP 'io\.cucumber' -- src ":!$T/steps" ":!$T/hooks" ":!$T/runners"
@@ -241,7 +251,7 @@ git grep --untracked -nP 'com\.demo\.(pages|actions|steps|hooks|runners|data)\b'
 git grep --untracked -nP 'com\.demo\.utils\.(?!ConfigReader\b)' -- "$T/transport" "$T/pages"
 git grep --untracked -nP 'com\.demo\.(actions|steps|hooks|runners|config|data)\b' -- "$T/pages"
 # R6 (restricción de D1, enmienda 2026-10-13): ResultadoClic no sale de pages
-git grep --untracked -nP '^\s*public\b.*\bResultadoClic\b' -- "$T/pages"
+git grep --untracked -nP "$EXP"'.*\bResultadoClic\b' -- "$T/pages"
 git grep --untracked -nP 'com\.demo\.(transport|utils|steps|hooks|runners|config)\b' -- "$T/actions"
 git grep --untracked -nP 'com\.demo\.(hooks|runners|config)\b' -- "$T/steps"
 git grep --untracked -nP 'com\.demo\.(transport|pages|actions|steps|hooks|runners)\b' -- "$T/utils"
@@ -256,6 +266,7 @@ git ls-files "$T/transport" "$T/pages" "$T/actions" "$T/steps"
 - `[A-Z]` exige un nombre de tipo, para no confundirlo con un nombre de variable.
 - Busca hasta el final de la línea, así que una anotación con argumentos no oculta el parámetro. A cambio, una línea con cuerpo que crea una página da un falso positivo, que falla cerrado.
 - Las firmas partidas en varias líneas siguen siendo riesgo residual aceptado (D6, R-5).
+- Desde la enmienda *Firmas expuestas*, `^\s*public\b` es `EXP` en las dos expresiones: admite anotaciones y modificadores delante, y `protected`. Los constructores siguen exceptuados.
 
 **`ResultadoClic` en páginas** (R6, restricción de D1, enmienda del 2026-10-13). La expresión `^\s*public\b.*\bResultadoClic\b` busca el tipo en cualquier miembro público de una página:
 - Cubre el tipo de retorno, los parámetros y los campos públicos, con el nombre calificado (`Navegador.ResultadoClic`) o importado.
@@ -263,6 +274,222 @@ git ls-files "$T/transport" "$T/pages" "$T/actions" "$T/steps"
 - El uso interno, los métodos privados y los comentarios no empiezan por `public`, así que también pasan.
 - Los constructores de las páginas reciben `Navegador`, no `ResultadoClic`, así que no hace falta exceptuarlos.
 - Las firmas partidas en varias líneas siguen siendo riesgo residual aceptado (D6, R-5).
+- Desde la enmienda *Firmas expuestas*, la expresión es `EXP.*\bResultadoClic\b`, y `R1-tipos` impide que una interfaz, una anotación o un record expuestos de `pages` lo saquen.
+
+**Firmas expuestas** (R1, R3 y R6; enmienda 2026-10-13). Precisa qué es una firma o un miembro "público" en las cinco comprobaciones de firmas, y cierra los huecos de la expresión anterior.
+
+*Huecos de `^\s*public\b`* (P2 registrado por el coordinador el 2026-10-13). La expresión exigía `public` al principio de la línea, tras espacios, y no veía:
+- una anotación en la misma línea: `@Override public ResultadoClic x()`;
+- otro orden de modificadores: `static public`, `final public`;
+- `protected`;
+- los miembros de una interfaz o de una anotación (`@interface`), que son públicos sin escribir `public`, ni los componentes de un `record`, que son accesores públicos.
+
+El hueco era el mismo en R1 (`By` y tipos de Selenium) y en R3 (páginas en acciones). Además, la autoprueba no tenía ningún caso con `public` en la columna 0, así que sobrevivía el mutante `^\s*public` → `^\s+public`.
+
+*Definición.* En R1, R3 y R6, una firma o un miembro **público** es una **declaración expuesta**: una línea que, después de espacios, anotaciones y modificadores, lleva `public` o `protected`. `MOD` es un elemento del prefijo, `EXP` la declaración expuesta y `TIPO` un tipo expuesto con miembros públicos implícitos:
+
+```text
+MOD  = (?:@[\w.]+(?:\(.*\))?|non-sealed|[a-z]+)\s+
+EXP  = ^\s*(?:MOD)*(?:public|protected)\b
+TIPO = EXP.*\b(?:interface|record)\s+\w
+```
+
+- `@[\w.]+(?:\(.*\))?` es una anotación, simple o calificada (`@java.lang.Deprecated`), con o sin argumentos. `.*` admite paréntesis anidados.
+- `non-sealed|[a-z]+` es un modificador. Se acepta cualquier palabra en minúsculas, no una lista: en Java válido, delante de `public` en la misma línea solo puede haber modificadores (`static`, `final`, `abstract`, `synchronized`, `native`, `strictfp`, `transient`, `volatile`, `default`, `sealed`). Una lista fallaría abierto ante un modificador nuevo.
+- El `\s+` de `MOD` exige un espacio tras cada elemento, así que `nonpublic` no es `non` seguido de `public`.
+- El `\b` final de `EXP` deja fuera `publicar(…)` y `protectedMode(…)`.
+- Una línea que empieza por `//`, `*`, `/*`, una cadena o un nombre en mayúscula (`Navegador.ResultadoClic r = …`) no puede coincidir con `EXP`. Por eso pasan los comentarios, las cadenas, las variables locales y los miembros `private` o de paquete, también con anotaciones.
+- Con cero elementos de `MOD` y la alternativa `public`, `EXP` es la expresión anterior. Así, cada comprobación encuentra todo lo que encontraba antes, y los casos negativos vigentes de la autoprueba siguen fallando con la misma línea.
+
+*Decisión 1: `protected` cuenta como expuesto.*
+
+| Opción | Veredicto | Motivo |
+|---|---|---|
+| A. `public` o `protected` en las cinco comprobaciones | **Elegida** | `protected` da acceso al paquete y a las subclases de cualquier paquete. R5 impide que una página extienda una clase, pero no que una clase de `actions` o de `steps` extienda una página, y ninguna regla exige `final`. Hoy las 5 páginas públicas, `Navegador` y las 2 acciones son `final`, pero nada lo comprueba, y en `transport` y `actions` no hay un R5 equivalente. Tampoco hay ningún `protected` en `src` (`git grep -n -w protected -- src`, rc=1): no cuesta nada y falla cerrado |
+| B. `protected` no cuenta, porque R5 prohíbe que las páginas extiendan | Descartada | R5 mira el `extends` de la página, no el de quien la extiende |
+| C. Prohibir `protected` en `transport`, `pages` y `actions` | Descartada | Es más fuerte de lo necesario: un miembro `protected` con tipos de Java no expone nada. Suma una comprobación sin cerrar ningún hueco que A deje abierto |
+| D. Exigir `final` en las clases de `pages` y tratar `protected` como de paquete | Descartada | Reconocer por texto una declaración de clase (con `sealed`, `abstract`, anotaciones o anidada) es frágil, y no cubre `transport` ni `actions` |
+
+*Decisión 2: en `transport`, `pages` y `actions` no se declaran interfaces, anotaciones (`@interface`) ni records expuestos.*
+- Los miembros de una interfaz y de una anotación son públicos sin escribir `public`, y ninguna expresión por línea los ve: `public interface Pulsable {`, seguido de `ResultadoClic pulsar();` en otra línea, pasaría.
+- Los componentes de un `record` son accesores públicos, y su cabecera se parte a menudo en varias líneas.
+- Los tipos expuestos de esas capas quedan en `class` y `enum`. Hoy son los únicos: 10 clases y el `enum ResultadoClic` (`git grep -nP '\b(class|interface|record|enum)\s+\w'` sobre las tres capas). Los contratos de D1 y D3 ya enumeran los tipos que cruzan esas capas.
+- Los tipos privados o de paquete sí se permiten, porque otro paquete no los alcanza.
+- En `TIPO`, el `\b` reconoce también `@interface`, y el `\s+\w` exige el nombre del tipo: un método `record()` o `recordar()` y un campo `record = …` pasan.
+
+| Opción | Veredicto | Motivo |
+|---|---|---|
+| A. Prohibir interfaces, anotaciones y records expuestos en las tres capas | **Elegida** | Cierra el hueco por construcción, con una sola expresión y sin falsos positivos hoy |
+| B. Seguir los miembros dentro del cuerpo de una interfaz | Imposible con `git grep` | Busca por línea, así que no sabe dentro de qué tipo está una línea. Lo haría ArchUnit (disparador de D6) |
+| C. Prohibir solo las interfaces y aceptar records con la cabecera en una línea | Descartada | Exige otra comprobación (cabecera expuesta sin cerrar) para un tipo que hoy nadie usa. Si una spec necesita un valor compuesto, se reabre por enmienda |
+| D. Tratarlo como el riesgo residual de las firmas partidas (R-5) | Descartada | R-5 acepta un formato poco común. Una interfaz no es un formato: todos sus miembros evaden la regla |
+
+*Comprobaciones.* Las cinco existentes conservan su ID y su motivo impreso: "pública" se lee con la definición de arriba. Con las dos nuevas son 24 comprobaciones (*Nota de ejecución*).
+
+| ID (autoprueba) | Regla | Ámbito | Expresión | Motivo impreso |
+|---|---|---|---|---|
+| `D7-03` | R1 | `transport` | `EXP` seguida de `.*\b(…)\b`, con los tipos de Selenium de siempre | tipo de Selenium en una firma pública del transporte |
+| `D7-04` | R1 | `pages` | `EXP.*\bBy\b` | By en una firma pública de una página |
+| `R1-tipos` (nueva) | R1 | `transport` y `pages` | `TIPO` | interfaz, anotación o record expuesto en transport o pages |
+| `D7-06` | R3 | `actions` | `EXP[^(]*\b\w+Page\b[^(]*\(` | página en el tipo de retorno de un método público de actions |
+| `R3-param` | R3 | `actions` | `EXP(?!\s+\w+\s*\()[^(]*\(.*\b[A-Z]\w*Page\b` | página como parámetro de un método público de actions |
+| `R3-tipos` (nueva) | R3 | `actions` | `TIPO` | interfaz, anotación o record expuesto en actions |
+| `D1-rc` | R6 | `pages` | `EXP.*\bResultadoClic\b` | ResultadoClic en un miembro público de una página |
+
+- `R1-tipos` también protege R6: una interfaz expuesta en `pages` podría sacar `ResultadoClic`.
+- En `R3-param`, un constructor sigue exceptuado con anotación o con `protected`: en `@Inject public OtraActions(LoginPage p)` hay un solo identificador entre el modificador de acceso y `(`.
+
+*Implementación (`devops-engineer`).* `scripts/check-layers.sh` define `MOD`, `EXP` y `TIPO` una sola vez, como el bloque de comandos, y las siete comprobaciones las usan. El prefijo no se copia en cada línea, así que un mutante del prefijo se mata una vez para todas. Los casos `-anot`, `-mod` y `-prot` de cada comprobación demuestran que cada una usa `EXP`.
+
+*Casos de autoprueba.* Cada línea es la línea 2 del archivo indicado, tal cual y con su sangría:
+- las de "Deben fallar" van con `violation`: exit 1 y la línea `archivo:2: R<n>: motivo` exacta de su comprobación;
+- las de "Deben pasar" van con `allowed`: exit 0;
+- todas, en sus dos modos (versionada y sin versionar).
+
+Son 32 casos negativos y 16 permitidos, es decir, 96 ejecuciones más: 280 en total. Los casos vigentes no cambian.
+
+```java
+// ===== Deben fallar (violation) =====
+// D7-03-col0 · R1 · transport/Bad.java · columna 0
+public WebElement buscar(By locator) {
+// D7-03-anot · R1 · transport/Bad.java · anotación en la misma línea
+    @Override public WebElement buscar(By locator) {
+// D7-03-mod · R1 · transport/Bad.java · modificador antes de public
+    static public WebDriver crear() {
+// D7-03-prot · R1 · transport/Bad.java · protected
+    protected WebDriver driver() {
+// D7-04-col0 · R1 · pages/BadPage.java
+public void pulsar(By locator) {
+// D7-04-anot · R1 · pages/BadPage.java
+    @Deprecated public void pulsar(By locator) {
+// D7-04-mod · R1 · pages/BadPage.java
+    final public void pulsar(By locator) {
+// D7-04-prot · R1 · pages/BadPage.java · campo protegido
+    protected static final By TITULO = By.className("title");
+// R1-tipos · R1 · pages/BadPage.java · interfaz en la columna 0
+public interface Pulsable {
+// R1-tipos-b · R1 · pages/BadPage.java · anotación (@interface)
+    public @interface Marca {
+// R1-tipos-c · R1 · pages/BadPage.java · record con un modificador antes de public
+    static public record Estado(boolean visible) {}
+// R1-tipos-d · R1 · pages/BadPage.java · interfaz protegida
+    protected interface Pulsable {
+// R1-tipos-e · R1 · transport/Bad.java · interfaz anotada
+    @FunctionalInterface public interface Condicion {
+// D7-06-col0 · R3 · actions/Bad.java
+public LoginPage pagina() {
+// D7-06-anot · R3 · actions/Bad.java
+    @Deprecated public LoginPage pagina() {
+// D7-06-mod · R3 · actions/Bad.java
+    synchronized public LoginPage pagina() {
+// D7-06-prot · R3 · actions/Bad.java
+    protected LoginPage pagina() {
+// R3-param-col0 · R3 · actions/Bad.java
+public void usar(LoginPage pagina) {
+// R3-param-anot · R3 · actions/Bad.java
+    @Override public void usar(LoginPage pagina) {
+// R3-param-mod · R3 · actions/Bad.java
+    final public void usar(LoginPage pagina) {
+// R3-param-prot · R3 · actions/Bad.java
+    protected void usar(LoginPage pagina) {
+// R3-tipos · R3 · actions/Bad.java · interfaz en la columna 0
+public interface Flujo {
+// R3-tipos-b · R3 · actions/Bad.java · record
+    public record Resumen(String total, int cantidad) {}
+// R3-tipos-c · R3 · actions/Bad.java · interfaz anotada y protegida
+    @Deprecated protected interface Paso {
+// D1-rc-col0 · R6 · pages/BadPage.java
+public Navegador.ResultadoClic pulsar() {
+// D1-rc-anot · R6 · pages/BadPage.java
+    @Override public ResultadoClic x() {
+// D1-rc-mod · R6 · pages/BadPage.java
+    static public Navegador.ResultadoClic pulsar() {
+// D1-rc-prot · R6 · pages/BadPage.java
+    protected Navegador.ResultadoClic pulsar() {
+// EXP-args · R6 · pages/BadPage.java · anotación con argumentos
+    @Deprecated(since = "1") public Navegador.ResultadoClic pulsar() {
+// EXP-calif · R6 · pages/BadPage.java · anotación calificada
+    @java.lang.Deprecated public Navegador.ResultadoClic pulsar() {
+// EXP-dos · R6 · pages/BadPage.java · dos elementos antes de public
+    @Deprecated final public Navegador.ResultadoClic pulsar() {
+// EXP-ns · R6 · pages/BadPage.java · non-sealed en la columna 0
+non-sealed public class BadPage implements Supplier<Navegador.ResultadoClic> {
+
+// ===== Deben pasar (allowed) =====
+// ok-12 · pages/OtraPage.java · anotación y private
+    @SuppressWarnings("unused") private Navegador.ResultadoClic pulsar() {
+// ok-13 · pages/OtraPage.java · miembro de paquete con modificador
+    static Navegador.ResultadoClic pulsar() {
+// ok-14 · pages/OtraPage.java · variable local con final
+        final Navegador.ResultadoClic resultado = pulsar();
+// ok-15 · pages/OtraPage.java · identificador que termina en public
+        boolean nonpublic = resultado == Navegador.ResultadoClic.AVANZO;
+// ok-16 · pages/OtraPage.java · identificador que empieza por protected
+        protectedMode(Navegador.ResultadoClic.AVANZO);
+// ok-17 · pages/OtraPage.java · comentario de línea
+    // @Override public Navegador.ResultadoClic pulsar() {
+// ok-18 · pages/OtraPage.java · Javadoc
+     * static public Navegador.ResultadoClic pulsar() no es API de la página
+// ok-19 · pages/OtraPage.java · cadena
+        String plantilla = "@Override public Navegador.ResultadoClic x()";
+// ok-20 · actions/OtraActions.java · constructor anotado con páginas (D3)
+    @Inject public OtraActions(LoginPage loginPage) {
+// ok-21 · actions/OtraActions.java · constructor protegido con páginas
+    protected OtraActions(LoginPage loginPage) {
+// ok-22 · actions/OtraActions.java · método privado anotado con una página
+    @SuppressWarnings("unused") private void usar(LoginPage pagina) {
+// ok-23 · transport/Otro.java · interfaz privada
+    private interface Condicion { boolean cumple(); }
+// ok-24 · pages/OtraPage.java · record de paquete
+    record Fila(String nombre, int cantidad) {}
+// ok-25 · pages/OtraPage.java · método que empieza por record
+    public void recordar() {
+// ok-26 · pages/OtraPage.java · campo llamado record
+    public String record = "";
+// ok-27 · pages/OtraPage.java · tipo que termina en record
+    public void guardar(Autorecord registro) {
+```
+
+*Mutantes que deben morir.* Es el sabotaje de devops, como el de `bb7f145`. Cada mutante debe hacer fallar al menos los casos indicados:
+
+| Mutante | Casos que lo matan |
+|---|---|
+| E1. `^\s*` → `^\s+` | Los `-col0`, `R1-tipos`, `R3-tipos` y `EXP-ns` |
+| E2. `^\s*` → `^` | Cualquier caso con sangría |
+| E3. Sin `(?:MOD)*` | Los `-anot` y los `-mod` |
+| E4. `(?:MOD)*` → `(?:MOD)?` | `EXP-dos` |
+| E5. Sin la alternativa de anotación | Los `-anot` |
+| E6. Sin `(?:\(.*\))?` | `EXP-args` |
+| E7. `[\w.]` → `\w` | `EXP-calif` |
+| E8. Sin `non-sealed` | `EXP-ns` |
+| E9. Sin `[a-z]+` | Los `-mod` |
+| E10. El `\s+` de `MOD` → `\s*` | `ok-15` |
+| E11. Sin `protected` | Los `-prot`, `R1-tipos-d` y `R3-tipos-c` |
+| E12. El modificador de acceso, opcional (`?`) | `ok-12`, `ok-13` y `ok-14` |
+| E13. Sin el `\b` final de `EXP` | `ok-9` (`publicar`) y `ok-16` |
+| E14. Una de las siete comprobaciones conserva `^\s*public\b` | Sus casos `-anot`, `-mod` y `-prot`. En `R1-tipos`, `-c`, `-d` y `-e`; en `R3-tipos`, `-c` |
+| T1. Sin `interface` | `R1-tipos`, `R1-tipos-b`, `-d` y `-e`, `R3-tipos` y `R3-tipos-c` |
+| T2. Sin `record` | `R1-tipos-c` y `R3-tipos-b` |
+| T3. Sin el `\b` de `TIPO` | `ok-27` |
+| T4. El `\s+` de `TIPO` → `\s*` | `ok-25` |
+| T5. Sin `\s+\w` | `ok-25` |
+| T6. Sin el `\w` final | `ok-26` |
+| T7. `R1-tipos` sin `transport` o sin `pages` | `R1-tipos-e` o `R1-tipos` |
+
+Cambiar la avidez de un `.*` (`.*` ↔ `.*?`) es equivalente: que una línea coincida no depende de la avidez.
+
+*Riesgo residual aceptado (D6, R-5):*
+- firmas, cabeceras y anotaciones partidas en varias líneas;
+- texto que no sea espacio, anotación ni modificador antes del modificador de acceso: `} public …`, `/* … */ public …`;
+- una anotación con un espacio antes del paréntesis (`@A (x) public …`) o pegada al modificador (`@A(x)public …`);
+- el cuerpo de una constante de `enum` en la misma línea (`AVANZO { public By x() { … } }`).
+
+*Falsos positivos, que fallan cerrado:*
+- líneas de un bloque de texto (`"""`) o de un comentario sin `//` ni `*` que parezcan declaraciones;
+- una interfaz o un record expuestos anidados en una clase de paquete: otro paquete no los ve, pero se rechazan;
+- una línea expuesta con una cadena o un cuerpo que contenga `interface X` o `record X`.
+
+*Comprobación sobre el árbol* (2026-10-13, HEAD `34f8528` y árbol limpio; solo `git grep`, B-01): ver la enmienda *Firmas expuestas*.
 
 **Nota de ejecución** (`scripts/check-layers.sh:11-39`, `:103-128`; eran `:10-38` y `:93-118` antes de la enmienda sobre `ResultadoClic`):
 - **Dos pasadas por comando.** Cada `git grep` corre con `--untracked` (lo no versionado, respetando `.gitignore`) y sin él (los archivos del índice), y los resultados se unen sin duplicados. Motivo: con git 2.53, `--untracked` recorre el árbol de trabajo sin leer el índice y omite los archivos versionados que coinciden con `.gitignore`.
@@ -276,6 +503,8 @@ git ls-files "$T/transport" "$T/pages" "$T/actions" "$T/steps"
   - el de R3 para parámetros (`R3-param`);
   - el de `ResultadoClic` en páginas (`D1-rc`);
   - el `git ls-files` de directorios (`D7-20`).
+- **24 comprobaciones** desde la enmienda *Firmas expuestas*: las 22 anteriores, `R1-tipos` y `R3-tipos`. Desde esa enmienda, el script se cita por nombre (su cabecera y la función `check`), no por línea.
+- **Límite de PCRE.** Si una expresión agota el límite de backtracking de PCRE, `git grep` escribe `match limit exceeded` en stderr, y CHK-17 da 2: falla cerrado, nunca abierto. Las siete expresiones de *Firmas expuestas* recorren todos los archivos versionados sin agotarlo (enmienda *Firmas expuestas*).
 
 ### D8. Configuración pura del navegador en `src/main` (paso independiente)
 
@@ -455,7 +684,7 @@ Las decisiones de fondo y el estado no cambian. Con este cierre, el ADR queda **
   - `BrowserSettings` está en `src/main/java/com/demo/config/`, con 27 pruebas unitarias, y `DriverFactory` solo traduce.
   - PIT da 89/89, y D6 del ADR-001 sigue en `BUILD FAILURE`. Los 4 `requireNonNull`, que PIT no muta, se validaron con control negativo manual.
 - **Reglas y agentes:** todos los cambios están aplicados (*Cambios propuestos*).
-- **Abiertos (P2):** R-4 (solo Jenkins) y R-8 (Q-*). R-3 y R-6 se cerraron en remoto (enmienda *R-3 y R-6 cerrados en remoto*).
+- **Abiertos (P2):** R-4 (solo Jenkins) y R-8 (Q-*). R-3 y R-6 se cerraron en remoto (enmienda *R-3 y R-6 cerrados en remoto*). Desde el 2026-10-13, también los dos P2 que deja abiertos la enmienda *Firmas expuestas*: la lista cerrada de tipos de R1 en `transport` y el `extends` fuera de `pages`.
 
 ### 2026-10-10 — R-4 confirmado en GitHub Actions
 
@@ -602,3 +831,57 @@ Las decisiones de fondo y el estado no cambian: D7 se alinea con el script, que 
 - **Reglas y agentes.** El usuario aplicó la mención de esta regla, sin commit al redactar esta enmienda, en dos archivos:
   - en la descripción de CHK-17 de `.claude/rules/04-quality-checks.md:23`;
   - en la fila R6 de `.claude/agents/qa-automation-architect.md:53`.
+- *(Trazabilidad, 2026-10-13: "este commit" es `5329cf1`, firmado. Contiene esta enmienda, el script, la autoprueba y los dos archivos de reglas y agentes: `git show --stat 5329cf1`.)*
+
+### 2026-10-13 — Firmas expuestas en CHK-17 (R1, R3 y R6)
+
+**Propuesta** del `qa-automation-architect` el 2026-10-13, a petición del coordinador (P2 de `MEMORY.md`, *Próximos pasos*). La aprueba el coordinador (Regla 01, nivel 2). Las decisiones de fondo no cambian: D7 define qué es una firma "pública" y cierra los huecos de `^\s*public\b`.
+
+- **Qué cambia en D7:**
+  - las filas R1, R3 y R6 de la tabla y sus equivalentes ArchUnit;
+  - el bloque de comandos: `MOD`, `EXP` y `TIPO`, las cinco comprobaciones de firmas reescritas con `EXP` y dos nuevas, `R1-tipos` y `R3-tipos`;
+  - una línea al final de *R3 en acciones* y otra al final de *`ResultadoClic` en páginas*;
+  - la subsección *Firmas expuestas*: definición, dos decisiones con sus opciones, expresiones, 48 casos de autoprueba, 21 mutantes y riesgo residual;
+  - la *Nota de ejecución* (24 comprobaciones y el límite de PCRE).
+  - Fuera de D7, D6 suma los casos previstos de la autoprueba.
+- **Integración (D6).** El script y la autoprueba son de `devops-engineer`. Esta enmienda se integra **en el mismo commit** que ellos, como la de `ResultadoClic`.
+  - Hasta ese commit, CHK-17 es lo que ejecuta el script: 22 comprobaciones.
+  - Si la implementación se aparta de D7 en una expresión, un motivo o un caso, se corrige el ADR antes del commit. La regla nunca se relaja.
+- **Comprobación sobre el árbol** (2026-10-13, HEAD `34f8528` y árbol limpio; solo `git grep`, B-01):
+  - **No hay violaciones.** Las siete expresiones, cada una sobre su ámbito, se ejecutaron en tres pasadas: con `--untracked`, sin él y sobre `HEAD`. Todas dan rc=1, sin salida. El cambio no rompe la suite ni CHK-17.
+  - `git grep -nP '^\s*(?:(?:@[\w.]+(?:\(.*\))?|non-sealed|[a-z]+)\s+)+(?:public|protected)\b' -- src` da rc=1 en las tres pasadas. Ninguna línea de `src` tiene una anotación o un modificador antes de `public` o `protected`, así que hoy `EXP` no encuentra nada nuevo en ninguna capa.
+  - `git grep -n -w protected -- src` da rc=1.
+  - `git grep -nP '\b(class|interface|record|enum)\s+\w'` sobre las tres capas solo lista 10 clases y `Navegador.java:147`, que es `public enum ResultadoClic`.
+  - **Control positivo de `TIPO`:** sobre todo `src`, solo encuentra `src/main/java/com/demo/data/Credentials.java:10` (`public record Credentials(…)`), fuera de las tres capas.
+  - **Control positivo de los casos:** sobre este ADR, cada expresión encuentra exactamente las líneas *Deben fallar* de su comprobación, y ninguna de *Deben pasar* ni de la prosa:
+    - `D7-03`: sus 4 casos;
+    - `D7-04`: sus 4, más `D7-03-col0` y `D7-03-anot`, que contienen `By` pero están en `transport`, fuera de su ámbito;
+    - `TIPO`: los 5 `R1-tipos*` y los 3 `R3-tipos*`;
+    - `D7-06` y `R3-param`: sus 4 cada una;
+    - `D1-rc`: sus 4 y los 4 `EXP-*`.
+  - **Control de los mutantes,** sobre el mismo bloque:
+    - E1, E3–E9, E11–E13 y T1–T6 cambian exactamente las líneas que indica la tabla de mutantes.
+    - E10 hace que PCRE agote su límite (`pcre2_jit_match failed … match limit exceeded`), porque `[a-z]+\s*` es ambiguo. En el script eso da 2, así que también mata al mutante.
+    - E2, E14 y T7 se deducen de la expresión: E2 deja fuera toda línea con sangría, y E14 y T7 dependen de la comprobación o la ruta mutada.
+  - **Casos vigentes:** sobre `scripts/tests/check-layers-test.sh`, con el ancla adaptada a sus comillas, cada expresión encuentra los casos negativos vigentes de su comprobación (`D7-03`…`D7-03f`, `D7-04`, `D7-06`, `R3-param`…`-c` y `D1-rc`…`-d`) y ninguno de los `ok-1`…`ok-11` de su capa.
+  - **Límite de PCRE:** las seis expresiones distintas recorren todos los archivos versionados con `git grep -lP` sin texto en stderr. `R1-tipos` y `R3-tipos` comparten `TIPO`.
+- **Criterio de cierre** (`devops-engineer`):
+  1. `scripts/check-layers.sh` define `MOD`, `EXP` y `TIPO` una sola vez, con el texto exacto de D7. Reescribe las cinco comprobaciones de firmas con `EXP`, sin cambiar sus motivos, y suma `R1-tipos` y `R3-tipos` con los motivos de la tabla de *Firmas expuestas*.
+  2. La autoprueba suma los 32 casos negativos y los 16 permitidos de D7, en sus dos modos, y los vigentes no cambian: 280 casos previstos, con exit 0.
+  3. Sabotaje: cada mutante de la tabla (E1–E14 y T1–T7) hace fallar al menos un caso. Se adjunta la tabla mutante → casos en rojo, y ninguno sobrevive.
+  4. `bash scripts/check-layers.sh` da 0 sobre HEAD.
+  5. La CI no cambia. CHK-17 sigue en el job `mutation`, en los pasos *Capas, autoprueba con mawk, gawk y gawk --posix (CHK-17)* y *Capas (CHK-17)*, y en la etapa `Capas (CHK-17)` del `Jenkinsfile`. D6 cita los nombres de esos pasos en `f7f7a13`.
+- **Fuera de alcance (P2 nuevos).** Los dos dan falsos negativos hoy no explotados. Se resuelven en otra enmienda, con sus casos:
+  1. **La lista de tipos de R1 en `transport` es cerrada.** `\b(Web[A-Z]\w*|…)\b` exige un límite de palabra antes de `Web`, así que no ve `RemoteWebDriver`, `ChromeDriver`, `FirefoxDriver` (los tres en `DriverFactory.java:5-9`, en código de paquete), `Alert`, `Actions`, `Cookie` ni `Dimension` en una firma expuesta.
+  2. **`extends` solo se comprueba en `pages` (R5).** Una clase de `transport` que extiende un driver hereda toda su API pública de Selenium, y una de `actions` que extiende una página hereda la página. Ninguna comprobación de firmas lo ve, porque la línea no tiene `(`. Hoy no ocurre: las 5 páginas públicas, `Navegador` y las 2 acciones son `final`, y `DriverFactory` no extiende nada.
+
+  Ejemplos: ninguna de las siete expresiones encuentra estas líneas en este ADR.
+
+  ```java
+      public RemoteWebDriver remoto() {
+  public final class Navegador extends ChromeDriver {
+  public final class CompraActions extends CartPage {
+  ```
+- **Reglas y agentes (opcional; usuario, P-01).** D7 ya define "pública", así que el texto actual sigue siendo correcto. Si el usuario quiere que lo diga:
+  - `.claude/agents/qa-automation-architect.md`, filas R1 y R3: agregar "(públicas o protegidas; sin interfaces, anotaciones ni records expuestos en `transport`, `pages` y `actions`)";
+  - `.claude/rules/04-quality-checks.md`, descripción de CHK-17: agregar "firmas expuestas con anotaciones, otro orden de modificadores o `protected`, y sin interfaces, anotaciones ni records expuestos".
