@@ -38,7 +38,7 @@ Motivo: en algunas instalaciones de Claude Code no existen las herramientas `Gre
 | Herramientas mínimas por agente (el verificador no tiene `Edit` ni `Write`; arquitecto y diseñador usan `Bash` solo como B-01). Ojo: `memory` agrega `Read`/`Write`/`Edit`, por eso el verificador no la tiene | Frontmatter `tools` de cada agente |
 | `deny`: `.env` y `git push --force`/`-f` · `ask`: `.claude/**`, `CLAUDE.md`, `MEMORY.md` (se importa como instrucción), `AGENTS.md`, `.github/workflows/**`, `curl`, `wget`, `WebFetch` | `.claude/settings.json` → `permissions` |
 | Push bloqueado sin un veredicto vigente | `.claude/hooks/devops-gate-hook.sh` |
-| Ningún comando `Bash` escribe en `.claude/**`, `CLAUDE.md`, `MEMORY.md` ni `AGENTS.md` (excepto `.claude/devops-gate.json`); la única vía son `Edit`/`Write`, bajo `ask` | `.claude/hooks/protect-config-hook.sh` (pruebas en `.claude/hooks/tests/`) |
+| Ningún comando `Bash` escribe en `.claude/**`, `CLAUDE.md`, `MEMORY.md`, `AGENTS.md` ni `.github/**` (excepto `.claude/devops-gate.json` y el comando literal de CHK-13, que solo lee); la única vía son `Edit`/`Write`, bajo `ask` | `.claude/hooks/protect-config-hook.sh` (pruebas en `.claude/hooks/tests/`) |
 | Reglas verificables por comando | `.claude/rules/04-quality-checks.md` |
 
 **Límite honesto:** B-01 (solo lectura fuera de la configuración) sigue dependiendo del prompt; el hook solo garantiza que la **configuración** no se toca por `Bash`, y no cubre escrituras cuyo destino no aparece en el comando (p. ej. `patch < archivo`). Los hooks son una barrera contra el olvido y la inyección, no un aislamiento frente a un adversario.

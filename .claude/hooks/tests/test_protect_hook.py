@@ -46,6 +46,18 @@ CASES = [
     (BLOCK, "echo x >> AGENTS.md"),
     (BLOCK, "sed -i 's/a/b/' AGENTS.md"),
     (BLOCK, "git checkout -- AGENTS.md"),
+    # .github/**: los workflows solo cambian con Edit/Write, bajo ask (decisión del usuario, 2026-10-13)
+    (BLOCK, "echo x > .github/workflows/ci.yml"),
+    (BLOCK, "sed -i 's/a/b/' .github/workflows/ci.yml"),
+    (BLOCK, "python3 - <<'EOF'\nopen('.github/workflows/ci.yml','w').write('x')\nEOF"),
+    (BLOCK, "python3 -c \"p='.github/workflows/ci.yml';open(p,'w').write('x')\""),
+    (BLOCK, "cd .github && echo x > workflows/ci.yml"),
+    (BLOCK, "git checkout -- .github/workflows/ci.yml"),
+    (BLOCK, "rm -rf .github"),
+    # La excepción de CHK-13 no tapa lo que se encadena ni un código distinto
+    (BLOCK, "python3 -c \"import yaml,sys;[yaml.safe_load(open(f)) for f in sys.argv[1:]]\" .github/workflows/*.yml; echo x > .github/workflows/ci.yml"),
+    (BLOCK, "python3 -c \"import yaml,sys;[yaml.safe_load(open(f)) for f in sys.argv[1:]];open('.github/workflows/ci.yml','w')\" .github/workflows/*.yml"),
+    (BLOCK, "python3 -c \"import yaml,sys;[yaml.safe_load(open(f)) for f in sys.argv[1:]]\" .claude/settings.json && python3 -c \"open('.claude/x','w')\""),
     # --- Lecturas y operaciones legítimas: deben permitirse ---
     (ALLOW, "cat .claude/agents/qa-test-verifier.md"),
     (ALLOW, "git grep -n Thread -- .claude"),
@@ -72,6 +84,16 @@ CASES = [
     (ALLOW, "find .claude -name '*.md'"),
     (ALLOW, "cat AGENTS.md"),
     (ALLOW, "cat > .claude/devops-gate.json <<'EOF'\n{\"verdict\": \"APROBADO\"}\nEOF"),
+    # Contrapartes legítimas de .github/**
+    (ALLOW, "python3 -c \"import yaml,sys;[yaml.safe_load(open(f)) for f in sys.argv[1:]]\" .github/workflows/*.yml"),
+    (ALLOW, "cat .github/workflows/ci.yml"),
+    (ALLOW, "git diff -- .github Jenkinsfile"),
+    (ALLOW, "git grep -n pipefail -- .github Jenkinsfile"),
+    (BLOCK, "git grep -n tee -- .github Jenkinsfile"),  # conservador: un escritor como argumento bloquea
+    (ALLOW, "git add .github/workflows/ci.yml && git commit -q -m \"ci: x\""),
+    (ALLOW, "git show 3be5956 -- .github/workflows/ci.yml"),
+    (ALLOW, "echo x > .githubx"),
+    (ALLOW, "cd .github && ls workflows"),
 ]
 
 fails = 0

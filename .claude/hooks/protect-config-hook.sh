@@ -4,8 +4,10 @@
 # Cierra el hueco de `ask`: las reglas `ask` de settings.json solo controlan las herramientas
 # Edit/Write, así que un comando Bash podía modificar la configuración de los agentes sin pedir
 # confirmación. Este hook bloquea los comandos Bash que ESCRIBEN en rutas protegidas:
-#   .claude/**   CLAUDE.md   MEMORY.md   AGENTS.md
-# Excepción: .claude/devops-gate.json, que el agente devops-engineer escribe por diseño.
+#   .claude/**   CLAUDE.md   MEMORY.md   AGENTS.md   .github/** (los workflows del CI)
+# Excepciones:
+#   - .claude/devops-gate.json, que el agente devops-engineer escribe por diseño;
+#   - el comando literal de CHK-13 (Regla 04), que solo lee los workflows con yaml.safe_load.
 #
 # Leer está permitido (cat, grep, git grep, git diff, wc, sed -n, python script.py ruta…).
 # Escribir se detecta, dentro de cada segmento del comando (separado por | ; &), así:
@@ -47,9 +49,14 @@ CMD="$(extract_command)"
 # La excepción se elimina antes de analizar: escribir el veredicto del gate es legítimo.
 # Solo la ruta exacta (con límite de palabra), para que `devops-gate.json.bak` no se cuele.
 ANALYSIS="$(printf '%s' "$CMD" | sed -E 's#\.claude/devops-gate\.json([^[:alnum:]._/-]|$)#__GATE_FILE__\1#g')"
+# CHK-13 lee los workflows con python3 -c: se sustituye solo el código literal (sin escrituras
+# posibles), así que cualquier otra cosa encadenada en el mismo comando se sigue analizando.
+CHK13_CODE='python3 -c "import yaml,sys;[yaml.safe_load(open(f)) for f in sys.argv[1:]]"'
+ANALYSIS="${ANALYSIS//"$CHK13_CODE"/__CHK13__}"
 
-# Ruta protegida: un segmento ".claude" de ruta, o los archivos CLAUDE.md / MEMORY.md / AGENTS.md.
-PROT='(\.claude([/"'"'"'[:space:]]|$)|CLAUDE\.md|MEMORY\.md|AGENTS\.md)'
+# Ruta protegida: un segmento ".claude" o ".github" de ruta, o los archivos CLAUDE.md / MEMORY.md /
+# AGENTS.md. ".github" entero (no solo workflows/) para que `cd .github && … > workflows/x` no se cuele.
+PROT='(\.(claude|github)([/"'"'"'[:space:]]|$)|CLAUDE\.md|MEMORY\.md|AGENTS\.md)'
 
 # Sin ninguna mención a una ruta protegida no hay nada que analizar.
 printf '%s' "$ANALYSIS" | grep -Eq "$PROT" || exit 0
@@ -79,7 +86,7 @@ elif printf '%s' "$ANALYSIS" | grep -Eq "(^|[^[:alnum:]_.-])($INLINE)"; then
 fi
 
 if [ -n "$reason" ]; then
-  echo "BLOQUEADO por protect-config-hook: $reason (.claude/**, CLAUDE.md, MEMORY.md o AGENTS.md). La configuración de los agentes solo se modifica con las herramientas Edit/Write, que piden confirmación al usuario (Regla 02, P-01; Regla 03, PI-07). Si solo necesitas leer, usa un comando de lectura." >&2
+  echo "BLOQUEADO por protect-config-hook: $reason (.claude/**, CLAUDE.md, MEMORY.md, AGENTS.md o .github/**). La configuración de los agentes y los workflows del CI solo se modifican con las herramientas Edit/Write, que piden confirmación al usuario (Regla 02, P-01; Regla 03, PI-07). Si solo necesitas leer, usa un comando de lectura." >&2
   exit 2
 fi
 exit 0
