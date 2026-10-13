@@ -66,9 +66,20 @@ pipeline {
 
         // CHK-17 (ADR-002, D6): fuera de withCredentials, sin secrets ni navegador.
         // La autoprueba crea su repositorio en un temporal fuera del workspace.
+        // Portabilidad de awk: la estática no necesita gawk. Las autopruebas que
+        // usan awk corren con cada implementación instalada en el agente (sin
+        // --require: GitHub Actions exige mawk, gawk y gawk --posix).
+        stage('Portabilidad de awk') {
+            steps {
+                sh 'bash scripts/tests/check-awk-portability-test.sh'
+                sh 'bash scripts/check-awk-portability.sh'
+                sh 'bash scripts/tests/run-with-each-awk-test.sh'
+            }
+        }
+
         stage('Capas (CHK-17)') {
             steps {
-                sh 'bash scripts/tests/check-layers-test.sh'
+                sh 'bash scripts/run-with-each-awk.sh -- bash scripts/tests/check-layers-test.sh'
                 sh '''#!/usr/bin/env bash
 set -euo pipefail
 git --version
@@ -81,8 +92,8 @@ bash scripts/check-layers.sh
         // del agente: una fila vencida rompe el build aunque el código no cambie.
         stage('Cuarentena reglada (CHK-14)') {
             steps {
-                sh 'bash scripts/tests/check-quarantine-test.sh'
-                sh 'bash scripts/tests/evaluate-quarantine-run-test.sh'
+                sh 'bash scripts/run-with-each-awk.sh -- bash scripts/tests/check-quarantine-test.sh'
+                sh 'bash scripts/run-with-each-awk.sh -- bash scripts/tests/evaluate-quarantine-run-test.sh'
                 sh 'bash scripts/check-quarantine.sh'
             }
         }

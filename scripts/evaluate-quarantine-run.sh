@@ -47,6 +47,9 @@
 # escenario (que viene de la feature); nunca el mensaje de fallo ni la salida
 # capturada, que pueden contener texto del SUT. Las secciones CDATA se ignoran.
 # Solo bash, coreutils, find, sort y awk POSIX (compatible con mawk y gawk).
+# Sin nombres que gawk reserva (scripts/check-awk-portability.sh): un array
+# con el nombre de una variable integrada de gawk es un error fatal en el
+# runner de GitHub Actions y pasa sin aviso con mawk.
 set -euo pipefail
 export LC_ALL=C
 
@@ -271,13 +274,14 @@ function xml_line(s,    i, rest, tag, j, partial) {
 
 # ------------------------------------------------------------------ tipos
 # Tipo de una lista de @AC-: "defecto-sut", "inestable", "mixto" (varios) o ""
-# si alguno no tiene fila válida (se registra como rojo).
+# si alguno no tiene fila válida (se registra como rojo). QTYPE: tipo de cada
+# @AC- del registro de docs/quarantine.md.
 function type_of(list, who,    n, i, tmp, t, out) {
   n = split(list, tmp, " "); out = ""
   if (n == 0) { red(who ": escenario en cuarentena sin @AC-<DOMINIO>-<NN>"); return "" }
   for (i = 1; i <= n; i++) {
-    if (!(tmp[i] in RT)) { red(who ": " tmp[i] " sin fila en " qfile " (CHK-14)"); return "" }
-    t = RT[tmp[i]]
+    if (!(tmp[i] in QTYPE)) { red(who ": " tmp[i] " sin fila en " qfile " (CHK-14)"); return "" }
+    t = QTYPE[tmp[i]]
     if (t != "defecto-sut" && t != "inestable") { red(who ": " tmp[i] " con tipo desconocido en " qfile " (CHK-14)"); return "" }
     if (out == "") out = t
     else if (out != t) out = "mixto"
@@ -309,7 +313,7 @@ FILENAME == qfile {
     n = cells($0)
     e = (col["Escenario"] <= n) ? C[col["Escenario"]] : ""
     t = (col["Tipo"] <= n) ? C[col["Tipo"]] : ""
-    if (e ~ /^@AC-[A-Z]+-[0-9][0-9]$/) RT[e] = t
+    if (e ~ /^@AC-[A-Z]+-[0-9][0-9]$/) QTYPE[e] = t
   }
   next
 }

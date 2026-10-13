@@ -170,27 +170,38 @@ jobs:
   # paralelo a `test`, sin secrets ni navegador. CHK-14 y CHK-17 van aquí y no
   # junto a CHK-12 porque `test` expone los secrets TEST_* a todos sus pasos
   # (env a nivel de job), y ni las autopruebas ni los scripts los necesitan.
+  #
+  # Las autopruebas que ejercitan awk corren con cada implementación: en el
+  # runner `awk` es gawk y en Ubuntu de escritorio es mawk, y un programa que
+  # solo se prueba con una puede fallar (o cambiar en silencio) con la otra.
+  # --require hace fallar el paso si falta alguna (falla cerrado).
   mutation:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Capas, autoprueba (CHK-17)
-        run: bash scripts/tests/check-layers-test.sh
+      - name: Portabilidad de awk (estática y su autoprueba, runner de la matriz)
+        run: |
+          bash scripts/tests/check-awk-portability-test.sh
+          bash scripts/check-awk-portability.sh
+          bash scripts/tests/run-with-each-awk-test.sh
+
+      - name: Capas, autoprueba con mawk, gawk y gawk --posix (CHK-17)
+        run: bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/check-layers-test.sh
 
       - name: Capas (CHK-17)
         run: |
           git --version
           bash scripts/check-layers.sh
 
-      - name: Cuarentena, autoprueba (CHK-14)
-        run: bash scripts/tests/check-quarantine-test.sh
+      - name: Cuarentena, autoprueba con mawk, gawk y gawk --posix (CHK-14)
+        run: bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/check-quarantine-test.sh
 
-      - name: Evaluador del job quarantine, autoprueba (CHK-14)
-        run: bash scripts/tests/evaluate-quarantine-run-test.sh
+      - name: Evaluador del job quarantine, autoprueba con mawk, gawk y gawk --posix (CHK-14)
+        run: bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/evaluate-quarantine-run-test.sh
 
       # Fecha del runner (UTC): una fila con el límite o la revisión vencidos
       # rompe el CI aunque nadie haya tocado el código.

@@ -557,6 +557,24 @@ xml 2 0 1 1 "$(tc_skip Normal)" "$(tc_error 'Defecto conocido')"
 log compile
 check "infra: log sin Tests run (inestable)" 1 'ERROR: el log de Maven no tiene la línea' 1 maven.log
 
+# 36. Forma del log real del job (run de CI de 5329cf1): la línea por clase y
+# el XML dicen 21/1/0/20; el bloque "Results:" de Surefire agrupa los
+# `Example #N.M` homónimos y dice 18/1/0/17. El evaluador cuadra con la línea
+# por clase e ignora el bloque Results: defecto-sut que falla, rc 0.
+new
+cases=()
+for i in $(seq 1 20); do cases+=("$(tc_skip "Normal $i")"); done
+xml 21 1 0 20 "${cases[@]}" "$(tc_fail 'Defecto conocido')"
+printf '%s\n' '[INFO] Scanning for projects...' \
+  '[ERROR] Tests run: 21, Failures: 1, Errors: 0, Skipped: 20, Time elapsed: 9.5 s <<< FAILURE! -- in com.demo.runners.RunnerTest' \
+  '[INFO] ' '[INFO] Results:' '[INFO] ' '[ERROR] Failures: ' \
+  '[ERROR]   Defecto conocido' '[INFO] ' \
+  '[ERROR] Tests run: 18, Failures: 1, Errors: 0, Skipped: 17' '[INFO] ' \
+  '[INFO] BUILD FAILURE' \
+  '[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.3:test (default-test) on project p: There are test failures.' \
+  > "$d/maven.log"
+check "log real: Results distinto de la línea por clase" 0 'NOTA: Fallo esperado (defecto-sut): «Defecto conocido»' 1 maven.log
+
 # 29. Errores de uso (rc 2).
 new
 xml 2 1 0 1 "$(tc_skip Normal)" "$(tc_fail 'Defecto conocido')"
