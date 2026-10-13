@@ -190,7 +190,7 @@ jobs:
       TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD }}
     services:
       selenium:
-        image: selenium/standalone-chrome:4.45.0
+        image: selenium/standalone-chrome@sha256:90fbfd0cec921daba37e87f92e0edbd2c1b6e03b14d3972dba6338dec3884b70 # 4.45.0
         ports:
           - 4444:4444
         options: --shm-size=2g

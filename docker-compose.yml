@@ -1,6 +1,6 @@
 services:
   selenium-hub:
-    image: selenium/hub:4.45.0
+    image: selenium/hub@sha256:684d163880d558f217b29d24e992c5a52e0b130381ab7e1f79e9bad0414f753b # 4.45.0
     ports:
       - "4442:4442"
       - "4443:4443"
@@ -10,7 +10,7 @@ services:
       SE_SESSION_RETRY_INTERVAL: 5
 
   node-chrome:
-    image: selenium/node-chrome:4.45.0
+    image: selenium/node-chrome@sha256:fae4a6dbb32939885ad92f8b7e1ed994179309d297c9e8b1fd39ea55af34ff4a # 4.45.0
     shm_size: 2gb
     depends_on:
       - selenium-hub
