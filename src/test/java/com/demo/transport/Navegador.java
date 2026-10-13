@@ -3,7 +3,6 @@ package com.demo.transport;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
@@ -31,21 +30,14 @@ public final class Navegador {
 
     private static final Duration TIEMPO_MAXIMO_ESPERA =
             Duration.ofSeconds(ConfigReader.getPositiveInt("explicit.wait.seconds"));
-    /**
-     * Tope de clics por acción: el primero es nativo y los demás, el respaldo JavaScript. No es un reintento de
-     * la prueba: agotado el tope no se vuelve a pulsar y solo se espera la postcondición hasta el tiempo máximo.
-     */
-    private static final int MAXIMO_CLICS_POR_ACCION = 3;
     /** Sondeos consecutivos con el mismo resultado para dar por estable una lectura de ausencia o de conteo. */
     private static final int SONDEOS_ESTABLES = 2;
-    private static final String SCRIPT_ESCRIBIR_INPUT_CONTROLADO = """
-            const elemento = arguments[0];
-            const valor = arguments[1];
-            const descriptor = Object.getOwnPropertyDescriptor(elemento.constructor.prototype, 'value');
-            descriptor.set.call(elemento, valor);
-            elemento.dispatchEvent(new Event('input', { bubbles: true }));
-            elemento.dispatchEvent(new Event('change', { bubbles: true }));
-            """;
+    /**
+     * Pista fija de los fallos con un clic o una escritura nativos sin efecto (ADR-002, D1 y D8): la causa conocida
+     * es el aviso de contraseñas filtradas de Chrome, que descarta la entrada nativa mientras está abierto.
+     */
+    private static final String PISTA_ENTRADA_NATIVA_SIN_EFECTO =
+            "si ocurre en Chrome tras iniciar sesión, revisar las preferencias de Chrome (ADR-002, D8)";
 
     /** Constante (PI-05): no incluye datos del SUT. Devuelve null fuera de una página de error de Chrome. */
     private static final String SCRIPT_LEER_CODIGO_PAGINA_ERROR = """
@@ -151,33 +143,20 @@ public final class Navegador {
     }
 
     /**
-     * Hace clic en el control, con el mismo respaldo y el mismo tope de clics que {@link #clickYEsperarUrlContiene},
-     * hasta que la URL contenga el fragmento o se agote el tiempo máximo. Distingue tres estados:
-     * {@link ResultadoClic#AVANZO}; {@link ResultadoClic#NO_AVANZO} con al menos un clic efectivo (el control
-     * estuvo clicable y se pulsó); y {@link ResultadoClic#NO_DISPONIBLE}: el control no estuvo visible y habilitado
-     * en todo el tiempo máximo, así que no hubo clic. Quien lo llama decide si "no disponible" es un resultado
+     * Hace un solo clic nativo en el control, como {@link #clickYEsperarUrlContiene}, y espera hasta que la URL
+     * contenga el fragmento o se agote el tiempo máximo. Distingue tres estados: {@link ResultadoClic#AVANZO};
+     * {@link ResultadoClic#NO_AVANZO}: tras el clic nativo (el control estuvo clicable y se pulsó) la URL no se
+     * alcanzó; y {@link ResultadoClic#NO_DISPONIBLE}: el control no estuvo visible y habilitado en todo el tiempo
+     * máximo, así que no hubo clic. Quien lo llama decide si "no disponible" es un resultado
      * válido; para que no sea un falso positivo debe comprobar antes que el resto de la página sí cargó.
      * Registra a nivel INFO el número de clics efectivos, nunca datos del escenario.
      */
     public ResultadoClic clickYObservarUrlContiene(By localizador, String fragmentoUrl) {
         verificarIniciado();
         AtomicInteger clicsEfectivos = new AtomicInteger();
-        ExpectedCondition<Boolean> urlEsperada = ExpectedConditions.urlContains(fragmentoUrl);
         try {
-            wait.until(webDriver -> {
-                if (Boolean.TRUE.equals(urlEsperada.apply(webDriver))) {
-                    return true;
-                }
-                if (clicsEfectivos.get() >= MAXIMO_CLICS_POR_ACCION) {
-                    return false;
-                }
-                WebElement elemento = ExpectedConditions.elementToBeClickable(localizador).apply(webDriver);
-                if (elemento == null) {
-                    return false;
-                }
-                pulsar(webDriver, elemento, localizador, clicsEfectivos);
-                return Boolean.TRUE.equals(urlEsperada.apply(webDriver));
-            });
+            wait.until(clicNativoUnicoHastaCumplir(
+                    localizador, ExpectedConditions.urlContains(fragmentoUrl), clicsEfectivos));
             logger.info("El clic en {} avanzó con {} clic(s) efectivo(s)", localizador, clicsEfectivos.get());
             return ResultadoClic.AVANZO;
         } catch (TimeoutException exception) {
@@ -222,6 +201,7 @@ public final class Navegador {
         clickHastaCumplir(localizador, ExpectedConditions.invisibilityOfElementLocated(localizador));
     }
 
+    /** Escribe una sola vez de forma nativa y espera a que el campo conserve el valor; si no, falla. */
     public void escribir(By localizador, String texto) {
         verificarIniciado();
         WebElement elemento = elementoVisible(localizador);
@@ -357,57 +337,50 @@ public final class Navegador {
     }
 
     /**
-     * Pulsa hasta {@value #MAXIMO_CLICS_POR_ACCION} veces (el primero nativo, el resto con el respaldo JavaScript
-     * para cuando Chrome pierde el evento) y espera la postcondición dentro del tiempo máximo. El respaldo solo
-     * se aplica si 500 ms después del clic anterior la postcondición sigue sin cumplirse; con el tope agotado no
-     * se pulsa más y solo se espera. Un control que alterna estado (agregar y quitar) podría revertirse con un
-     * segundo clic si el primero sí se registró pero tardó en verse: por eso el tope es pequeño y se registra a
-     * nivel INFO cada vez que hace falta un clic extra. Al agotarse el plazo lanza {@link TimeoutException} con
-     * el localizador, los clics efectivos y el plazo. El localizador puede llevar el nombre de un producto del
-     * escenario (dato propio de la prueba); el mensaje no incluye texto leído del SUT ni credenciales.
+     * Hace un solo clic nativo cuando el control está visible y habilitado, y espera la postcondición dentro del
+     * tiempo máximo (ADR-002, D1). No repite el clic: si la postcondición no se cumple, lanza
+     * {@link TimeoutException} con el localizador, el plazo y los clics efectivos (0 o 1); con 1, añade la pista de
+     * D8. El localizador puede llevar el nombre de un producto del escenario (dato propio de la prueba); el mensaje
+     * no incluye texto leído del SUT ni credenciales.
      */
     private void clickHastaCumplir(By localizador, ExpectedCondition<Boolean> postcondicion) {
         AtomicInteger clicsEfectivos = new AtomicInteger();
         try {
-            wait.until(webDriver -> {
-                if (Boolean.TRUE.equals(postcondicion.apply(webDriver))) {
-                    return true;
-                }
-                if (clicsEfectivos.get() >= MAXIMO_CLICS_POR_ACCION) {
-                    return false;
-                }
-
-                WebElement elemento = ExpectedConditions.elementToBeClickable(localizador).apply(webDriver);
-                if (elemento == null) {
-                    return false;
-                }
-
-                pulsar(webDriver, elemento, localizador, clicsEfectivos);
-                return Boolean.TRUE.equals(postcondicion.apply(webDriver));
-            });
+            wait.until(clicNativoUnicoHastaCumplir(localizador, postcondicion, clicsEfectivos));
         } catch (TimeoutException exception) {
             int clics = clicsEfectivos.get();
             throw new TimeoutException(
-                    "El clic en %s no alcanzó su postcondición en %d s (clics efectivos: %d de %d permitidos%s)"
-                            .formatted(localizador, TIEMPO_MAXIMO_ESPERA.toSeconds(), clics, MAXIMO_CLICS_POR_ACCION,
-                                    clics == 0 ? "; el control nunca estuvo visible y habilitado" : ""),
+                    "El clic en %s no alcanzó su postcondición en %d s (clics efectivos: %d; %s)"
+                            .formatted(localizador, TIEMPO_MAXIMO_ESPERA.toSeconds(), clics,
+                                    clics == 0
+                                            ? "el control nunca estuvo visible y habilitado"
+                                            : "el clic nativo no tuvo efecto; " + PISTA_ENTRADA_NATIVA_SIN_EFECTO),
                     exception);
-        }
-        if (clicsEfectivos.get() > 1) {
-            logger.info("El clic en {} necesitó {} clics efectivos (respaldo JavaScript)", localizador,
-                    clicsEfectivos.get());
         }
     }
 
-    /** Primer clic nativo; los siguientes, con el respaldo JavaScript. Cuenta el clic antes de pulsar. */
-    private void pulsar(WebDriver webDriver, WebElement elemento, By localizador, AtomicInteger clicsEfectivos) {
-        if (clicsEfectivos.getAndIncrement() == 0) {
+    /**
+     * Condición de espera que da un único clic nativo: es verdadera en cuanto se cumple la postcondición; mientras
+     * no haya clic, pulsa el control si está visible y habilitado (contando el clic antes de pulsar); después del
+     * clic solo vuelve a evaluar la postcondición.
+     */
+    private static ExpectedCondition<Boolean> clicNativoUnicoHastaCumplir(
+            By localizador, ExpectedCondition<Boolean> postcondicion, AtomicInteger clicsEfectivos) {
+        return webDriver -> {
+            if (Boolean.TRUE.equals(postcondicion.apply(webDriver))) {
+                return true;
+            }
+            if (clicsEfectivos.get() > 0) {
+                return false;
+            }
+            WebElement elemento = ExpectedConditions.elementToBeClickable(localizador).apply(webDriver);
+            if (elemento == null) {
+                return false;
+            }
+            clicsEfectivos.incrementAndGet();
             elemento.click();
-            return;
-        }
-        logger.debug("El clic anterior en {} no alcanzó su postcondición; se aplica el respaldo JavaScript",
-                localizador);
-        ((JavascriptExecutor) webDriver).executeScript("arguments[0].click();", elemento);
+            return Boolean.TRUE.equals(postcondicion.apply(webDriver));
+        };
     }
 
     private boolean visibleAhora(WebDriver webDriver, By localizador) {
@@ -420,40 +393,26 @@ public final class Navegador {
         }
     }
 
+    /**
+     * Espera a que el campo conserve el valor escrito en {@value #SONDEOS_ESTABLES} sondeos consecutivos, sin volver
+     * a escribir (ADR-002, D1). El mensaje del fallo no incluye el texto, que puede ser una contraseña.
+     */
     private void esperarValorEstable(By localizador, String textoEsperado) {
         AtomicInteger coincidenciasConsecutivas = new AtomicInteger();
-        AtomicBoolean reintentoNativoRealizado = new AtomicBoolean();
-        AtomicInteger correcciones = new AtomicInteger();
-        wait.until(webDriver -> {
-            WebElement elemento = ExpectedConditions.visibilityOfElementLocated(localizador).apply(webDriver);
-            if (elemento == null) {
-                coincidenciasConsecutivas.set(0);
-                return false;
-            }
-
-            if (textoEsperado.equals(elemento.getDomProperty("value"))) {
-                return coincidenciasConsecutivas.incrementAndGet() >= 2;
-            }
-
-            coincidenciasConsecutivas.set(0);
-            correcciones.incrementAndGet();
-            if (reintentoNativoRealizado.compareAndSet(false, true)) {
-                elemento.clear();
-                elemento.sendKeys(textoEsperado);
-                return false;
-            }
-
-            logger.debug("La escritura nativa en {} no conservó su valor; se aplica el respaldo para input controlado",
-                    localizador);
-            ((JavascriptExecutor) webDriver).executeScript(
-                    SCRIPT_ESCRIBIR_INPUT_CONTROLADO,
-                    elemento,
-                    textoEsperado);
-            return false;
-        });
-        if (correcciones.get() > 0) {
-            logger.info("La escritura en {} necesitó {} corrección(es) tras la escritura nativa", localizador,
-                    correcciones.get());
+        try {
+            wait.until(webDriver -> {
+                WebElement elemento = ExpectedConditions.visibilityOfElementLocated(localizador).apply(webDriver);
+                if (elemento == null || !textoEsperado.equals(elemento.getDomProperty("value"))) {
+                    coincidenciasConsecutivas.set(0);
+                    return false;
+                }
+                return coincidenciasConsecutivas.incrementAndGet() >= SONDEOS_ESTABLES;
+            });
+        } catch (TimeoutException exception) {
+            throw new TimeoutException(
+                    "La escritura en %s no conservó el valor escrito en %d s; %s"
+                            .formatted(localizador, TIEMPO_MAXIMO_ESPERA.toSeconds(), PISTA_ENTRADA_NATIVA_SIN_EFECTO),
+                    exception);
         }
     }
 }
