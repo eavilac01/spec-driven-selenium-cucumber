@@ -41,6 +41,12 @@ jobs:
       - name: Verify required secrets
         run: bash scripts/check-required-secrets.sh
 
+      # ADR-002 (enmienda Preferencias de Chrome): Chrome viene preinstalado en
+      # ubuntu-latest y Selenium Manager usa ese binario; su versión queda en el
+      # log para asociar un rojo con una actualización de Chrome.
+      - name: Chrome version
+        run: google-chrome --version
+
       # CHK-08: suite completa (unitarias y E2E) sin los escenarios en cuarentena.
       # pipefail: el rc del paso es el de Maven (o el de tee), no solo el de tee.
       - name: Run tests (headless Chrome)
@@ -169,6 +175,12 @@ jobs:
       # Sondeo de /status con plazo: si el Grid no queda listo, el job falla.
       - name: Wait for Selenium Grid
         run: bash scripts/wait-for-grid.sh http://localhost:4444 120
+
+      # Las sesiones corren en el Chrome del contenedor del Grid, no en el del
+      # runner: se lee el binario dentro del servicio (docker exec), sin red ni
+      # JSON. Falla si el binario no está, como `Firefox version`.
+      - name: Chrome version (contenedor del Grid)
+        run: docker exec "${{ job.services.selenium.id }}" google-chrome --version
 
       # -Dremote.url no produce el aviso de D3: es un destino de red (D5).
       - name: Run E2E (Selenium Grid, Chrome)
@@ -327,6 +339,10 @@ jobs:
       - name: Verify required secrets
         if: steps.detect.outputs.present == 'true'
         run: bash scripts/check-required-secrets.sh
+
+      - name: Chrome version
+        if: steps.detect.outputs.present == 'true'
+        run: google-chrome --version
 
       # El rc de Maven se captura en la misma orden (PIPESTATUS, por el tee) y
       # se evalúa contra el XML: un fallo de compilación no deja XML ni la línea
