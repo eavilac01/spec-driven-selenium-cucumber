@@ -47,7 +47,7 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 - Las features describen comportamiento de negocio: sin selectores ni palabras de interfaz (clic, botón, campo, xpath).
 - Capas (ADR-002): steps → actions → pages → transport. Los steps solo usan acciones; las páginas solo interactúan a través de `Navegador`; Selenium solo vive en `transport` (en páginas, solo `By`).
 - Localizadores como constantes `By`, con prioridad `id` > CSS con atributos estables (`data-test`) > XPath relativo solo para relaciones del DOM; sin XPath absolutos, índices posicionales, `PageFactory` ni `@FindBy`.
-- Solo esperas explícitas por condición (`Navegador`); cada click espera su postcondición.
+- Solo esperas explícitas por condición (`Navegador`); cada acción hace un solo clic o una sola escritura nativos y espera su postcondición, sin respaldo JavaScript (ADR-002, D1). En Chrome, `BrowserSettings.chromePreferences()` desactiva el aviso de contraseñas filtradas, que descartaba la entrada nativa (D8).
 - Configuración con precedencia `-D` > variable de entorno > `config.properties`; los valores esperados (`*.expected*`) y las URL (`base.url`, `remote.url`) solo aceptan `-D` y `config.properties` (ADR-003); los valores esperados salen de la spec.
 
 ## No hagas
