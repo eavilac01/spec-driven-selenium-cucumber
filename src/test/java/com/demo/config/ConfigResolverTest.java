@@ -125,14 +125,185 @@ class ConfigResolverTest {
                 assertThrows(NullPointerException.class, () -> new ConfigResolver(lookup, lookup, null)).getMessage());
     }
 
-    // --- Comportamiento actual fijado (P2 abiertos de MEMORY.md; se deciden aparte) ---
+    // --- Valores esperados y destinos de red sin entorno (ADR-003) ---
 
     @Test
-    void environmentCanOverrideExpectedKeysTodayP2() {
+    void environmentDoesNotOverrideExpectedKeys() {
         file.setProperty("cart.expected.single-product.count", "1");
         environment.put("CART_EXPECTED_SINGLE_PRODUCT_COUNT", "7");
+        environment.put("cart.expected.single-product.count", "7");
 
-        assertEquals(7, resolver.getPositiveInt("cart.expected.single-product.count"));
+        assertEquals(1, resolver.getPositiveInt("cart.expected.single-product.count"));
+    }
+
+    @Test
+    void expectedErrorSuffixIgnoresEnvironment() {
+        file.setProperty("test.login.cases.locked-user.expected-error", "archivo");
+        environment.put("TEST_LOGIN_CASES_LOCKED_USER_EXPECTED_ERROR", "entorno");
+
+        assertEquals("archivo", resolver.getRequired("test.login.cases.locked-user.expected-error"));
+    }
+
+    @Test
+    void expectedKeyOnlyInEnvironmentIsAbsent() {
+        environment.put("INVENTORY_EXPECTED_TITLE", "entorno");
+
+        assertEquals("", resolver.getOptional("inventory.expected.title"));
+        IllegalStateException exception = assertThrows(IllegalStateException.class,
+                () -> resolver.getRequired("inventory.expected.title"));
+        assertEquals("La configuración obligatoria 'inventory.expected.title' no tiene valor",
+                exception.getMessage());
+    }
+
+    @Test
+    void expectedAsFirstSegmentIgnoresEnvironment() {
+        file.setProperty("expected.x", "archivo");
+        environment.put("EXPECTED_X", "entorno");
+
+        assertEquals("archivo", resolver.getRequired("expected.x"));
+    }
+
+    @Test
+    void expectedSegmentIsCaseInsensitive() {
+        file.setProperty("a.Expected.b", "archivo");
+        environment.put("a.Expected.b", "entorno");
+
+        assertEquals("archivo", resolver.getRequired("a.Expected.b"));
+    }
+
+    @Test
+    void segmentStartingWithExpectedIsTreatedAsExpected() {
+        file.setProperty("a.expectedValue", "archivo");
+        environment.put("A_EXPECTEDVALUE", "entorno");
+
+        assertEquals("archivo", resolver.getRequired("a.expectedValue"));
+    }
+
+    @Test
+    void blankSystemValueWinsForExpectedKey() {
+        file.setProperty("cart.expected.count", "2");
+        system.put("cart.expected.count", " ");
+
+        assertEquals(" ", resolver.getOptional("cart.expected.count"));
+    }
+
+    @Test
+    void remoteUrlIgnoresEnvironment() {
+        file.setProperty("remote.url", "");
+        environment.put("REMOTE_URL", "http://localhost:9");
+        environment.put("remote.url", "http://localhost:9");
+
+        assertEquals("", resolver.getOptional("remote.url"));
+    }
+
+    @Test
+    void baseUrlIgnoresEnvironment() {
+        file.setProperty("base.url", "https://www.saucedemo.com");
+        environment.put("BASE_URL", "http://otro-host.invalid");
+        environment.put("base.url", "http://otro-host.invalid");
+
+        assertEquals("https://www.saucedemo.com", resolver.getRequired("base.url"));
+    }
+
+    @Test
+    void networkDestinationOnlyInEnvironmentIsAbsent() {
+        environment.put("BASE_URL", "http://otro-host.invalid");
+
+        assertEquals("", resolver.getOptional("base.url"));
+    }
+
+    @Test
+    void systemWinsForNetworkDestinations() {
+        file.setProperty("remote.url", "");
+        environment.put("REMOTE_URL", "http://localhost:9");
+        system.put("remote.url", "http://localhost:4444");
+
+        assertEquals("http://localhost:4444", resolver.getOptional("remote.url"));
+
+        system.put("remote.url", "");
+
+        assertEquals("", resolver.getOptional("remote.url"));
+    }
+
+    @Test
+    void networkDestinationPatternIsCaseInsensitiveAndAcceptsDashedSuffix() {
+        file.setProperty("a.Base.URL", "archivo");
+        environment.put("a.Base.URL", "entorno");
+        file.setProperty("grid-url", "archivo");
+        environment.put("GRID_URL", "entorno");
+
+        assertEquals("archivo", resolver.getRequired("a.Base.URL"));
+        assertEquals("archivo", resolver.getRequired("grid-url"));
+    }
+
+    @Test
+    void keysThatLookSimilarButAreNeitherExpectedNorDestinationKeepEnvironment() {
+        file.setProperty("a.unexpected.b", "archivo");
+        environment.put("A_UNEXPECTED_B", "entorno");
+        file.setProperty("a.url.b", "archivo");
+        environment.put("A_URL_B", "entorno");
+        file.setProperty("a.curl", "archivo");
+        environment.put("A_CURL", "entorno");
+
+        assertEquals("entorno", resolver.getRequired("a.unexpected.b"));
+        assertEquals("entorno", resolver.getRequired("a.url.b"));
+        assertEquals("entorno", resolver.getRequired("a.curl"));
+    }
+
+    @Test
+    void headlessKeepsTheEnvironment() {
+        file.setProperty("headless", "false");
+        environment.put("HEADLESS", "true");
+
+        assertTrue(resolver.getBoolean("headless"));
+    }
+
+    @Test
+    void overridesExpectedValueIsTrueForAnExpectedKeyDefinedInTheSystem() {
+        system.put("cart.expected.count", "9");
+        system.put("test.login.cases.locked-user.expected-error", "x");
+
+        assertTrue(resolver.overridesExpectedValue("cart.expected.count"));
+        assertTrue(resolver.overridesExpectedValue("test.login.cases.locked-user.expected-error"));
+    }
+
+    @Test
+    void overridesExpectedValueIsTrueEvenWhenTheSystemValueIsEmptyOrBlank() {
+        system.put("cart.expected.count", "");
+        system.put("cart.expected.other", " ");
+
+        assertTrue(resolver.overridesExpectedValue("cart.expected.count"));
+        assertTrue(resolver.overridesExpectedValue("cart.expected.other"));
+    }
+
+    @Test
+    void overridesExpectedValueIsFalseWhenOnlyTheEnvironmentOrTheFileDefineTheKey() {
+        environment.put("CART_EXPECTED_COUNT", "9");
+        file.setProperty("cart.expected.count", "2");
+        file.setProperty("cart.expected.only-file", "2");
+
+        assertFalse(resolver.overridesExpectedValue("cart.expected.count"));
+        assertFalse(resolver.overridesExpectedValue("cart.expected.only-file"));
+        assertFalse(resolver.overridesExpectedValue("cart.expected.undefined"));
+    }
+
+    @Test
+    void overridesExpectedValueIsFalseForNetworkDestinationsAndOtherKeys() {
+        system.put("remote.url", "http://localhost:4444");
+        system.put("base.url", "http://localhost:3000");
+        system.put("headless", "true");
+
+        assertFalse(resolver.overridesExpectedValue("remote.url"));
+        assertFalse(resolver.overridesExpectedValue("base.url"));
+        assertFalse(resolver.overridesExpectedValue("headless"));
+    }
+
+    @Test
+    void overridesExpectedValueRejectsNullKey() {
+        NullPointerException exception = assertThrows(NullPointerException.class,
+                () -> resolver.overridesExpectedValue(null));
+
+        assertEquals("La clave de configuración no puede ser null", exception.getMessage());
     }
 
     @Test
