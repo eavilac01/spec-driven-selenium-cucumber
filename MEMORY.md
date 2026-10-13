@@ -3,50 +3,45 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-- Suite 165 en verde (local, `not @quarantine`, 1 omitido = AC-COMPRA-09): 21 E2E (22 AC de login y compra) + 144 unitarias; PIT 116/116.
-- `Navegador.abrir` falla al instante ante una página de error de red (`IllegalStateException` con URL y `net::ERR_*`, ~1 s en vez de 11 s); `BrowserErrorPage` en `src/main`; Chrome con `--disable-component-update` (sin demostrar que quite el flake).
-- Specs `docs/specs/login.md` y `compra.md` con todos sus AC verificables y cubiertos (valores ratificados tras exploración, 2026-10-10).
-- CHK-10 demostrado en cada AC: cada control negativo falla en el `Then`.
-- AC-COMPRA-09 en cuarentena `defecto-sut` (SauceDemo deja comprar con carrito vacío); CHK-14; el job `quarantine` (`evaluate-quarantine-run.sh`) queda verde con el fallo esperado y rojo solo ante errores reales.
-- Package `com.demo`, Maven Wrapper, reportes Allure y HTML de Cucumber.
-- Equipo de 5 agentes QE con reglas en `.claude/rules/` (SDD, permisos, prompt injection, CHK-01…17).
-- ADR-001 (mutación con PIT) completo: `src/main` puro (`ConfigResolver`, `DotEnvParser`, `SecretResolver`, `BrowserSettings`, `BrowserErrorPage`, `Credentials`); job `mutation` con guarda de reporte.
-- ADR-002 (capas) completo: steps → actions → pages → transport (`Navegador`, único dueño del `WebDriver`); CHK-17 `check-layers.sh` con autoprueba de 162 casos.
+- Suite 186 en verde (local, `not @quarantine`, 1 omitido = AC-COMPRA-09): 21 E2E (22 AC) + 165 unitarias; PIT 129/129. Subido en `5329cf1` (2026-10-13).
+- Specs `docs/specs/login.md` y `compra.md` aprobadas, con todos sus AC verificables cubiertos y CHK-10 demostrado en cada uno.
+- AC-COMPRA-09 en cuarentena `defecto-sut`; acepta "no se puede tramitar" solo con el botón presente y deshabilitado u oculto; si no existe, error.
+- Job `quarantine`: `defecto-sut` que falla por aserción = verde; `inestable` con error = verde con aviso (decisión del usuario); errores reales e infraestructura = rojo.
+- `Navegador`: `abrir` falla al instante ante `net::ERR_*`; tope de 3 clics por acción (1 nativo + 2 JS, con log INFO); `contarEstable`/`esVisibleEstable` (2 sondeos); `existeEnTiempoMaximo`.
+- ADR-001 (PIT) y ADR-002 (capas; CHK-17 con autoprueba de 184 casos, incluida la regla de `ResultadoClic`) completos.
+- ADR-003: las claves `*.expected*`, `base.url` y `remote.url` solo aceptan `-D` y `config.properties`; un `-D` sobre un esperado deja WARN con la clave. PI-08 alineada.
 - CHK-01…17 activas; en CI: CHK-12 antes de la suite; CHK-11/14/15/16/17 en el job `mutation`.
-- Hooks activos: gate DevOps y protección de `.claude/**`, `CLAUDE.md`, `MEMORY.md` y `AGENTS.md` (56/56 casos).
-- `AGENTS.md` en la raíz, para cualquier agente de código; bajo `ask`.
-- CI con 5 jobs (`test`, `e2e-firefox`, `e2e-grid`, `mutation`, `quarantine`) y paralelismo por escenario (2 hilos); Jenkinsfile endurecido (6 Secret text = nombres de `.env.example`), sin servidor real.
+- Hooks activos: gate DevOps y protección de `.claude/**`, `CLAUDE.md`, `MEMORY.md` y `AGENTS.md`.
+- CI con 5 jobs (`test`, `e2e-firefox`, `e2e-grid`, `mutation`, `quarantine`), 2 hilos; Jenkinsfile sin servidor real (R-4).
 
 ## Decisiones (y por qué)
 - El coordinador es la sesión principal, porque un subagente no puede delegar en otros.
-- No hay agente de datos y ambientes: SauceDemo es externo y no tiene estado de servidor que preparar.
 - PIT solo sobre la lógica propia del framework; los E2E se validan con control negativo (`-D…`), porque un SUT externo no se puede mutar.
 - El verifier no tiene `memory`: activarla le agrega `Write`/`Edit` y rompe su independencia.
-- Solo el usuario aprueba specs (SDD-09) y reescribe historia (push forzado bloqueado en settings).
+- Solo el usuario aprueba specs (SDD-09) y reescribe historia; los ADR los aprueba el coordinador.
 - `MEMORY.md` está bajo `ask`: se importa como instrucción, así que cada cambio lo confirma el usuario.
 - Los `Then` comparan contra claves `*.expected*` independientes de la entrada; si no, el control negativo es imposible.
-- Las specs referencian escenarios por tag (`@AC-…`), no por línea: las líneas cambian con cada edición.
-- Riesgo residual aceptado: el error de nombre inválido de `SecretResolver` repite el argumento; hoy todos los llamadores pasan constantes.
+- Las specs y los ADR citan por tag o por nombre de job/paso, no por línea.
+- `XPathLiteral` se queda en `pages` sin ramas de comillas (falla ante `'`); se reabre si un dato las necesita.
+- Naming de Cucumber se queda en `short` (el usuario): `long` rompe el evaluador de cuarentena y el efecto es solo cosmético.
 
 ## Aprendizajes y errores a evitar
-- Commits sin `Co-Authored-By` ni marcas de IA; autor según el git local del repo; firmados con SSH desde 2026-10-10 y el gate exige `%G?` = `G` en cada commit (si la llave no está en `ssh-agent`, el commit falla).
+- Commits sin `Co-Authored-By` ni marcas de IA; firmados con SSH; el gate exige `%G?` = `G` en cada commit.
 - El hook evalúa antes de ejecutar: escribir `devops-gate.json` y hacer el push en comandos separados.
-- Un `: ` dentro de la `description` de un agente rompe su YAML.
-- Los comandos con `|` no van en tablas Markdown: se escapan como `\|` y cambian la regex.
-- El CI falla si faltan los 6 secrets `TEST_*` en GitHub.
-- En esta instalación no existen `Grep` ni `Glob`; se descartan en silencio. Buscar con `git grep`/`git ls-files` (B-01).
+- Un `: ` dentro de la `description` de un agente rompe su YAML; los `|` en tablas Markdown se escapan y cambian la regex.
+- En esta instalación no existen `Grep` ni `Glob`: buscar con `git grep`/`git ls-files` (B-01).
 - `ask` solo controla `Edit`/`Write`; `protect-config-hook.sh` bloquea las escrituras por `Bash` en los archivos protegidos.
-- En SauceDemo (SPA) la URL cambia antes que el DOM: esperar un contenedor propio de la página, no solo la URL.
-- PIT 1.30.0 sin `target/classes` dice "Skipping project" y da `BUILD SUCCESS` (falla abierto): CI y gate deben exigir `target/pit-reports/mutations.xml`.
-- PIT no muta `requireNonNull` ni los accesores de un record: esas pruebas se validan con control negativo manual en una copia aislada (sin `.env`).
-- Una mutante declarada "equivalente" se demuestra, no se supone: en CHK-17 dos lo parecían y fallaban abierto.
-- git hace mantenimiento automático en segundo plano tras un commit: un script que copia un repo debe desactivar `maintenance.auto`/`gc.auto` (en el runner rompió la autoprueba).
-- Firefox local es de snap: en local necesita `-Dwebdriver.gecko.driver=/snap/bin/geckodriver`; en CI no.
-- Un "no pasa X" que se verifica solo por ausencia da verde falso cuando falla la observación: exigir prueba positiva del estado contrario (AC-COMPRA-09).
-- No existe la CLI `gh` en esta máquina: las operaciones de GitHub (renombrar, settings) las hace el usuario en la web.
+- En SauceDemo (SPA) la URL cambia antes que el DOM: esperar un contenedor propio de la página.
+- PIT sin `target/classes` da `BUILD SUCCESS` sin mutar (falla abierto): exigir `mutations.xml`. PIT no muta regex, `requireNonNull` ni accesores de record: control negativo manual.
+- Una mutante "equivalente" se demuestra, no se supone.
+- Un "no pasa X" verificado solo por ausencia da verde falso: exigir prueba positiva (AC-COMPRA-09 se rechazó dos veces por esto).
+- `if script | grep -q` con `pipefail` nunca falla si el script sale con rc ≠ 0: capturar la salida antes.
+- Con la máquina cargada, Chrome pierde clics y escrituras nativas (respaldo JS frecuente); con el equipo tranquilo, 0. No correr dos Maven a la vez.
+- Firefox local es de snap: necesita `-Dwebdriver.gecko.driver=/snap/bin/geckodriver`; en CI no.
+- No existe la CLI `gh`: las operaciones de GitHub las hace el usuario en la web.
 
 ## Próximos pasos
-1. Usuario: confirmar el run de CI de `3347062` (fallo rápido + README + cabecera del evaluador).
-2. P2 (engineer): `BrowserErrorPage.codeFromDriverMessage` trunca `ERR_ABCdef` a `ERR_ABC` en vez de rechazar; `abrir` descarta la `WebDriverException` sin log de depuración (Firefox: "código no disponible").
-3. P2: API nueva de `Navegador` y contrato de `abrir` en la tabla D1 del ADR-002; `XPathLiteral` sin pruebas; `clickHastaCumplir` sin acotar; lecturas inmediatas de "no se muestra"; AC-COMPRA-09 si el SUT deshabilita el botón; naming `long` de Cucumber.
-4. P2: el entorno puede sobrescribir claves `*.expected*`; R-4 abierto solo para Jenkins (sin servidor); decidir si un `<error>` en una cuarentena `inestable` debe ser solo aviso.
+1. Usuario: confirmar el run de CI de `5329cf1` (en especial `mutation` con la autoprueba de 184 casos).
+2. P2 (architect): marcar "Hecho" el paso 3 del ADR-003 (Grid con `-Dremote.url` en verde, 2026-10-13).
+3. P2 (devops/architect): CHK-17 no ve `@Anot public …`, `static public`, interfaces públicas ni `protected` en `pages` (mismo hueco en R1/R3); falta caso de columna 0 (mutante `^\s+public` sobrevive).
+4. P2: `inventory.remove-button.text` está en la sección de esperados de `config.properties` sin serlo; causa del respaldo JS bajo carga sin aislar (Firefox/Grid sin medir).
