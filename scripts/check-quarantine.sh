@@ -85,11 +85,12 @@ function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
 function viol(loc, msg) { nv++; V[nv] = loc ": " msg }
 
 # Divide una fila de tabla Markdown en C[1..n]; respeta "\|" dentro de celdas.
-function cells(row,    n, i, tmp) {
-  gsub(/\\\|/, "\001", row)
-  sub(/^[ \t]*\|/, "", row)
-  sub(/\|[ \t]*$/, "", row)
-  n = split(row, tmp, "|")
+# Un parámetro no puede llamarse como una función (POSIX; gawk --posix lo rechaza).
+function cells(line,    n, i, tmp) {
+  gsub(/\\\|/, "\001", line)
+  sub(/^[ \t]*\|/, "", line)
+  sub(/\|[ \t]*$/, "", line)
+  n = split(line, tmp, "|")
   for (i = 1; i <= n; i++) {
     C[i] = trim(tmp[i])
     gsub(/\001/, "|", C[i])
