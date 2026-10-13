@@ -527,7 +527,7 @@ Para comprobar la evidencia durante desarrollo, puede cambiarse temporalmente un
 | `e2e-firefox` | Los escenarios E2E en Firefox headless | Sí |
 | `e2e-grid` | Los escenarios E2E contra un Selenium Grid (`selenium/standalone-chrome`), con espera activa a que esté listo | Sí |
 | `mutation` | CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
-| `quarantine` | Solo los escenarios `@quarantine`, evaluados por `scripts/evaluate-quarantine-run.sh` contra `docs/quarantine.md`: **verde** si un `defecto-sut` falla por aserción (lo esperado); **verde con aviso** si un `defecto-sut` pasa (revisar la spec); **rojo** solo si la cuarentena no mide nada (error o timeout, cero escenarios, sin reporte o fallo de compilación) | Sí |
+| `quarantine` | Solo los escenarios `@quarantine`, evaluados por `scripts/evaluate-quarantine-run.sh` contra `docs/quarantine.md`: **verde** si un `defecto-sut` falla por aserción (lo esperado) o un `inestable` falla por aserción o pasa; **verde con aviso** si un `defecto-sut` pasa (revisar la spec) o un `inestable` termina con error (revisar su diagnóstico); **rojo** si un `defecto-sut` termina con error (excepción o timeout) o si la cuarentena no mide nada (cero escenarios, sin reporte, fallo de compilación o un escenario sin fila) | Sí |
 
 Cada job publica sus reportes como artefactos aunque falle. Los jobs con secrets los verifican al inicio con `scripts/check-required-secrets.sh`, que solo nombra las variables que faltan.
 
@@ -549,7 +549,7 @@ El `Jenkinsfile` declarativo está listo para un servidor Jenkins, aunque todav�
 2. `Traceability SDD (CHK-12)`, `Capas (CHK-17)` y `Cuarentena reglada (CHK-14)`.
 3. `Mutation (CHK-11)`: PIT con la guarda de reporte, sin credenciales.
 4. `Test`: la suite sin `@quarantine`; recibe credenciales.
-5. `Cuarentena (CHK-14)`: solo los escenarios `@quarantine`, con la misma evaluación que en GitHub. Fallo esperado: etapa verde. Un `defecto-sut` que pasa: etapa inestable. Error real: falla el build. También recibe credenciales.
+5. `Cuarentena (CHK-14)`: solo los escenarios `@quarantine`, con la misma evaluación que en GitHub. Fallo esperado: etapa verde. Un `defecto-sut` que pasa o un `inestable` con error: etapa inestable. Error real: falla el build. También recibe credenciales.
 6. `post` de `Test`: publica JUnit y Allure y archiva los reportes, aunque una prueba falle. `Mutation` archiva su reporte y `pit.log`. El `post` global limpia el espacio de trabajo.
 
 Incluye límites de tiempo globales y por etapa, descarte de builds antiguos y builds no concurrentes. Los bloques de shell de varias órdenes corren en bash con `set -euo pipefail`, y todos usan comillas simples para que Groovy no interpole ningún valor.
@@ -611,6 +611,8 @@ Una prueba nunca se desactiva ni se borra para que el pipeline pase. La única v
 |---|---|---|---|
 | `inestable` | Una prueba falla de forma intermitente sin cambios de código | Máximo 14 días | Se corrige la causa raíz |
 | `defecto-sut` | La aplicación incumple la spec (defecto conocido del sistema bajo prueba) | Revisión cada 90 días | La aplicación se corrige: el escenario pasa y se quita la etiqueta |
+
+En el job `quarantine`, un escenario que termina con error (excepción o timeout, no aserción) deja el job en verde con aviso si es `inestable`, porque esa es justo la causa que se está diagnosticando, y en rojo si es `defecto-sut`, porque entonces no mide el criterio. La tabla completa está en [`docs/quarantine.md`](docs/quarantine.md).
 
 Hoy hay un caso: **AC-COMPRA-09**. La regla de negocio dice que no se puede comprar con el carrito vacío, pero SauceDemo lo permite. La prueba exige la regla, así que falla por aserción y el job `quarantine` lo reporta como **fallo esperado** (en verde, con una nota en el resumen del run). Si algún día SauceDemo se corrige, el escenario pasará y el job emitirá un aviso para revisar la spec y quitarlo de la cuarentena.
 

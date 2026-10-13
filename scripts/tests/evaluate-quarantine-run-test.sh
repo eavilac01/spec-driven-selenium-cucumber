@@ -169,6 +169,10 @@ check() {
   fi
 }
 
+# out <argumentos del script>: su salida estándar, cualquiera que sea su rc
+# (con pipefail, "script | grep" daría falso con rc 1 o 3 aunque grep coincida).
+out() { (cd "$d" && bash "$script" "$@" 2>/dev/null) || true; }
+
 # ------------------------------------------------------------------ casos
 # 1. defecto-sut que falla por aserción: lo esperado.
 new
@@ -194,7 +198,7 @@ xml 2 0 1 1 "$(tc_skip Normal)" "$(tc_error 'Defecto conocido')"
 log tests-failure 2 0 1 1
 sed -i 's/ There are test failures\.$/ /' "$d/maven.log"
 check "solo errores, sin otra causa" 1 'ERROR: 1 escenario(s) en cuarentena terminaron con error' 1 maven.log
-if (cd "$d" && bash "$script" 1 maven.log 2>/dev/null) | grep -q 'falló por otra causa'; then
+if out 1 maven.log | grep -q 'falló por otra causa'; then
   fails=$((fails + 1)); results+=("FALLA | solo errores | atribuye el fallo a otra causa")
 else
   results+=("ok    | solo errores | sin falsa «otra causa»")
@@ -418,6 +422,140 @@ if grep -qxF '| Defecto conocido | defecto-sut | falla | fallo esperado |' "$n_c
 else
   fails=$((fails + 1)); results+=("FALLA | resumen Markdown | sin la fila esperada")
 fi
+
+# ---- <error> según el tipo (decisión del usuario, 2026-10-13): un
+# `inestable` con error es verde con aviso; un `defecto-sut`, un tipo mixto o
+# sin clasificar con error, y cualquier fallo de infraestructura, son rojo.
+
+# 30. inestable con error: verde con aviso que nombra el @AC- y el tipo.
+new
+registry '| inestable | `@AC-COMPRA-09` |'
+xml 2 0 1 1 "$(tc_skip Normal)" "$(tc_error 'Defecto conocido')"
+log tests-failure 2 0 1 1
+check "inestable con error" 3 'AVISO: inestable con error: @AC-COMPRA-09 («Defecto conocido») terminó con error' 1 maven.log
+if out 1 maven.log | grep -qF 'terminaron con error'; then
+  fails=$((fails + 1)); results+=("FALLA | inestable con error | lo cuenta como error real")
+else
+  results+=("ok    | inestable con error | no lo cuenta como error real")
+fi
+
+# 30b. Lo mismo con solo errores y sin "There are test failures" (log real).
+new
+registry '| inestable | `@AC-COMPRA-09` |'
+xml 2 0 1 1 "$(tc_skip Normal)" "$(tc_error 'Defecto conocido')"
+log tests-failure 2 0 1 1
+sed -i 's/ There are test failures\.$/ /' "$d/maven.log"
+check "inestable con error, log real" 3 'AVISO: inestable con error: @AC-COMPRA-09' 1 maven.log
+
+# 30c. Formato GitHub y resumen Markdown del aviso.
+new
+registry '| inestable | `@AC-COMPRA-09` |'
+xml 2 0 1 1 "$(tc_skip Normal)" "$(tc_error 'Defecto conocido')"
+log tests-failure 2 0 1 1
+check "inestable con error, GitHub" 3 '::warning::inestable con error: @AC-COMPRA-09 («Defecto conocido»)' --github --summary summary.md 1 maven.log
+if grep -qxF '| Defecto conocido | inestable | error | error tolerado (inestable): aviso |' "$d/summary.md" \
+   && grep -qxF '### Escenarios en cuarentena (CHK-14): VERDE CON AVISO' "$d/summary.md"; then
+  results+=("ok    | resumen Markdown | inestable con error")
+else
+  fails=$((fails + 1)); results+=("FALLA | resumen Markdown | inestable con error sin la fila esperada")
+fi
+
+# 31. Dos inestables, uno falla por aserción y otro con error: verde con aviso.
+new
+feat c.feature \
+  'Feature: Otra' \
+  '  @quarantine @AC-LOGIN-03' \
+  '  Scenario: Intermitente' \
+  '    Given algo'
+registry '| inestable | `@AC-COMPRA-09` |' '| inestable | `@AC-LOGIN-03` |'
+xml 3 1 1 1 "$(tc_skip Normal)" "$(tc_fail 'Defecto conocido')" "$(tc_error 'Intermitente')"
+log tests-failure 3 1 1 1
+check "inestable aserción + inestable error" 3 'AVISO: inestable con error: @AC-LOGIN-03 («Intermitente»)' 1 maven.log
+if out 1 maven.log | grep -qF 'NOTA: inestable: «Defecto conocido» falló por aserción'; then
+  results+=("ok    | inestable aserción + error | nota de la aserción")
+else
+  fails=$((fails + 1)); results+=("FALLA | inestable aserción + error | sin la nota de la aserción")
+fi
+
+# 32. defecto-sut con error e inestable con error: rojo (y el aviso del inestable).
+new
+feat c.feature \
+  'Feature: Otra' \
+  '  @quarantine @AC-LOGIN-03' \
+  '  Scenario: Intermitente' \
+  '    Given algo'
+registry '| defecto-sut | `@AC-COMPRA-09` |' '| inestable | `@AC-LOGIN-03` |'
+xml 3 0 2 1 "$(tc_skip Normal)" "$(tc_error 'Defecto conocido')" "$(tc_error 'Intermitente')"
+log tests-failure 3 0 2 1
+check "defecto-sut error + inestable error" 1 'ERROR: 1 escenario(s) en cuarentena terminaron con error' 1 maven.log
+if out 1 maven.log | grep -qF 'AVISO: inestable con error: @AC-LOGIN-03'; then
+  results+=("ok    | defecto-sut error + inestable error | aviso del inestable")
+else
+  fails=$((fails + 1)); results+=("FALLA | defecto-sut error + inestable error | sin el aviso del inestable")
+fi
+
+# 33. Outline con @AC- de tipos distintos que termina con error: rojo (el tipo
+# no se distingue por nombre; falla cerrado).
+new
+feat b.feature \
+  'Feature: Login' \
+  '  @quarantine' \
+  '  Scenario Outline: Varios' \
+  '    Given <x>' \
+  '    @AC-LOGIN-05' \
+  '    Examples:' \
+  '      | x |' \
+  '      | 1 |' \
+  '    @AC-LOGIN-06' \
+  '    Examples:' \
+  '      | x |' \
+  '      | 2 |'
+registry '| defecto-sut | `@AC-COMPRA-09` |' '| defecto-sut | `@AC-LOGIN-05` |' '| inestable | `@AC-LOGIN-06` |'
+xml 3 1 1 1 "$(tc_skip Normal)" "$(tc_fail 'Defecto conocido')" "$(tc_error 'Example #2.1')"
+log tests-failure 3 1 1 1
+check "tipo mixto con error" 1 'ERROR: 1 escenario(s) en cuarentena terminaron con error' 1 maven.log
+
+# 34. inestable con error pero sin fila en el registro: rojo.
+new
+registry '| inestable | `@AC-COMPRA-77` |'
+xml 2 0 1 1 "$(tc_skip Normal)" "$(tc_error 'Defecto conocido')"
+log tests-failure 2 0 1 1
+check "inestable con error sin fila" 1 'ERROR: «Defecto conocido»: @AC-COMPRA-09 sin fila en docs/quarantine.md' 1 maven.log
+
+# 35. Fallos de infraestructura con un registro inestable: siguen en rojo.
+# 35a. Maven no compila (sin XML).
+new
+registry '| inestable | `@AC-COMPRA-09` |'
+log compile
+check "infra: sin XML (inestable)" 1 'ERROR: no se generó target/surefire-reports/TEST-com.demo.runners.RunnerTest.xml' 1 maven.log
+
+# 35b. rc de Maven inesperado con un inestable con error.
+new
+registry '| inestable | `@AC-COMPRA-09` |'
+xml 2 0 1 1 "$(tc_skip Normal)" "$(tc_error 'Defecto conocido')"
+log tests-failure 2 0 1 1
+check "infra: rc 137 (inestable con error)" 1 'ERROR: rc de Maven inesperado: 137' 137 maven.log
+
+# 35c. rc 0 con un inestable con error en el XML.
+new
+registry '| inestable | `@AC-COMPRA-09` |'
+xml 2 0 1 1 "$(tc_skip Normal)" "$(tc_error 'Defecto conocido')"
+log success 2 0 1 1
+check "infra: rc 0 con error (inestable)" 1 'ERROR: Maven terminó con rc 0 pero el XML tiene fallos o errores' 0 maven.log
+
+# 35d. rc 1 con un inestable con error, pero Maven falló en otro goal.
+new
+registry '| inestable | `@AC-COMPRA-09` |'
+xml 2 0 1 1 "$(tc_skip Normal)" "$(tc_error 'Defecto conocido')"
+log failure 2 0 1 1
+check "infra: otro goal (inestable con error)" 1 'sin "BUILD FAILURE" por el goal test de Surefire' 1 maven.log
+
+# 35e. Log de otra ejecución (sin la línea Tests run) con un inestable con error.
+new
+registry '| inestable | `@AC-COMPRA-09` |'
+xml 2 0 1 1 "$(tc_skip Normal)" "$(tc_error 'Defecto conocido')"
+log compile
+check "infra: log sin Tests run (inestable)" 1 'ERROR: el log de Maven no tiene la línea' 1 maven.log
 
 # 29. Errores de uso (rc 2).
 new

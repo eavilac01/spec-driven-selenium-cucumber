@@ -158,11 +158,15 @@ bash scripts/check-required-secrets.sh
         // sola ejecución (sin reintentos, CHK-02). scripts/evaluate-quarantine-run.sh
         // cruza el rc de Maven, su log y el XML de Surefire con docs/quarantine.md:
         //   rc 0 -> etapa en verde: un `defecto-sut` que falla por aserción (lo
-        //           esperado) o un `inestable` (informativo); el mensaje queda en el log.
-        //   rc 3 -> un `defecto-sut` PASA: etapa UNSTABLE con build SUCCESS, como
-        //           el ::warning:: de GitHub (el SUT pudo haberse corregido).
+        //           esperado) o un `inestable` que falla por aserción o pasa
+        //           (informativo); el mensaje queda en el log.
+        //   rc 3 -> aviso: etapa UNSTABLE con build SUCCESS, como el ::warning::
+        //           de GitHub. Un `defecto-sut` PASA (el SUT pudo haberse
+        //           corregido) o un `inestable` termina con error (excepción o
+        //           timeout: revisar su diagnóstico); el log nombra el @AC-.
         //   otro -> error real (la cuarentena no mide nada o se rompe: excepción o
-        //           timeout, cero escenarios, sin XML, Maven falló por otra causa):
+        //           timeout de un `defecto-sut`, cero escenarios, sin XML, Maven
+        //           falló por otra causa, un escenario sin fila):
         //           FAILURE de la etapa y del build, como el job rojo de GitHub. Se
         //           rompe el build a propósito: con la etapa sola en rojo y el build
         //           en verde, una cuarentena que no mide pasaría inadvertida.
@@ -212,7 +216,7 @@ exec bash scripts/evaluate-quarantine-run.sh "$mvn_rc" quarantine-reports/quaran
                     }
                     if (rc == 3) {
                         catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                            error('Cuarentena (CHK-14): un defecto-sut pasa; el SUT pudo haberse corregido: revisar la spec y docs/quarantine.md')
+                            error('Cuarentena (CHK-14): aviso (un defecto-sut pasa o un inestable termina con error); ver el log de la etapa y docs/quarantine.md')
                         }
                     } else if (rc != 0) {
                         error("Cuarentena (CHK-14): la ejecución no midió la cuarentena (rc ${rc}); ver el log de la etapa")

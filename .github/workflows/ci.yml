@@ -228,12 +228,14 @@ jobs:
   # CHK-02) y sin continue-on-error. scripts/evaluate-quarantine-run.sh cruza el
   # rc de Maven, su log y el XML de Surefire con docs/quarantine.md:
   #   - verde: un `defecto-sut` que falla por aserción (lo esperado, ::notice::)
-  #     o un `inestable` que falla o pasa (informativo, ::notice::);
+  #     o un `inestable` que falla por aserción o pasa (informativo, ::notice::);
   #   - verde con ::warning::: un `defecto-sut` que PASA (el SUT pudo haberse
-  #     corregido: revisar la spec y la cuarentena);
-  #   - rojo: la cuarentena no mide nada o se rompe (un <error> por excepción o
-  #     timeout, cero escenarios ejecutados, sin XML, Maven falló por otra causa
-  #     que las pruebas, o cualquier resultado que no cuadre).
+  #     corregido: revisar la spec y la cuarentena) o un `inestable` que termina
+  #     con <error> (excepción o timeout: revisar su diagnóstico; nombra el @AC-);
+  #   - rojo: la cuarentena no mide nada o se rompe (un <error> de un
+  #     `defecto-sut`, cero escenarios ejecutados, sin XML, Maven falló por otra
+  #     causa que las pruebas, un escenario sin fila, o cualquier resultado que
+  #     no cuadre).
   quarantine:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -281,8 +283,9 @@ jobs:
       # El rc de Maven se captura en la misma orden (PIPESTATUS, por el tee) y
       # se evalúa contra el XML: un fallo de compilación no deja XML ni la línea
       # "Tests run" de RunnerTest, así que no se confunde con un fallo esperado.
-      # rc 3 del evaluador = un defecto-sut pasa: ya emitió el ::warning:: y el
-      # job sigue en verde. Cualquier otro rc distinto de 0 es un error real.
+      # rc 3 del evaluador = aviso (un defecto-sut pasa o un inestable termina
+      # con error): ya emitió el ::warning:: y el job sigue en verde. Cualquier
+      # otro rc distinto de 0 es un error real.
       - name: Run @quarantine (headless Chrome) y evaluar
         if: steps.detect.outputs.present == 'true'
         shell: bash

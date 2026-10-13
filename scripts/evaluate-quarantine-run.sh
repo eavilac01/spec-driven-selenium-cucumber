@@ -11,16 +11,21 @@
 # Lee docs/quarantine.md (tipo de cada @AC-), las features (qué escenarios
 # están en cuarentena), target/surefire-reports/TEST-com.demo.runners.RunnerTest.xml
 # y el log de Maven. Un escenario en cuarentena que falla por aserción
-# (<failure>) o que pasa es una medición válida; lo que se vigila es que la
-# cuarentena mida de verdad.
+# (<failure>) o que pasa es una medición válida, y también un `inestable` que
+# termina con <error>; lo que se vigila es que la cuarentena mida de verdad.
 #
 # Salida:
 #   0  medición válida. Un `defecto-sut` que falla por aserción es lo esperado
-#      (nota); un `inestable` que falla o pasa es informativo (nota).
-#   3  medición válida con aviso: un `defecto-sut` (o un escenario cuyo tipo no
-#      se puede resolver entre varios) PASA. El SUT pudo haberse corregido:
-#      revisar la spec y la cuarentena. GitHub lo deja en verde con un aviso;
-#      Jenkins marca la etapa como UNSTABLE.
+#      (nota); un `inestable` que falla por aserción o pasa es informativo (nota).
+#   3  medición válida con aviso (GitHub lo deja en verde con ::warning::;
+#      Jenkins marca la etapa como UNSTABLE):
+#        - un `defecto-sut` (o un escenario cuyo tipo no se puede resolver entre
+#          varios) PASA: el SUT pudo haberse corregido; revisar la spec y la
+#          cuarentena;
+#        - un `inestable` termina con <error> (excepción o timeout, no
+#          aserción): es justo la causa raíz en diagnóstico; el aviso nombra sus
+#          @AC- (decisión del usuario, 2026-10-13). Solo si todos los @AC- del
+#          escenario son `inestable`: con tipo mixto o sin clasificar es rojo.
 #   1  la cuarentena no midió nada o se rompió (rojo real):
 #        - no hay XML de RunnerTest (p. ej. falló la compilación) o está truncado;
 #        - el log no tiene la línea "Tests run … -- in com.demo.runners.RunnerTest"
@@ -28,8 +33,11 @@
 #        - el rc de Maven no concuerda con el resultado (rc 0 con fallos, rc ≠ 0
 #          sin fallos de prueba, rc distinto de 0 y 1, BUILD SUCCESS/FAILURE o
 #          el fallo del goal test de Surefire ausentes);
-#        - algún <error> (excepción o timeout, no aserción), un reintento
-#          (flaky/rerun, CHK-02) o un omitido por otro motivo que el filtro;
+#        - algún <error> (excepción o timeout, no aserción) en un escenario que
+#          no es `inestable` (defecto-sut, tipo mixto o sin clasificar), aunque
+#          otro `inestable` también termine con error;
+#        - un reintento (flaky/rerun, CHK-02) o un omitido por otro motivo que
+#          el filtro;
 #        - cero escenarios ejecutados, un escenario en cuarentena sin ejecutar,
 #          o uno ejecutado que no está en cuarentena (filtro de tags roto);
 #        - un @AC- en cuarentena sin fila válida en docs/quarantine.md.
@@ -408,7 +416,6 @@ END {
     if (ncase != S_tests || n_fail != S_fail || n_err != S_err)
       red("los <testcase> del XML (" ncase ") no cuadran con sus contadores (tests " S_tests ", failures " S_fail ", errors " S_err ")")
     if (n_run == 0) red("no se ejecutó ningún escenario @quarantine")
-    if (n_err > 0) red(n_err " escenario(s) en cuarentena terminaron con error (excepción o timeout, no aserción): la cuarentena no mide el criterio")
 
     # rc de Maven frente al resultado.
     if (mvn_rc == 0) {
@@ -434,14 +441,25 @@ END {
     for (i = 1; i <= ncase; i++) {
       r = CRES[i]; name = CNAME[i]
       if (r != "falla" && r != "error" && r != "pasa") continue
-      if (name in QNAME) tipo = type_of(QNAME[name], "«" name "»")
-      else if (name ~ /^Example #[0-9]+\.[0-9]+$/ && q_outline) tipo = type_of(Q_OUTLINE_ACS, "«" name "»")
+      lst = ""
+      if (name in QNAME) lst = QNAME[name]
+      else if (name ~ /^Example #[0-9]+\.[0-9]+$/ && q_outline) lst = Q_OUTLINE_ACS
+      if (name in QNAME || (name ~ /^Example #[0-9]+\.[0-9]+$/ && q_outline)) tipo = type_of(lst, "«" name "»")
       else {
         red("«" name "» se ejecutó y no está en cuarentena: el filtro de tags no se aplicó")
         tipo = ""
       }
       nrow++; ROW_N[nrow] = name; ROW_T[nrow] = (tipo == "" ? "?" : tipo); ROW_R[nrow] = r
-      if (r == "error") { ROW_L[nrow] = "error real: no mide el criterio"; continue }
+      # <error> (excepción o timeout, no aserción). Solo un `inestable` puro lo
+      # tolera, con aviso (decisión del usuario, 2026-10-13): su causa raíz es
+      # justamente lo que está en diagnóstico. En un `defecto-sut`, un tipo
+      # mixto o sin clasificar es rojo: la cuarentena no mide el criterio.
+      if (r == "error" && tipo == "inestable") {
+        ROW_L[nrow] = "error tolerado (inestable): aviso"; aviso = 1
+        NOTE[++nnote] = "warning|inestable con error:" lst " («" name "») terminó con error (excepción o timeout, no aserción); es `inestable`, así que no rompe el job: revisar su diagnóstico y su límite en docs/quarantine.md."
+        continue
+      }
+      if (r == "error") { n_err_red++; ROW_L[nrow] = "error real: no mide el criterio"; continue }
       if (tipo == "") { ROW_L[nrow] = "sin clasificar"; continue }
       if (tipo == "defecto-sut" && r == "falla") {
         ROW_L[nrow] = "fallo esperado"
@@ -463,6 +481,7 @@ END {
         NOTE[++nnote] = "warning|«" name "» pasa y podría ser un defecto-sut (su tipo no se distingue por nombre): revisar la spec y la cuarentena (docs/quarantine.md)."
       }
     }
+    if (n_err_red > 0) red(n_err_red " escenario(s) en cuarentena terminaron con error (excepción o timeout, no aserción) sin ser `inestable`: la cuarentena no mide el criterio")
   }
 
   # --- Salida.
