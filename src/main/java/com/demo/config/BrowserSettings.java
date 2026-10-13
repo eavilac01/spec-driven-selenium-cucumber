@@ -65,6 +65,7 @@ public final class BrowserSettings {
         if (selectedBrowser == Browser.CHROME) {
             arguments.add("--no-sandbox");
             arguments.add("--disable-dev-shm-usage");
+            arguments.add("--disable-component-update");
             if (headless) {
                 arguments.add("--headless=new");
                 arguments.add("--window-size=%d,%d".formatted(width.getAsInt(), height.getAsInt()));

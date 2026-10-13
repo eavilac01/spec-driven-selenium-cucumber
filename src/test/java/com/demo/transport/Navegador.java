@@ -2,6 +2,7 @@ package com.demo.transport;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.openqa.selenium.By;
@@ -17,6 +18,7 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.demo.config.BrowserErrorPage;
 import com.demo.utils.ConfigReader;
 
 /**
@@ -36,6 +38,13 @@ public final class Navegador {
             descriptor.set.call(elemento, valor);
             elemento.dispatchEvent(new Event('input', { bubbles: true }));
             elemento.dispatchEvent(new Event('change', { bubbles: true }));
+            """;
+
+    /** Constante (PI-05): no incluye datos del SUT. Devuelve null fuera de una página de error de Chrome. */
+    private static final String SCRIPT_LEER_CODIGO_PAGINA_ERROR = """
+            if (!document.body || !document.body.classList.contains('neterror')) { return null; }
+            const codigo = document.querySelector('.error-code');
+            return codigo ? codigo.textContent : '';
             """;
 
     private final Logger logger = LoggerFactory.getLogger(Navegador.class);
@@ -74,9 +83,30 @@ public final class Navegador {
 
     // --- Navegación ---
 
+    /**
+     * Abre la URL y falla de inmediato si el navegador responde con su propia página de error
+     * (Chrome: documento {@code neterror}; Firefox: {@code about:neterror}). No reintenta. El mensaje
+     * incluye la URL solicitada y, si es válido, el código {@code net::ERR_…}; nunca texto de la página.
+     */
     public void abrir(String url) {
         verificarIniciado();
-        driver.navigate().to(url);
+        try {
+            driver.navigate().to(url);
+        } catch (WebDriverException exception) {
+            if (BrowserErrorPage.isNavigationErrorMessage(exception.getMessage())) {
+                throw errorDeNavegacion(url, BrowserErrorPage.codeFromDriverMessage(exception.getMessage()));
+            }
+            throw exception;
+        }
+
+        // El script devuelve null si el documento no es una página de error; si lo es, el texto del código.
+        Object textoDelCodigo = ejecutarScriptConstante(SCRIPT_LEER_CODIGO_PAGINA_ERROR);
+        if (textoDelCodigo instanceof String texto) {
+            throw errorDeNavegacion(url, BrowserErrorPage.codeFromPageText(texto));
+        }
+        if (BrowserErrorPage.isErrorUrl(driver.getCurrentUrl())) {
+            throw errorDeNavegacion(url, Optional.empty());
+        }
     }
 
     public void esperarUrlContiene(String fragmentoUrl) {
@@ -253,6 +283,21 @@ public final class Navegador {
         if (driver == null) {
             throw new IllegalStateException(
                     "El navegador aún no fue iniciado para el escenario: llama a iniciar() antes de usarlo");
+        }
+    }
+
+    private IllegalStateException errorDeNavegacion(String urlSolicitada, Optional<String> codigo) {
+        String mensaje = BrowserErrorPage.describe(urlSolicitada, codigo);
+        logger.error(mensaje);
+        return new IllegalStateException(mensaje);
+    }
+
+    private Object ejecutarScriptConstante(String script) {
+        try {
+            return ((JavascriptExecutor) driver).executeScript(script);
+        } catch (WebDriverException exception) {
+            logger.debug("No se pudo leer el documento para detectar una página de error", exception);
+            return null;
         }
     }
 

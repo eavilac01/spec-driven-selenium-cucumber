@@ -94,7 +94,8 @@ class BrowserSettingsTest {
         BrowserSettings settings = of("chrome", "", false);
 
         assertFalse(settings.headless());
-        assertEquals(List.of("--no-sandbox", "--disable-dev-shm-usage"), settings.arguments());
+        assertEquals(List.of("--no-sandbox", "--disable-dev-shm-usage", "--disable-component-update"),
+                settings.arguments());
     }
 
     @Test
@@ -102,7 +103,7 @@ class BrowserSettingsTest {
         BrowserSettings settings = of("chrome", "", true);
 
         assertTrue(settings.headless());
-        assertEquals(List.of("--no-sandbox", "--disable-dev-shm-usage",
+        assertEquals(List.of("--no-sandbox", "--disable-dev-shm-usage", "--disable-component-update",
                 "--headless=new", "--window-size=1920,1080"), settings.arguments());
     }
 
@@ -110,7 +111,7 @@ class BrowserSettingsTest {
     void chromeWindowSizePutsWidthBeforeHeight() {
         BrowserSettings settings = BrowserSettings.of("chrome", "", true, () -> 800, () -> 600);
 
-        assertEquals("--window-size=800,600", settings.arguments().get(3));
+        assertEquals("--window-size=800,600", settings.arguments().get(4));
     }
 
     // --- Argumentos de Firefox ---
@@ -178,7 +179,7 @@ class BrowserSettingsTest {
         assertEquals("La configuración 'browser.window.height' debe ser mayor que cero, pero fue '-5'",
                 heightError.getMessage());
 
-        assertEquals(List.of("--no-sandbox", "--disable-dev-shm-usage"),
+        assertEquals(List.of("--no-sandbox", "--disable-dev-shm-usage", "--disable-component-update"),
                 BrowserSettings.of("chrome", "", false, width, height).arguments());
     }
 
