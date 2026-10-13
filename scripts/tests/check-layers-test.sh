@@ -17,7 +17,11 @@
 #     protected, y los elementos de MOD los suyos (EXP-*); la unión por imports
 #     (R1-imp, R1-her), R1-wild, R1-by y R5-ext (Selenium en el transporte y
 #     herencia, D7) tienen casos de una línea y de dos (import en la 2 y
-#     declaración en la 3);
+#     declaración en la 3); R5-js, R5-evt, R5-clic y R5-clic-max (Clic nativo
+#     único, scripts cerrados y preferencias de Chrome, D7, parte 4) tienen un
+#     caso por alternativa, y D8-prefs reescribe la línea de preferencias del
+#     DriverFactory.java del árbol base (o borra el archivo) y espera
+#     "archivo:0: D8: …";
 #   - exit 1 con una violación en un archivo versionado que coincide con
 #     .gitignore, y exit 0 si ese archivo no está versionado;
 #   - exit 1 ("directorio:0: D6: …") por cada directorio de capa ausente o
@@ -28,7 +32,8 @@
 #     índice corrupto y configuración inválida (git grep rc >= 2), git grep que
 #     termina con rc >= 2 sin escribir en stderr (shim de git en el PATH),
 #     archivo ilegible (stderr de git grep), el awk de la unión que sale con 3
-#     (shim de awk) y el git grep de HER que falla dentro de la unión.
+#     (shim de awk), el git grep de HER que falla dentro de la unión, y el de
+#     check_max (CLIC) y el de require (PREFS) que fallan sin stderr.
 # Antes de copiar el repo base, exige que git no lance mantenimiento ni gc
 # automáticos (config efectiva, traza del commit con un control positivo, sin
 # archivos efímeros) y que un cp que pierde un archivo efímero salga con 2.
@@ -133,7 +138,13 @@ mkdir -p "$base"
     '    public Navegador() {' \
     '    }' \
     '    public void click(By locator) {' \
-    '        ((JavascriptExecutor) driver).executeScript("arguments[0].click();", driver.findElement(locator));' \
+    '        elemento.click();' \
+    '    }' \
+    '    public void desplazarA(By locator) {' \
+    '        ((JavascriptExecutor) driver).executeScript(SCRIPT_DESPLAZAR_AL_CENTRO, driver.findElement(locator));' \
+    '    }' \
+    '    private Object leerCodigoPaginaError() {' \
+    '        return ((JavascriptExecutor) driver).executeScript(SCRIPT_LEER_CODIGO_PAGINA_ERROR);' \
     '    }' \
     '    public String texto(By locator) {' \
     '        return driver.findElement(locator).getText();' \
@@ -152,6 +163,7 @@ mkdir -p "$base"
     'final class DriverFactory {' \
     '    static WebDriver crear() {' \
     '        ChromeOptions opciones = new ChromeOptions();' \
+    '        options.setExperimentalOption("prefs", settings.chromePreferences());' \
     '        return null;' \
     '    }' \
     '}'
@@ -426,6 +438,30 @@ violation2() {
     run_script "$dir"
     expect "$id $rule ${file#"$T/"} ($mode)" 1 "$file:3: $rule: $reason"
   done
+}
+
+# reemplazar <ruta> <línea exacta> [línea nueva]: sustituye esa línea del
+# archivo, o la borra si no hay línea nueva. Si la línea no está, es un error de
+# preparación (2): un caso así nunca puede quedar en verde.
+reemplazar() {
+  local path="$1" old="$2" found=0 line
+  local nuevo="$tmp/reemplazo.tmp"
+  : > "$nuevo"
+  while IFS= read -r line; do
+    if [ "$line" = "$old" ]; then
+      found=1
+      if [ "$#" -ge 3 ]; then
+        printf '%s\n' "$3" >> "$nuevo"
+      fi
+    else
+      printf '%s\n' "$line" >> "$nuevo"
+    fi
+  done < "$path"
+  if [ "$found" -ne 1 ]; then
+    echo "check-layers-test: no está la línea a sustituir en $path" >&2
+    exit 2
+  fi
+  cat "$nuevo" > "$path"
 }
 
 # allowed2 <id> <archivo> <línea 2> <línea 3>: casi-violación de dos líneas.
@@ -813,6 +849,151 @@ violation "R5-ext-b" R5 "una clase de transport, actions o utils extiende otra" 
 violation "R5-ext-c" R5 "una clase de transport, actions o utils extiende otra" \
   "$T/transport/Bad.java" 'final class Bad extends RuntimeException {'
 
+# Clic nativo único, scripts cerrados y preferencias de Chrome (D7, enmienda
+# 2026-10-13, parte 4). R5-js: executeScript fuera de la lista cerrada.
+R5JS="executeScript fuera de la lista cerrada de scripts del transporte"
+violation "R5-js" R5 "$R5JS" "$T/transport/Bad.java" \
+  '        ((JavascriptExecutor) driver).executeScript("return 1;");'
+violation "R5-js-b" R5 "$R5JS" "$T/transport/Bad.java" \
+  '            return ((JavascriptExecutor) driver).executeScript(script);'
+violation "R5-js-c" R5 "$R5JS" "$T/transport/Bad.java" \
+  '        ((JavascriptExecutor) driver).executeScript(SCRIPT_PULSAR, elemento);'
+violation "R5-js-d" R5 "$R5JS" "$T/transport/Bad.java" \
+  '        ((JavascriptExecutor) driver).executeScript(SCRIPT_DESPLAZAR_AL_CENTRO_Y_PULSAR, elemento);'
+violation "R5-js-e" R5 "$R5JS" "$T/transport/Bad.java" \
+  '        ((JavascriptExecutor) driver).executeAsyncScript(SCRIPT_DESPLAZAR_AL_CENTRO, elemento);'
+# R5-evt: eventos sintéticos y otras vías de entrada.
+R5EVT="evento sintético o vía de entrada distinta del clic nativo en transport"
+violation "R5-evt" R5 "$R5EVT" "$T/transport/Bad.java" \
+  "            arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));"
+violation "R5-evt-b" R5 "$R5EVT" "$T/transport/Bad.java" \
+  '        String metodo = "Input.dispatchMouseEvent";'
+violation "R5-evt-c" R5 "$R5EVT" "$T/transport/Bad.java" \
+  '        ((HasCdp) driver).executeCdpCommand("Runtime.evaluate", parametros);'
+violation "R5-evt-d" R5 "$R5EVT" "$T/transport/Bad.java" \
+  '        elemento.sendKeys(Keys.ENTER);'
+violation "R5-evt-e" R5 "$R5EVT" "$T/transport/Bad.java" \
+  '        elemento.submit();'
+violation "R5-evt-f" R5 "$R5EVT" "$T/transport/Bad.java" \
+  '            arguments[0].form.requestSubmit();'
+violation "R5-evt-g" R5 "$R5EVT" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.interactions.Actions;'
+violation "R5-evt-h" R5 "$R5EVT" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.devtools.HasDevTools;'
+violation "R5-evt-i" R5 "$R5EVT" "$T/transport/Bad.java" \
+  'import org.openqa.selenium.bidi.HasBiDi;'
+violation "R5-evt-j" R5 "$R5EVT" "$T/transport/Bad.java" \
+  '        java.util.Optional.of(elemento).ifPresent(WebElement::submit);'
+# R5-clic: toda línea de clic es exactamente "elemento.click();".
+R5CLIC="clic distinto de la línea de clic nativo del transporte"
+violation "R5-clic" R5 "$R5CLIC" "$T/transport/Bad.java" \
+  '            arguments[0].click();'
+violation "R5-clic-b" R5 "$R5CLIC" "$T/transport/Bad.java" \
+  '        wait.until(ExpectedConditions.elementToBeClickable(localizador)).click();'
+violation "R5-clic-c" R5 "$R5CLIC" "$T/transport/Bad.java" \
+  '        new Actions(driver).moveToElement(elemento).click().perform();'
+violation "R5-clic-d" R5 "$R5CLIC" "$T/transport/Bad.java" \
+  '        java.util.Optional.of(elemento).ifPresent(WebElement::click);'
+violation "R5-clic-e" R5 "$R5CLIC" "$T/transport/Bad.java" \
+  '            HTMLElement.prototype.click.call(arguments[0]);'
+violation "R5-clic-f" R5 "$R5CLIC" "$T/transport/Bad.java" \
+  '            elemento.click(); elemento.click();'
+violation "R5-clic-g" R5 "$R5CLIC" "$T/transport/Bad.java" \
+  '            boton.click();'
+# R5-clic-max: forma exacta, pero es la segunda línea de clic (la otra está en
+# el Navegador.java del árbol base).
+violation "R5-clic-max" R5 "más de un clic nativo en transport" "$T/transport/Bad.java" \
+  '            elemento.click();'
+# D8-prefs (presencia): la línea de preferencias del DriverFactory.java del
+# árbol base se reescribe; versionada = el cambio va al índice (git add o
+# git rm), sin versionar = solo en el árbol de trabajo.
+D8_FILE="$T/transport/DriverFactory.java"
+D8_LINE='        options.setExperimentalOption("prefs", settings.chromePreferences());'
+D8_OUT="$D8_FILE:0: D8: DriverFactory no aplica las preferencias de Chrome de BrowserSettings"
+# d8 <id> <descripción> [línea nueva]: sin línea nueva, la línea se borra.
+d8() {
+  local id="$1" desc="$2" mode
+  shift 2
+  for mode in versionada sin-versionar; do
+    new_case
+    reemplazar "$dir/$D8_FILE" "$D8_LINE" "$@"
+    if [ "$mode" = versionada ]; then
+      git -C "$dir" add -- "$D8_FILE"
+    fi
+    run_script "$dir"
+    expect "$id D8 transport/DriverFactory.java, $desc ($mode)" 1 "$D8_OUT"
+  done
+}
+d8 "D8-prefs" "sin la línea"
+d8 "D8-prefs-b" "comentada" \
+  '        // options.setExperimentalOption("prefs", settings.chromePreferences());'
+d8 "D8-prefs-c" "otra clave" \
+  '        options.setExperimentalOption("excludeSwitches", settings.chromePreferences());'
+d8 "D8-prefs-d" "otro origen" \
+  '        options.setExperimentalOption("prefs", java.util.Map.of());'
+# D8-prefs-e: la línea buena, pero en transport/Otro.java (línea 2).
+for mode in versionada sin-versionar; do
+  new_case
+  reemplazar "$dir/$D8_FILE" "$D8_LINE"
+  put "$dir/$T/transport/Otro.java" 'package com.demo.prueba;' "$D8_LINE"
+  if [ "$mode" = versionada ]; then
+    git -C "$dir" add -- "$D8_FILE" "$T/transport/Otro.java"
+  fi
+  run_script "$dir"
+  expect "D8-prefs-e D8 sin la línea en DriverFactory y con ella en Otro.java ($mode)" 1 "$D8_OUT"
+done
+# D8-prefs-f: sin DriverFactory.java (git rm, o rm sin git rm).
+for mode in versionada sin-versionar; do
+  new_case
+  if [ "$mode" = versionada ]; then
+    git -C "$dir" rm -q -- "$D8_FILE"
+  else
+    rm -- "$dir/$D8_FILE"
+  fi
+  run_script "$dir"
+  expect "D8-prefs-f D8 sin transport/DriverFactory.java ($mode)" 1 "$D8_OUT"
+done
+# D8-prefs-g: sin el directorio transport (git rm -r, o rm -r sin git rm). La
+# guarda del directorio padre de require da 1 con la línea de D8, sin el aviso
+# de git grep --untracked ("could not open directory").
+for mode in versionada sin-versionar; do
+  new_case
+  if [ "$mode" = versionada ]; then
+    git -C "$dir" rm -r -q -- "$T/transport"
+  else
+    rm -r -- "$dir/$T/transport"
+  fi
+  run_script "$dir"
+  expect "D8-prefs-g D8 sin el directorio transport ($mode)" 1 "$D8_OUT"
+done
+# Casi-coincidencias permitidas de la parte 4.
+allowed "ok-35 identificadores que contienen los nombres de JS" "$T/transport/Otro.java" \
+  '        boolean noexecuteScript = executeScriptado && noexecuteAsyncScript || executeAsyncScriptado;'
+allowed "ok-36 sendKeys y Keystroke no son el token Keys" "$T/transport/Otro.java" \
+  '        elemento.sendKeys(texto); // Keystroke nativo'
+allowed "ok-37 submit sin punto, y submitted" "$T/transport/Otro.java" \
+  '        boolean submit = formulario.submitted;'
+allowed "ok-38 método que empieza por click" "$T/transport/Otro.java" \
+  '        this.clickHastaCumplir(localizador, postcondicion);'
+# allowed_rewrite <id> <archivo> <línea exacta> <línea nueva>: casi-violación
+# que reescribe una línea del árbol base, en ambos modos.
+allowed_rewrite() {
+  local id="$1" file="$2" old="$3" new="$4" mode
+  for mode in versionada sin-versionar; do
+    new_case
+    reemplazar "$dir/$file" "$old" "$new"
+    if [ "$mode" = versionada ]; then
+      git -C "$dir" add -- "$file"
+    fi
+    run_script "$dir"
+    expect "$id ${file#"$T/"} ($mode)" 0 "check-layers: ok: CHK-17 (R1–R6) sin violaciones"
+  done
+}
+allowed_rewrite "ok-39 línea de clic del árbol base en la columna 0" "$T/transport/Navegador.java" \
+  '        elemento.click();' 'elemento.click();'
+allowed_rewrite "ok-40 otros nombres y espacios, en la columna 0" "$D8_FILE" \
+  "$D8_LINE" 'opciones.setExperimentalOption( "prefs" , ajustes.chromePreferences() ) ;'
+
 # Archivos que coinciden con .gitignore: --untracked omite incluso los
 # versionados (git 2.53), así que el script hace también una pasada sobre el
 # índice. Uno versionado e ignorado se detecta; uno sin versionar e ignorado
@@ -947,6 +1128,23 @@ new_case
 run_with_path "$tmp/shim-her" "$dir"
 expect "error-her: el git grep de HER falla dentro de la unión" 2 \
   "check-layers: ERROR: git grep terminó con 2 (R1: transport hereda o implementa un tipo de Selenium)"
+
+# Conteo y presencia (D7, parte 4): check_max y require pasan por el ejecutor
+# con guardas. error-max: el shim falla, sin stderr, solo si un argumento es
+# exactamente CLIC (FORMA lo contiene, pero no es igual). error-d8: solo si un
+# argumento contiene setExperimentalOption; require no confunde el error con
+# una ausencia.
+shim "$tmp/shim-max" 'for a in "$@"; do if [ "$a" = '"'"'(?:\.|::)click\b'"'"' ]; then exit 2; fi; done'
+new_case
+run_with_path "$tmp/shim-max" "$dir"
+expect "error-max: el git grep de check_max falla" 2 \
+  "check-layers: ERROR: git grep terminó con 2 (R5: más de un clic nativo en transport)"
+
+shim "$tmp/shim-d8" 'for a in "$@"; do case "$a" in *setExperimentalOption*) exit 2 ;; esac; done'
+new_case
+run_with_path "$tmp/shim-d8" "$dir"
+expect "error-d8: el git grep de require falla" 2 \
+  "check-layers: ERROR: git grep terminó con 2 (D8: DriverFactory no aplica las preferencias de Chrome de BrowserSettings)"
 
 # git grep imprime "failed to stat" y termina con 0 o 1 ante un archivo
 # ilegible: el script lo trata como error por la salida en stderr. Como root

@@ -22,8 +22,10 @@
 #   0  ninguna violación.
 #   1  violaciones; una por línea como "archivo:línea: R<n>: motivo".
 #      Un directorio de capa sin archivos versionados se imprime como
-#      "directorio:0: D6: motivo".
-#   2  no se pudo evaluar (falla cerrado): argumentos de más, la raíz no es un
+#      "directorio:0: D6: motivo", y una línea de presencia que falta (o su
+#      archivo), como "archivo:0: D8: motivo".
+#   2  no se pudo evaluar (falla cerrado): argumentos de más (también en
+#      require, que recibe una sola ruta), la raíz no es un
 #      directorio o no es la raíz de un repositorio git, git grep terminó con
 #      un código >= 2 o escribió en stderr (índice corrupto, configuración
 #      inválida, git sin PCRE, archivo ilegible), git ls-files falló, o el awk
@@ -80,6 +82,21 @@
 # (R5-ext), como pages (D7-11). Si awk termina con un código distinto de 0, el
 # resultado es 2.
 #
+# Clic nativo único, scripts cerrados y preferencias de Chrome (D7, enmienda
+# 2026-10-13, parte 4). En transport: executeScript solo con un script de la
+# lista cerrada JS_LISTA y nunca executeAsyncScript (R5-js); ningún evento
+# sintético ni otra vía de entrada: teclado, envío de formularios, Actions, CDP
+# y BiDi (EVT, R5-evt); toda línea de clic es exactamente "elemento.click();"
+# (FORMA, R5-clic) y hay una como mucho (check_max, R5-clic-max). Además,
+# DriverFactory.java aplica las preferencias de Chrome de BrowserSettings
+# (PREFS, regla de presencia D8-prefs, con require). Los comentarios cuentan
+# como texto (D6).
+#
+# Conteo y presencia: check_max y require usan el ejecutor de dos pasadas con
+# sus guardas (grep2), sin awk. check_max cuenta las líneas distintas
+# (archivo:línea) de las dos pasadas; require falla si ninguna pasada encuentra
+# la línea, y sin el archivo también (no hay coincidencias: falla cerrado).
+#
 # Riesgo residual aceptado (D6, R-5): firmas, cabeceras y anotaciones partidas
 # en varias líneas, y texto que no sea espacio, anotación ni modificador antes
 # del modificador de acceso.
@@ -117,6 +134,14 @@ T=src/test/java/com/demo
 MOD='(?:@[\w.]+(?:\(.*\))?|non-sealed|[a-z]+)\s+'
 EXP='^\s*(?:'"$MOD"')*(?:public|protected)\b'
 TIPO="$EXP"'.*\b(?:interface|record)\s+\w'
+# Clic nativo único y scripts cerrados (D7, parte 4): la lista cerrada de
+# scripts, las llamadas a scripts fuera de ella, las vías de entrada distintas
+# del clic nativo, la línea de clic y su forma exacta.
+JS_LISTA='SCRIPT_DESPLAZAR_AL_CENTRO|SCRIPT_LEER_CODIGO_PAGINA_ERROR'
+JS='\bexecuteAsyncScript\b|\bexecuteScript\b(?!\((?:'"$JS_LISTA"')[,)])'
+EVT='\bKeys\b|dispatch\w*Event|executeCdpCommand|(?:\.|::)(?:requestSubmit|submit)\b|org\.openqa\.selenium\.(?:interactions|devtools|bidi)'
+CLIC='(?:\.|::)click\b'
+FORMA='^(?!\s*elemento\.click\(\);\s*$).*'"$CLIC"
 status=0
 
 errf="$(mktemp)"
@@ -162,6 +187,58 @@ check() {
   if [ -n "$grep_out" ]; then
     printf '%s' "$grep_out" | awk -F'\t' -v r="$rule" -v m="$reason" \
       'NF >= 2 { print $1 ":" $2 ": " r ": " m }' | sort -t: -k1,1 -k2,2n | uniq
+    status=1
+  fi
+}
+
+# check_max <regla> <motivo> <máximo> <git grep…> (Conteo y presencia, D7):
+# cuenta las líneas distintas (archivo:línea) de las dos pasadas juntas; si son
+# más que el máximo, imprime cada una como "archivo:línea: <regla>: <motivo>",
+# ordenadas como en check. Sin awk (CHK-18) y sin comandos cuyo rc=1 sea normal
+# (grep -c) dentro de una sustitución con set -e.
+check_max() {
+  local rule="$1" reason="$2" max="$3"
+  shift 3
+  local lines count f l
+  grep2 "$rule" "$reason" "$@"
+  lines="$(printf '%s' "$grep_out" | cut -f1,2 | sed '/^$/d' | sort -u)"
+  count=0
+  if [ -n "$lines" ]; then
+    count=$(($(printf '%s\n' "$lines" | wc -l)))
+  fi
+  if [ "$count" -gt "$max" ]; then
+    printf '%s\n' "$lines" | while IFS=$'\t' read -r f l; do
+      printf '%s:%s: %s: %s\n' "$f" "$l" "$rule" "$reason"
+    done | sort -t: -k1,1 -k2,2n | uniq
+    status=1
+  fi
+}
+
+# require <regla> <motivo> <expresión> -- <archivo> (Conteo y presencia, D7):
+# una sola ruta (otra cantidad es un error de uso: 2). Si ninguna de las dos
+# pasadas encuentra la línea, imprime "<archivo>:0: <regla>: <motivo>". Sin el
+# archivo no hay coincidencias, y eso también es la violación (falla cerrado).
+# Guarda del directorio padre: sin él, la misma línea y estado 1, sin ejecutar
+# git grep. Con --untracked, git grep avisa en stderr ("could not open
+# directory") ante un archivo dentro de un directorio inexistente, y grep2 lo
+# daría como error (2): la ausencia es una violación, como un directorio de
+# capa (D6). Registra la violación; nunca deja pasar.
+require() {
+  local rule="$1" reason="$2" expr="$3"
+  shift 3
+  if [ "$#" -ne 2 ] || [ "$1" != -- ]; then
+    echo "check-layers: ERROR: require recibe una sola ruta ($rule: $reason)" >&2
+    exit 2
+  fi
+  local file="$2"
+  if [ ! -d "$(dirname "$file")" ]; then
+    echo "$file:0: $rule: $reason"
+    status=1
+    return 0
+  fi
+  grep2 "$rule" "$reason" "$expr" -- "$file"
+  if [ -z "$grep_out" ]; then
+    echo "$file:0: $rule: $reason"
     status=1
   fi
 }
@@ -294,6 +371,19 @@ check R5 "una página extiende una clase" \
 #   … transport, actions y utils tampoco heredan (Selenium en el transporte y herencia)
 check R5 "una clase de transport, actions o utils extiende otra" \
   '\bextends\b' -- "$T/transport" "$T/actions" "$T/utils"
+# R5 en transport (Clic nativo único, scripts cerrados y preferencias de Chrome, parte 4)
+#   … executeScript solo con un script de la lista cerrada; executeAsyncScript nunca
+check R5 "executeScript fuera de la lista cerrada de scripts del transporte" \
+  "$JS" -- "$T/transport"
+#   … sin eventos sintéticos ni otras vías de entrada (teclado, envío, Actions, CDP, BiDi)
+check R5 "evento sintético o vía de entrada distinta del clic nativo en transport" \
+  "$EVT" -- "$T/transport"
+#   … toda línea de clic es exactamente elemento.click();
+check R5 "clic distinto de la línea de clic nativo del transporte" \
+  "$FORMA" -- "$T/transport"
+#   … y hay una como mucho (líneas distintas de las dos pasadas)
+check_max R5 "más de un clic nativo en transport" 1 \
+  "$CLIC" -- "$T/transport"
 # R6: una línea por fila de D4 (runners excluido; src/main lo garantiza Maven)
 check R6 "transport nombra un paquete fuera de su fila de D4" \
   'com\.demo\.(pages|actions|steps|hooks|runners|data)\b' -- "$T/transport"
@@ -328,6 +418,12 @@ for dir in "$T/transport" "$T/pages" "$T/actions" "$T/steps"; do
     status=1
   fi
 done
+
+# D8 (presencia, parte 4): DriverFactory aplica las preferencias de Chrome; sin
+# la línea o sin el archivo, es violación.
+PREFS='^\s*\w+\.setExperimentalOption\(\s*"prefs"\s*,\s*\w+\.chromePreferences\(\)\s*\)\s*;'
+require D8 "DriverFactory no aplica las preferencias de Chrome de BrowserSettings" \
+  "$PREFS" -- "$T/transport/DriverFactory.java"
 
 if [ "$status" -eq 0 ]; then
   echo "check-layers: ok: CHK-17 (R1–R6) sin violaciones"

@@ -58,7 +58,7 @@
 
 Las filas marcadas registran la API pública que la tabla original no recogía; las cuatro primeras no se reescriben. Reflejan el `Navegador` de `0de6962` (2026-10-13). Se registró del árbol de trabajo antes del commit, y después se comprobó que coincide (*Enmiendas*, 2026-10-13). Por eso se citan por método y no por línea. Todas cumplen este D1: reciben solo `By` y tipos de Java, no devuelven tipos de Selenium y fallan antes de `iniciar()`.
 
-- **Tope de clics** (`0de6962`). `clickHastaCumplir` y `clickYObservarUrlContiene` pulsan como mucho `MAXIMO_CLICS_POR_ACCION = 3` veces: 1 clic nativo y, como máximo, 2 de respaldo JavaScript. *(Enmienda 2026-10-13, parte 3: se retira el respaldo JavaScript y queda un solo clic nativo por acción. Lo aplica el engineer; hasta su commit, rige lo que describe este punto. Ver *Enmiendas*, *Preferencias de Chrome y respaldo JavaScript*.)* *(Aplicado en `d569a34`, junto con el retiro del respaldo de escritura; verificación en curso.)*
+- **Tope de clics** (`0de6962`). `clickHastaCumplir` y `clickYObservarUrlContiene` pulsan como mucho `MAXIMO_CLICS_POR_ACCION = 3` veces: 1 clic nativo y, como máximo, 2 de respaldo JavaScript. *(Enmienda 2026-10-13, parte 3: se retira el respaldo JavaScript y queda un solo clic nativo por acción. Lo aplica el engineer; hasta su commit, rige lo que describe este punto. Ver *Enmiendas*, *Preferencias de Chrome y respaldo JavaScript*.)* *(Aplicado en `d569a34`, junto con el retiro del respaldo de escritura; verificación en curso.)* *(Enmienda 2026-10-13, parte 4: CHK-17 exige en `transport` un único clic nativo, en la línea `elemento.click();` (`R5-clic` y `R5-clic-max`), y ningún clic, evento ni envío por JavaScript, teclado o `Actions` (`R5-js` y `R5-evt`). `click(By)` pasa a usar el mismo clic nativo único. Ver D7, *Clic nativo único, scripts cerrados y preferencias de Chrome*.)*
   - Con el tope agotado no pulsan más; solo esperan la postcondición dentro del plazo.
   - Si el plazo se agota, `clickHastaCumplir` lanza `TimeoutException` con el localizador, los clics efectivos y el plazo, y nunca con el texto escrito.
   - Antes, el respaldo JavaScript se repetía sin límite dentro del plazo. Un control que alterna su estado (agregar y quitar) podía revertirse con un clic de más.
@@ -88,7 +88,7 @@ Las filas marcadas registran la API pública que la tabla original no recogía; 
 
 - **Algoritmos de sincronización.** Los de `BasePage.java:72-125` (clic y escritura con sus respaldos) se **mueven sin cambios**, y el diff se revisa como movimiento (*Criterio de verificación*).
 - **Lo que no puede cambiar al moverlos:**
-  - El primer argumento de `executeScript` es siempre una constante del transporte (PI-05).
+  - El primer argumento de `executeScript` es siempre una constante del transporte (PI-05). *(Enmienda 2026-10-13, parte 4: una constante de la lista cerrada `JS_LISTA` de D7, que hoy son `SCRIPT_DESPLAZAR_AL_CENTRO` y `SCRIPT_LEER_CODIGO_PAGINA_ERROR`, y nunca un literal ni un parámetro. Lo comprueba CHK-17 (`R5-js`).)*
   - Los logs y mensajes nunca incluyen el texto escrito, que puede ser una contraseña (PI-09). Hoy `:89` y `:117` solo registran el localizador.
 - Cualquier método llamado antes de `iniciar()` falla con `IllegalStateException` y un mensaje claro, como hoy `TestContext.java:13-15`.
 - **`DriverFactory` pasa a `com.demo.transport`.** Queda **sin estado** y con visibilidad de paquete (`static WebDriver crear()`). Se elimina el `ThreadLocal`, y la creación de Chrome, Firefox y `RemoteWebDriver` no cambia.
@@ -193,7 +193,7 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
   - exit 1 con cada directorio de capa ausente;
   - exit 2 con cada error de evaluación de la *Nota de ejecución* de D7.
 
-  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`; 184 desde el commit de la enmienda sobre `ResultadoClic` (según devops); 280 desde `df87ada` (enmienda *Firmas expuestas*), con `ok` en 4 implementaciones de awk: mawk, gawk, `gawk --posix` y busybox (según devops). Desde `7d9477f` (enmienda *Selenium en el transporte y herencia*) son 340, con `ok` en las mismas 4 implementaciones de awk (según devops).
+  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`; 184 desde el commit de la enmienda sobre `ResultadoClic` (según devops); 280 desde `df87ada` (enmienda *Firmas expuestas*), con `ok` en 4 implementaciones de awk: mawk, gawk, `gawk --posix` y busybox (según devops). Desde `7d9477f` (enmienda *Selenium en el transporte y herencia*) son 340, con `ok` en las mismas 4 implementaciones de awk (según devops). Con la enmienda *Clic nativo único, scripts cerrados y preferencias de Chrome* (parte 4) serán 414 (previstos).
 - **Dónde corren el script y la autoprueba:**
   - GitHub Actions: job `mutation`, pasos *Capas, autoprueba (CHK-17)* y *Capas (CHK-17)*, en paralelo a la suite y sin secrets (`ci.yml:66-84` en `f7f7a13`);
   - Jenkins: etapa `Capas (CHK-17)`, antes de la suite y fuera de `withCredentials` (`Jenkinsfile:22-29` en `f7f7a13`);
@@ -209,7 +209,7 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
 | R2 | Selenium en `steps` o `actions` (incluida en R1; CHK-03 es su subconjunto rápido) | `noClasses().that().resideInAnyPackage("..steps..", "..actions..").should().dependOnClassesThat().resideInAPackage("org.openqa..")` |
 | R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas públicas, como tipo de retorno o como parámetro (los constructores sí las reciben, D3); interfaces, anotaciones o records expuestos en `actions`. "Pública" incluye `protected` (*Firmas expuestas*) | `noClasses().that().resideInAPackage("..steps..").should().dependOnClassesThat().resideInAnyPackage("..pages..", "..transport..")`. Tipos: lo mismo que en R1, para `..actions..` |
 | R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions` | `noClasses().that().resideInAnyPackage("..transport..", "..pages..", "..actions..").should().dependOnClassesThat().resideInAnyPackage("org.junit..", "io.cucumber..")` |
-| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase; clases de `transport`, `actions` o `utils` que extienden otra (*Selenium en el transporte y herencia*, enmienda 2026-10-13, parte 2) | `noClasses().that().resideOutsideOfPackage("..transport..").should().callMethodWhere(target(owner(assignableTo(SearchContext.class).or(assignableTo(JavascriptExecutor.class)))))`. Herencia: `classes().that().resideInAnyPackage("..transport..", "..pages..", "..actions..", "..utils..")` con una condición propia: `getRawSuperclass()` es `Object` (o `Enum` y `Record` en esos tipos) |
+| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase; clases de `transport`, `actions` o `utils` que extienden otra (*Selenium en el transporte y herencia*, enmienda 2026-10-13, parte 2). En `transport` (*Clic nativo único, scripts cerrados y preferencias de Chrome*, enmienda 2026-10-13, parte 4): `executeScript` con un primer argumento fuera de la lista cerrada `JS_LISTA`; `executeAsyncScript`; un clic en una línea distinta de `elemento.click();` o más de una línea de clic; eventos sintéticos y otras vías de entrada (teclado, envío de formularios, `Actions`, CDP y BiDi) | `noClasses().that().resideOutsideOfPackage("..transport..").should().callMethodWhere(target(owner(assignableTo(SearchContext.class).or(assignableTo(JavascriptExecutor.class)))))`. Herencia: `classes().that().resideInAnyPackage("..transport..", "..pages..", "..actions..", "..utils..")` con una condición propia: `getRawSuperclass()` es `Object` (o `Enum` y `Record` en esos tipos). Parte 4, solo en parte: `noClasses().should().callMethod(JavascriptExecutor.class, "executeAsyncScript", String.class, Object[].class)`; `noClasses().that().resideInAPackage("..transport..").should().dependOnClassesThat().resideInAnyPackage("org.openqa.selenium.interactions..", "org.openqa.selenium.devtools..", "org.openqa.selenium.bidi..")` o `.belongToAnyOf(Keys.class)`; un solo llamador de `WebElement.click()`, el lambda de `clicNativoUnicoHastaCumplir`. ArchUnit no lee el texto de los scripts ni los argumentos, así que la lista cerrada y el vocabulario de JavaScript no tienen equivalente |
 | R6 | Nombrar un paquete fuera de su fila de D4; secretos fuera de `utils` y `steps` (las unitarias, por CHK-16); `ResultadoClic` en un miembro público de una página (restricción de D1, enmienda del 2026-10-13). "Público" incluye `protected` (*Firmas expuestas*) | `layeredArchitecture().consideringOnlyDependenciesInLayers()` con las filas de D4 (`whereLayer(…).mayOnlyBeAccessedByLayers(…)`) y `slices().matching("com.demo.(*)..").should().beFreeOfCycles()`. Para `ResultadoClic`: métodos y campos públicos o protegidos de `..pages..` sin `Navegador.ResultadoClic` como tipo de retorno, de parámetro o de campo |
 | R7 | Vocabulario de interfaz en las features | No aplica (Gherkin): CHK-04, sin cambios |
 
@@ -218,6 +218,8 @@ Comandos de CHK-17, transcritos de `scripts/check-layers.sh` (la implementación
 Enmienda 2026-10-13 (*Firmas expuestas*): el bloque ya incluye `MOD`, `EXP` y `TIPO`, las cinco comprobaciones de firmas reescritas con `EXP` y las dos nuevas de tipos. Se integra en el mismo commit que el script y su autoprueba (D6). Hasta ese commit, CHK-17 es lo que ejecuta el script. *(Integrada en `df87ada`.)*
 
 Enmienda 2026-10-13, parte 2 (*Selenium en el transporte y herencia*): el bloque ya incluye `IMP`, `HER`, `R1-wild`, `R1-by`, las dos uniones por imports (`R1-imp` y `R1-her`) y `R5-ext`. `union_imports` no es un comando de git: es la función del script que define *Unión por imports*. Se integra en el mismo commit que el script y su autoprueba (D6); hasta ese commit, CHK-17 es lo que ejecuta el script (24 comprobaciones en `df87ada`). *(Integrada en `7d9477f`.)*
+
+Enmienda 2026-10-13, parte 4 (*Clic nativo único, scripts cerrados y preferencias de Chrome*): el bloque ya incluye `JS_LISTA`, `JS`, `EVT`, `CLIC` y `PREFS`, las tres comprobaciones nuevas de R5 en `transport`, el conteo `R5-clic-max` y la presencia `D8-prefs`. `check_max` y `require` no son comandos de git: son las funciones del script que define *Conteo y presencia*. Se integra en el mismo commit que el script y su autoprueba (D6), **después** del cambio de `Navegador` del paso 1 de su *Migración*; hasta ese commit, CHK-17 es lo que ejecuta el script (29 comprobaciones en `7d9477f`).
 
 ```bash
 T=src/test/java/com/demo
@@ -260,6 +262,19 @@ git grep --untracked -nP '\bfindElements?\s*\(|\bexecute(Async)?Script\b' -- src
 git grep --untracked -nP '\bextends\b' -- "$T/pages"
 #   … transport, actions y utils tampoco heredan (Selenium en el transporte y herencia)
 git grep --untracked -nP '\bextends\b' -- "$T/transport" "$T/actions" "$T/utils"
+# R5 en transport (Clic nativo único, scripts cerrados y preferencias de Chrome, parte 4)
+JS_LISTA='SCRIPT_DESPLAZAR_AL_CENTRO|SCRIPT_LEER_CODIGO_PAGINA_ERROR'
+JS='\bexecuteAsyncScript\b|\bexecuteScript\b(?!\((?:'"$JS_LISTA"')[,)])'
+EVT='\bKeys\b|dispatch\w*Event|executeCdpCommand|(?:\.|::)(?:requestSubmit|submit)\b|org\.openqa\.selenium\.(?:interactions|devtools|bidi)'
+CLIC='(?:\.|::)click\b'
+#   … executeScript solo con un script de la lista cerrada; executeAsyncScript nunca
+git grep --untracked -nP "$JS" -- "$T/transport"
+#   … sin eventos sintéticos ni otras vías de entrada (teclado, envío, Actions, CDP, BiDi)
+git grep --untracked -nP "$EVT" -- "$T/transport"
+#   … toda línea de clic es exactamente elemento.click();
+git grep --untracked -nP '^(?!\s*elemento\.click\(\);\s*$).*'"$CLIC" -- "$T/transport"
+#   … y hay una como mucho (conteo de líneas distintas de las dos pasadas)
+check_max R5 "más de un clic nativo en transport" 1 "$CLIC" -- "$T/transport"
 # R6: una línea por fila de D4 (runners excluido; src/main lo garantiza Maven)
 git grep --untracked -nP 'com\.demo\.(pages|actions|steps|hooks|runners|data)\b' -- "$T/transport"
 git grep --untracked -nP 'com\.demo\.utils\.(?!ConfigReader\b)' -- "$T/transport" "$T/pages"
@@ -273,6 +288,9 @@ git grep --untracked -nP 'com\.demo\.(pages|actions|steps|runners|config|data)\b
 git grep --untracked -nP '\b(SecretReader|CredentialsProvider)\b' -- src ":!$T/utils" ":!$T/steps" ":!$T/config" ":!$T/data"
 # Directorios de capa presentes (cada uno debe listar al menos un archivo)
 git ls-files "$T/transport" "$T/pages" "$T/actions" "$T/steps"
+# D8 (presencia, parte 4): DriverFactory aplica las preferencias de Chrome; sin la línea o sin el archivo, es violación
+PREFS='^\s*\w+\.setExperimentalOption\(\s*"prefs"\s*,\s*\w+\.chromePreferences\(\)\s*\)\s*;'
+require D8 "DriverFactory no aplica las preferencias de Chrome de BrowserSettings" "$PREFS" -- "$T/transport/DriverFactory.java"
 ```
 
 **R3 en acciones.** La expresión del tipo de retorno se detiene en el primer `(`, así que no ve `public void usar(LoginPage pagina) {` (P2 del verifier). La de parámetros busca un tipo `*Page` después del `(` de un método público:
@@ -771,6 +789,288 @@ Cambiar la avidez de un cuantificador es equivalente, igual que en *Firmas expue
 - un comentario o una cadena con `extends` en `transport`, `actions` o `utils` (D6: los comentarios cuentan como texto);
 - límites genéricos y excepciones propias en esas tres capas (ver la Decisión 2).
 
+**Clic nativo único, scripts cerrados y preferencias de Chrome** (R5 y D8; enmienda 2026-10-13, parte 4). Lleva a CHK-17 dos invariantes que hasta ahora solo protegía la revisión.
+
+*Huecos* (en `950d6de`):
+1. **Un solo clic nativo y ningún clic por JavaScript** (D1, `d569a34`).
+   - En `transport` quedan dos `executeScript`: el de `desplazarA`, con un literal (`Navegador.java:223`), y el de `ejecutarScriptConstante`, que recibe el script por parámetro (`:335`).
+   - Hay dos líneas de clic nativo: la de `click(By)` (`:132`) y la de `clicNativoUnicoHastaCumplir` (`:388`).
+   - Ninguna regla impide volver a agregar `arguments[0].click()`, un `dispatchEvent`, un segundo `click()` dentro de la espera, un clic con `Actions` o una tecla `ENTER`. R5 solo mira `executeScript` fuera de `transport`.
+2. **La preferencia de Chrome** (D8, `3bab4b2`).
+   - `DriverFactory.java:42` aplica `options.setExperimentalOption("prefs", settings.chromePreferences())`.
+   - Si alguien borra esa línea, ninguna prueba falla de forma determinista. `DriverFactory` usa Selenium, está en `src/test` y queda fuera de PIT, y `BrowserSettingsTest` fija el mapa, no que se aplique.
+   - La E2E solo falla si el aviso de Chrome aparece, y eso depende de que responda el servicio de Google (D8, *Límite*).
+
+*Decisión 1: en `transport`, los scripts son una lista cerrada, hay una sola línea de clic nativo y ninguna otra vía de entrada.*
+
+| Opción | Veredicto | Motivo |
+|---|---|---|
+| A. Lista cerrada de los `executeScript` permitidos, por constante (`R5-js`) | **Elegida** | Lleva a comando la regla de D1 "el primer argumento de `executeScript` es siempre una constante del transporte" (PI-05), que hasta hoy se comprobaba leyendo. Cada script nuevo pasa a ser una decisión con enmienda, como pide la parte 3 para cualquier respaldo. Rechaza también `executeAsyncScript`, un literal, un parámetro, una referencia a método y una llamada partida en dos líneas |
+| B. Prohibir los literales `.click()` y `dispatchEvent` dentro de las cadenas JavaScript de `transport` | **Elegida con otro alcance:** en cualquier línea de `transport` | `git grep` lee por línea y no sabe si una línea está dentro de una cadena. Los scripts de `Navegador` viven en bloques de texto (`"""`), cuyas líneas interiores no llevan comillas, así que una regla "entre comillas" no los vería. Por eso `EVT` se prohíbe en cualquier línea (también en los comentarios, D6), y `.click` solo se admite en una línea exacta (`R5-clic`). Así se vigila también el **contenido** de las constantes de la lista |
+| C. Una sola línea de clic nativo (`R5-clic-max`), con una forma exacta (`R5-clic`) | **Elegida** | El conteo sin la forma no distingue un clic JavaScript que sustituye al nativo: sigue habiendo uno. La forma sin el conteo no impide un segundo `elemento.click();`. Juntas exigen exactamente una línea, y que sea la nativa. Una línea con dos clics no tiene la forma exacta |
+| D. Exigir que el clic esté dentro de `clicNativoUnicoHastaCumplir` | Descartada | `git grep` no sabe en qué método está una línea, y un awk que siga las llaves es frágil ante cadenas, bloques de texto y lambdas. C da lo mismo: si la única línea de clic estuviera en otro método, los clics con postcondición dejarían de pulsar y la suite fallaría. ArchUnit sí lo vería (un solo llamador de `WebElement.click()`), pero D6 lo descarta y su disparador no se activa |
+| E. Contar hasta 2 y aceptar la línea de `click(By)` como está | Descartada | Congela la forma de hoy, no la invariante. Además, `click(By)` es el único clic sin el fallo uniforme de D1 (clics efectivos y pista de D8) |
+| F. Llevar la decisión del clic único a `src/main`, como lógica pura con pruebas y PIT | Descartada hoy | Mataría por mutación una regresión de la guarda (ver *Riesgo residual*), pero el cableado en `Navegador` seguiría sin prueba: el hueco se mueve, no se cierra. Es una clase nueva para tres líneas. **Disparador:** una regresión real de la guarda |
+
+- **Vías de entrada de `EVT`.** Son las formas realistas de volver a pulsar sin una segunda línea `.click`:
+  - eventos sintéticos de JavaScript (`dispatchEvent`) y los `Input.dispatch…Event` del protocolo de Chrome;
+  - `executeCdpCommand` y los paquetes `devtools` y `bidi` de Selenium, que ejecutan JavaScript o generan entrada fuera de `executeScript`;
+  - el paquete `interactions` (`Actions`), que además tiene `clickAndHold` y `doubleClick`, que `CLIC` no ve;
+  - `Keys`, porque un `ENTER` o un `SPACE` activan un botón;
+  - `submit` y `requestSubmit`, nativos o de JavaScript, que envían un formulario sin pulsar el botón.
+- **Coste.** El código cambia antes que la regla (paso 1 de *Migración*): una constante para `desplazarA`, el script de la página de error sin parámetro y `click(By)` sobre el mismo clic nativo único. Hoy no hay ningún uso de `EVT` en `transport`. Si una spec necesitara una tecla (por ejemplo, `Keys.CONTROL` para vaciar un campo), se reabre por enmienda; la regla nunca se relaja.
+- **La escritura** queda protegida solo en parte: `EVT` rechaza el `dispatchEvent` del antiguo script de escritura, y `JS`, cualquier script nuevo. Una segunda `sendKeys` nativa no la ve ninguna regla (*Fuera de alcance*).
+
+*Decisión 2: CHK-17 exige que `DriverFactory` aplique las preferencias de Chrome (`D8-prefs`, regla de presencia).*
+
+| Opción | Veredicto | Motivo |
+|---|---|---|
+| A. Regla positiva en CHK-17 sobre `DriverFactory.java` | **Elegida** | Es determinista, no necesita dependencias ni compilar, y la puede ejecutar cualquier agente (D6). Reutiliza el ejecutor de dos pasadas con sus guardas, la autoprueba y los pasos de CI de CHK-17. Una regla de presencia falla cerrado por construcción: si falta la línea, el archivo o la ruta, no hay coincidencias, y eso es la violación |
+| B. Construir las opciones de Chrome en `src/main` | Inviable | `selenium-java` tiene alcance `test` (`pom.xml:56`), así que `src/main` no compila contra `ChromeOptions`, y CHK-15 prohíbe `org.openqa` en `src/main`. Cambiarlo sería una dependencia nueva de `main` (P-06) y rompería el ADR-001 |
+| B'. `src/main` devuelve el mapa de capacidades `goog:chromeOptions` y `DriverFactory` lo fusiona | Descartada | Lleva a `src/main` el formato interno de Selenium y de Chrome. La línea que fusiona sigue en `DriverFactory` sin prueba, que es el mismo hueco. Y la fusión de `goog:chromeOptions` con `ChromeOptions.merge` tiene una semántica propia que habría que probar |
+| C. Prueba unitaria de `DriverFactory` | Descartada | R4 rechaza JUnit en `transport`; CHK-16 solo admite unitarias en `config` y `data`, y sin Selenium; Surefire solo las incluye ahí (`pom.xml:188-189`), y PIT no muta `target/test-classes`. Serían excepciones en cuatro controles, como en la opción B de `XPathLiteral` |
+| D. Comprobarlo al iniciar el navegador | Descartada | Chrome no devuelve las preferencias en las capacidades, y leer una página interna del navegador (`chrome://prefs-internals`) es otra superficie, que además depende de la versión |
+| E. Una CHK nueva | Descartada | Sería el mismo `git grep`, con script, autoprueba, paso de CI, etapa de Jenkins y fila en la Regla 04 propios. D8 es de este ADR, y CHK-17 ya tiene el ejecutor con guardas. El motivo se imprime con la etiqueta `D8`, como los directorios con `D6` |
+| F. Confiar solo en la E2E, que ya no tiene respaldo de clic | Insuficiente sola | Solo falla si el aviso aparece (D8, *Límite*). Se conserva como la última red |
+
+- **Alcance: solo `DriverFactory.java`.** Una línea igual en otra clase de `transport` no cuenta, porque nada garantiza que esa clase cree el driver. Si la traducción se mueve a otro archivo, la regla da 1 y se enmienda la ruta.
+- **Qué fija la expresión:** la clave `"prefs"` y el origen `chromePreferences()`, que son la invariante. Los nombres de variable (`\w+`) y los espacios pueden cambiar sin enmienda.
+- **Cadena completa:** `BrowserSettings` devuelve la preferencia (unitarias y PIT, D8), `DriverFactory` la aplica (`D8-prefs`) y Chrome la respeta (E2E sin respaldo, parte 3).
+
+*Expresiones.* `JS_LISTA`, `JS`, `EVT` y `CLIC` se definen una sola vez, como `MOD`, `EXP` y `TIPO`, y `PREFS` junto a su `require`:
+
+```text
+JS_LISTA = SCRIPT_DESPLAZAR_AL_CENTRO|SCRIPT_LEER_CODIGO_PAGINA_ERROR
+JS       = \bexecuteAsyncScript\b|\bexecuteScript\b(?!\((?:JS_LISTA)[,)])
+EVT      = \bKeys\b|dispatch\w*Event|executeCdpCommand|(?:\.|::)(?:requestSubmit|submit)\b|org\.openqa\.selenium\.(?:interactions|devtools|bidi)
+CLIC     = (?:\.|::)click\b
+FORMA    = ^(?!\s*elemento\.click\(\);\s*$).*CLIC
+PREFS    = ^\s*\w+\.setExperimentalOption\(\s*"prefs"\s*,\s*\w+\.chromePreferences\(\)\s*\)\s*;
+```
+
+Con estas cinco son 34 comprobaciones (*Nota de ejecución*):
+
+| ID (autoprueba) | Regla | Ámbito | Expresión | Motivo impreso |
+|---|---|---|---|---|
+| `R5-js` (nueva) | R5 | `transport` | `JS` | executeScript fuera de la lista cerrada de scripts del transporte |
+| `R5-evt` (nueva) | R5 | `transport` | `EVT` | evento sintético o vía de entrada distinta del clic nativo en transport |
+| `R5-clic` (nueva) | R5 | `transport` | `FORMA` | clic distinto de la línea de clic nativo del transporte |
+| `R5-clic-max` (nueva) | R5 | `transport` | `CLIC`, con `check_max` y máximo 1 | más de un clic nativo en transport |
+| `D8-prefs` (nueva) | D8 | `transport/DriverFactory.java` | `PREFS`, con `require` | DriverFactory no aplica las preferencias de Chrome de BrowserSettings |
+
+- En `JS`, la búsqueda negativa exige `(` justo después de `executeScript`, y después uno de los nombres de la lista seguido de `,` o `)`. Así, un nombre que empieza como uno de la lista (`SCRIPT_DESPLAZAR_AL_CENTRO_Y_PULSAR`) no pasa. `executeAsyncScript` es otra alternativa, sin lista.
+- Los `\b` de `JS` y de `Keys` exigen el token completo: `sendKeys` y `noexecuteScript` pasan.
+- `CLIC` acepta `.` o `::` delante, así que ve `WebElement::click` y `HTMLElement.prototype.click.call(…)`. Su `\b` final deja fuera `clickHastaCumplir` y `clickYEsperar…`, y una firma `public void click(By …)` no lleva `.` ni `::` delante.
+- `FORMA` admite sangría y espacios finales alrededor de `elemento.click();`. Una línea con un comentario o con dos clics no tiene la forma exacta.
+- En `PREFS`, `^\s*\w+\.` deja fuera la línea comentada con `//` o con `*`.
+
+*Conteo y presencia.* Las dos funciones nuevas usan el ejecutor de dos pasadas con sus guardas (`grep2`), igual que `check` y `union_imports`: con rc ≥ 2 o con texto en stderr, CHK-17 da 2, y el mensaje nombra la regla y el motivo.
+- **`check_max <regla> <motivo> <máximo> <expresión> -- <rutas>`:**
+  1. cuenta las líneas distintas (`archivo:línea`) de las dos pasadas juntas. Las dos leen el mismo árbol de trabajo, así que una línea vista en las dos cuenta una vez;
+  2. si son más que el máximo, imprime cada una como `archivo:línea: <regla>: <motivo>`, ordenadas como en `check`, y el estado pasa a 1;
+  3. no usa awk, para no depender de CHK-18, ni un comando cuyo rc=1 sea normal (`grep -c`) dentro de una sustitución con `set -e`.
+- **`require <regla> <motivo> <expresión> -- <archivo>`:**
+  1. recibe una sola ruta; con otra cantidad, es un error de uso y da 2;
+  2. **guarda del directorio padre:** si `dirname <archivo>` no es un directorio del árbol de trabajo (`[ -d "$(dirname "$file")" ]`), imprime `<archivo>:0: <regla>: <motivo>`, el estado pasa a 1 y **no ejecuta `git grep`**. Es una guarda que registra la violación, nunca una que deja pasar;
+  3. si el directorio existe y ninguna de las dos pasadas encuentra una línea, imprime la misma línea, y el estado pasa a 1;
+  4. **sin el archivo, falla cerrado.**
+     - Sin el directorio padre, lo resuelve la guarda del punto 2.
+     - Con el directorio padre y sin el archivo, la ruta da rc=1 sin salida ni stderr. Un archivo versionado que falta en el árbol de trabajo también se omite sin escribir en stderr (en el código de git, `grep_source_load_file` calla ante `ENOENT`; lo confirma `D8-prefs-f`).
+     - En los dos casos no hay coincidencias, y eso es la violación.
+
+  *Por qué la guarda* (hallazgo de devops, 2026-10-13, en un repositorio temporal con git 2.53.0; el arquitecto lo reprodujo en este repositorio con `git grep` y rutas dentro de `src`). Con `--untracked`, `git grep` escribe `warning: could not open directory '…/'` en stderr, y termina con rc=1, cuando la ruta es un archivo dentro de un directorio que no existe o un directorio con `/` final. Sin `--untracked`, nunca avisa:
+
+  | Ruta (con `--untracked`) | rc | stderr |
+  |---|---|---|
+  | `a/nada` (directorio inexistente, sin `/` final) | 1 | vacío |
+  | `a/nada/` | 1 | aviso |
+  | `a/nada/F.java` | 1 | aviso |
+  | `a/u/Nada.java` (el directorio padre existe) | 1 | vacío |
+
+  `grep2` trata todo texto en stderr como error, así que sin la guarda `require` daría 2 cuando falta `transport`, y el caso vigente `D7-20 directorio transport ausente` pasaría de 1 a 2. Las demás comprobaciones no se ven afectadas, porque sus rutas son directorios sin `/` final.
+
+  | Opción | Veredicto | Motivo |
+  |---|---|---|
+  | A. Guarda del directorio padre en `require`, que registra la violación sin ejecutar `git grep` | **Elegida** (coordinador) | La ausencia del directorio es una violación de D8, no un error de la herramienta, como el directorio de capa de D6. D7-20 vuelve a dar 1, con las líneas de D6 y de D8 |
+  | B. Cambiar el esperado de `D7-20 directorio transport ausente` a 2 | Descartada | Contradice D6 (un directorio de capa ausente es 1) y que los casos vigentes no cambian |
+  | C. Pasar a `git grep` el directorio y filtrar el archivo en bash | Descartada | Es más código, y cambia lo que miden P7 y P8 |
+
+  Una regla de presencia no necesita la comprobación de directorios de D6, pero sí esta guarda propia.
+
+*Migración* (cada paso deja la suite en verde):
+1. **`qa-automation-engineer`, en `Navegador`** (gate CRÍTICO, porque toca `transport`):
+   - `desplazarA` ejecuta una constante nueva, `private static final String SCRIPT_DESPLAZAR_AL_CENTRO = "arguments[0].scrollIntoView({block: 'center'});"`, con `executeScript(SCRIPT_DESPLAZAR_AL_CENTRO, elemento)`.
+   - `ejecutarScriptConstante(String script)` pasa a ser un método privado sin el parámetro del script (nombre orientativo: `leerCodigoPaginaError()`). Ejecuta `executeScript(SCRIPT_LEER_CODIGO_PAGINA_ERROR)`, con el mismo `catch` y el mismo DEBUG.
+   - `click(By)` hace su clic con `clicNativoUnicoHastaCumplir`, y su postcondición es el propio clic: se cumple en cuanto `clicsEfectivos` > 0. Una postcondición siempre verdadera no sirve, porque `clicNativoUnicoHastaCumplir` la evalúa antes de pulsar y no pulsaría. Si el control nunca está visible y habilitado, falla con el mensaje de `clickHastaCumplir` para 0 clics, sin duplicar su texto.
+   - La única línea de clic sigue siendo `elemento.click();`, dentro de `clicNativoUnicoHastaCumplir`. Ningún comentario de `transport` nombra `executeScript`, `.click` ni el vocabulario de `EVT`.
+   - La API pública y `ResultadoClic` no cambian.
+   - **Comprobaciones:** CHK-01, CHK-03, CHK-07 y CHK-17 (el script vigente, exit 0); las expresiones de R5 de este bloque sobre el árbol, con `--untracked` y sin él (`JS`, `EVT` y `FORMA` sin salida, y `CLIC` con una sola línea); CHK-08 ×2 con el mismo `Tests run` que antes del cambio; CHK-09 y CHK-10 de `@AC-LOGIN-01`, y CHK-09 de `@AC-LOGIN-02`, porque el clic de inicio de sesión es el de `click(By)`.
+2. **`devops-engineer`, en el mismo commit que esta enmienda:** el script, con las cinco comprobaciones y las dos funciones, y la autoprueba (*Criterio de cierre* de la enmienda). Nunca antes del paso 1: sobre `950d6de`, CHK-17 daría 1 (`R5-js` dos veces, `R5-clic` y `R5-clic-max`).
+
+*Casos de autoprueba.* Las comprobaciones de R5 usan los ayudantes vigentes: la línea va en la 2 de `transport/Bad.java` u `Otro.java`, con `violation` o `allowed`, en sus dos modos. Las de D8 necesitan un ayudante nuevo, que reescribe la línea de preferencias del `DriverFactory.java` del árbol base:
+- **Modo versionado:** el cambio se agrega al índice (`git add`, o `git rm` si se borra el archivo).
+- **Modo sin versionar:** el cambio queda solo en el árbol de trabajo (`rm` sin `git rm`, si se borra).
+- Una violación de D8 espera la línea `src/test/java/com/demo/transport/DriverFactory.java:0: D8: DriverFactory no aplica las preferencias de Chrome de BrowserSettings`.
+
+**El árbol base cambia**, porque si no, `valido` daría 1:
+- en `transport/Navegador.java`, la línea `executeScript("arguments[0].click();", …)` de `click` se sustituye por una línea `elemento.click();` con sangría, y se agregan las dos llamadas de la lista, una con argumentos (`executeScript(SCRIPT_DESPLAZAR_AL_CENTRO, …)`) y otra sin ellos (`executeScript(SCRIPT_LEER_CODIGO_PAGINA_ERROR)`). Se conserva `public void click(By locator) {`;
+- `transport/DriverFactory.java` suma, con sangría, `options.setExperimentalOption("prefs", settings.chromePreferences());`.
+
+Son 30 casos negativos y 6 permitidos, es decir, 72 ejecuciones, más 2 casos de error: 414 en total. Los casos vigentes no cambian. `D7-20 directorio transport ausente` sigue esperando 1 y su línea de D6, y ahora imprime además la línea de D8 (guarda del directorio padre de `require`).
+
+```java
+// ===== Deben fallar (violation) =====
+// R5-js · R5 · transport/Bad.java · literal
+        ((JavascriptExecutor) driver).executeScript("return 1;");
+// R5-js-b · R5 · transport/Bad.java · parámetro (el ejecutarScriptConstante de 950d6de)
+            return ((JavascriptExecutor) driver).executeScript(script);
+// R5-js-c · R5 · transport/Bad.java · constante fuera de la lista
+        ((JavascriptExecutor) driver).executeScript(SCRIPT_PULSAR, elemento);
+// R5-js-d · R5 · transport/Bad.java · nombre que empieza como uno de la lista
+        ((JavascriptExecutor) driver).executeScript(SCRIPT_DESPLAZAR_AL_CENTRO_Y_PULSAR, elemento);
+// R5-js-e · R5 · transport/Bad.java · asíncrono, aun con un script de la lista
+        ((JavascriptExecutor) driver).executeAsyncScript(SCRIPT_DESPLAZAR_AL_CENTRO, elemento);
+// R5-evt · R5 · transport/Bad.java · evento sintético en un bloque de texto
+            arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));
+// R5-evt-b · R5 · transport/Bad.java · evento de entrada del protocolo de Chrome
+        String metodo = "Input.dispatchMouseEvent";
+// R5-evt-c · R5 · transport/Bad.java · CDP
+        ((HasCdp) driver).executeCdpCommand("Runtime.evaluate", parametros);
+// R5-evt-d · R5 · transport/Bad.java · teclado
+        elemento.sendKeys(Keys.ENTER);
+// R5-evt-e · R5 · transport/Bad.java · envío nativo
+        elemento.submit();
+// R5-evt-f · R5 · transport/Bad.java · envío por JavaScript en un bloque de texto
+            arguments[0].form.requestSubmit();
+// R5-evt-g · R5 · transport/Bad.java · Actions
+import org.openqa.selenium.interactions.Actions;
+// R5-evt-h · R5 · transport/Bad.java · DevTools
+import org.openqa.selenium.devtools.HasDevTools;
+// R5-evt-i · R5 · transport/Bad.java · BiDi
+import org.openqa.selenium.bidi.HasBiDi;
+// R5-evt-j · R5 · transport/Bad.java · envío por referencia a método
+        java.util.Optional.of(elemento).ifPresent(WebElement::submit);
+// R5-clic · R5 · transport/Bad.java · clic JavaScript en un bloque de texto
+            arguments[0].click();
+// R5-clic-b · R5 · transport/Bad.java · la línea de click(By) en 950d6de
+        wait.until(ExpectedConditions.elementToBeClickable(localizador)).click();
+// R5-clic-c · R5 · transport/Bad.java · Actions sin su import
+        new Actions(driver).moveToElement(elemento).click().perform();
+// R5-clic-d · R5 · transport/Bad.java · referencia a método
+        java.util.Optional.of(elemento).ifPresent(WebElement::click);
+// R5-clic-e · R5 · transport/Bad.java · prototipo, sin paréntesis
+            HTMLElement.prototype.click.call(arguments[0]);
+// R5-clic-f · R5 · transport/Bad.java · dos clics en una línea
+            elemento.click(); elemento.click();
+// R5-clic-g · R5 · transport/Bad.java · otro receptor
+            boton.click();
+// R5-clic-max · R5 · transport/Bad.java · forma exacta, pero es la segunda línea de clic (la otra está en el Navegador.java del árbol base)
+            elemento.click();
+// D8-prefs · D8 · transport/DriverFactory.java · sin la línea (se borra)
+// D8-prefs-b · D8 · transport/DriverFactory.java · comentada
+        // options.setExperimentalOption("prefs", settings.chromePreferences());
+// D8-prefs-c · D8 · transport/DriverFactory.java · otra clave
+        options.setExperimentalOption("excludeSwitches", settings.chromePreferences());
+// D8-prefs-d · D8 · transport/DriverFactory.java · otro origen
+        options.setExperimentalOption("prefs", java.util.Map.of());
+// D8-prefs-e · D8 · transport/DriverFactory.java sin la línea, y transport/Otro.java con ella en la línea 2
+        options.setExperimentalOption("prefs", settings.chromePreferences());
+// D8-prefs-f · D8 · sin transport/DriverFactory.java (se borra el archivo)
+// D8-prefs-g · D8 · sin el directorio transport (versionado: git rm -r; sin versionar: rm -r): exit 1 con la línea de D8; la guarda del directorio padre evita el aviso de git
+
+// ===== Deben pasar (allowed) =====
+// ok-35 · transport/Otro.java · identificadores que contienen los nombres de JS
+        boolean noexecuteScript = executeScriptado && noexecuteAsyncScript || executeAsyncScriptado;
+// ok-36 · transport/Otro.java · sendKeys y Keystroke no son el token Keys
+        elemento.sendKeys(texto); // Keystroke nativo
+// ok-37 · transport/Otro.java · submit sin punto, y submitted
+        boolean submit = formulario.submitted;
+// ok-38 · transport/Otro.java · método que empieza por click
+        this.clickHastaCumplir(localizador, postcondicion);
+// ok-39 · transport/Navegador.java del árbol base, con su línea de clic en la columna 0
+elemento.click();
+// ok-40 · transport/DriverFactory.java · otros nombres y espacios, en la columna 0
+opciones.setExperimentalOption( "prefs" , ajustes.chromePreferences() ) ;
+```
+
+*Casos de error* (exit 2, con su mensaje):
+- `error-max`: el shim de `git` sale con 2, sin escribir en stderr, solo cuando uno de sus argumentos es exactamente `CLIC`. Debe dar 2 y `check-layers: ERROR: git grep terminó con 2 (R5: más de un clic nativo en transport)`. Demuestra que `check_max` pasa por el ejecutor con guardas. `FORMA` contiene `CLIC` pero no es igual, así que el shim no la afecta.
+- `error-d8`: el shim sale con 2, sin stderr, solo cuando un argumento contiene `setExperimentalOption`. Debe dar 2 y `check-layers: ERROR: git grep terminó con 2 (D8: DriverFactory no aplica las preferencias de Chrome de BrowserSettings)`. Demuestra que `require` no confunde un error con una ausencia.
+
+*Mutantes que deben morir* (sabotaje de devops; los de `git grep` se comprobaron sobre este ADR, *Enmiendas*):
+
+| Mutante | Casos que lo matan |
+|---|---|
+| J1. Sin `R5-js` | `R5-js` a `-e` |
+| J2. Sin la alternativa `executeAsyncScript` | `R5-js-e` |
+| J3. Una sola alternativa con la lista (`\bexecute(?:Async)?Script\b(?!…)`) | `R5-js-e` |
+| J4. Sin la búsqueda negativa | `valido` |
+| J5. Sin el `\(` de la búsqueda negativa | `valido` |
+| J6. Sin uno de los dos nombres de `JS_LISTA` | `valido` |
+| J7. Lista abierta (`SCRIPT_\w+`) | `R5-js-c` |
+| J8. Sin `[,)]` | `R5-js-d` |
+| J9. `[,)]` pasa a `,` o a `)` | `valido` |
+| J10. Sin el `\b` inicial o sin el final de una alternativa de `JS` | `ok-35` |
+| V1. Sin `R5-evt` | `R5-evt` a `-j` |
+| V2. Sin `\bKeys\b` | `R5-evt-d` |
+| V3. Sin el `\b` inicial o sin el final de `Keys` | `ok-36` |
+| V4. Sin `dispatch\w*Event` | `R5-evt` y `-b` |
+| V5. `dispatch\w*Event` pasa a `dispatchEvent` | `R5-evt-b` |
+| V6. Sin `executeCdpCommand` | `R5-evt-c` |
+| V7. Sin `requestSubmit` | `R5-evt-f` |
+| V8. Sin `submit` | `R5-evt-e` y `-j` |
+| V9. El prefijo del envío, solo con `.` (sin `::`) | `R5-evt-j` |
+| V10. El envío sin su prefijo (`.` o `::`) | `ok-37` |
+| V11. Sin el `\b` final del envío | `ok-37` |
+| V12. Sin `interactions`, sin `devtools` o sin `bidi` | `R5-evt-g`, `-h` o `-i` |
+| K1. Sin `R5-clic` | `R5-clic` a `-g` |
+| K2. `FORMA` sin el `^` | `valido` |
+| K3. `^(?!\s*` pasa a `^(?!` | `valido` |
+| K4. `^(?!\s*` pasa a `^(?!\s+` | `ok-39` |
+| K5. `elemento` pasa a `\w+` | `R5-clic-g` |
+| K6. Sin el `\s*$` final de `FORMA` | `R5-clic-f` |
+| K7. `CLIC` solo con `.` (sin `::`) | `R5-clic-d` |
+| K8. `CLIC` sin su prefijo (`.` o `::`) | `valido` (`public void click(By locator) {`) |
+| K9. `CLIC` sin el `\b` final | `ok-38` |
+| M1. Sin `R5-clic-max` | `R5-clic-max` |
+| M2. Máximo 2 | `R5-clic-max` |
+| M3. Máximo 0, o `>` pasa a `>=` | `valido` |
+| M4. Cuenta por archivo (`git grep -c`), no el total | `R5-clic-max` |
+| M5. Suma las dos pasadas sin quitar duplicados | `valido` |
+| M6. Solo la pasada sin `--untracked` | `R5-clic-max` (sin versionar) |
+| M7. `check_max` no usa el ejecutor con guardas | `error-max` |
+| P1. Sin `D8-prefs` | `D8-prefs` a `-f` |
+| P2. `D8-prefs` con `check`, de modo que la presencia es la violación | `valido` |
+| P3. `PREFS` sin `^\s*` | `D8-prefs-b` |
+| P4. `^\s*` pasa a `^\s+` | `ok-40` |
+| P5. Cualquier clave (`"\w+"`) | `D8-prefs-c` |
+| P6. Cualquier argumento en lugar de `chromePreferences()` | `D8-prefs-d` |
+| P7. Ámbito de todo `transport`, no solo `DriverFactory.java` | `D8-prefs-e` |
+| P8. Lee el índice (`--cached`) en lugar del árbol de trabajo | `D8-prefs` a `-f` (sin versionar) |
+| P9. Sin el archivo, la regla no se evalúa (una guarda de existencia que pasa) | `D8-prefs-f` (versionado) |
+| P10. `\w+` pasa a `options` o a `settings` | `ok-40` |
+| P11. Sin uno de los cinco `\s*` interiores de `PREFS` | `ok-40` |
+| P12. `require` no usa el ejecutor con guardas | `error-d8` |
+| P13. `require` sin la guarda del directorio padre | `D8-prefs-g` y `D7-20 directorio transport ausente`, que dan 2 en lugar de 1 |
+| P14. La guarda del directorio padre deja pasar (sale sin registrar la violación) | `D8-prefs-g`. `D8-prefs-f` no lo mata, porque allí el directorio existe, y `D7-20` tampoco, porque su línea de D6 ya da 1 |
+
+Cambiar la avidez de un cuantificador es equivalente, igual que en *Firmas expuestas*.
+
+*Riesgo residual aceptado (D6, R-5):*
+- **Una regresión de la guarda** de `clicNativoUnicoHastaCumplir` (`if (clicsEfectivos.get() > 0)`). Sin ella, la espera vuelve a pulsar en cada sondeo sin ninguna línea nueva. Ningún comando la ve, y la suite tampoco, porque la postcondición suele cumplirse tras el primer clic. La protegen la revisión y el mensaje del fallo, que cuenta los clics efectivos. Es el disparador de la opción F.
+- Formato poco común: `elemento . click()`, o `/* … */` alrededor de la línea de `PREFS`, que la evade porque la línea sigue coincidiendo.
+- Vías de JavaScript o de entrada que `EVT` no enumera (una URL `javascript:` en `abrir`, reflexión, una API futura de Selenium) y un salto de línea en el texto de `escribir`, que envía el formulario.
+- Un script de la lista que cambie su contenido sin usar `.click`, `EVT` ni `elemento` (por ejemplo, `focus()`): no pulsa, pero ninguna regla lo ve.
+- La línea de `PREFS` en código muerto, o aplicada a otras opciones que no crean el driver.
+
+*Falsos positivos, que fallan cerrado:*
+- un comentario de `transport` que nombre `executeScript(`, `.click` o el vocabulario de `EVT` (D6: los comentarios cuentan como texto);
+- renombrar `elemento`, `SCRIPT_DESPLAZAR_AL_CENTRO`, `SCRIPT_LEER_CODIGO_PAGINA_ERROR` o `DriverFactory.java`, o mover la traducción de Chrome a otro archivo: se enmienda la regla;
+- una tecla que no activa nada (`Keys.CONTROL` para vaciar un campo) o un envío que pida una spec: se reabre por enmienda;
+- una llamada a `executeScript` partida en dos líneas, o con un espacio antes del `(`.
+
+*Fuera de alcance (P2, si el usuario lo pide):* la escritura única. Ninguna regla ve una segunda `sendKeys` nativa en `transport`. Se cerraría con `check_max R5 "más de una escritura nativa en transport" 1 '\bsendKeys\b' -- "$T/transport"`, con sus casos.
+
 **Nota de ejecución** (`scripts/check-layers.sh:11-39`, `:103-128`; eran `:10-38` y `:93-118` antes de la enmienda sobre `ResultadoClic`):
 - **Dos pasadas por comando.** Cada `git grep` corre con `--untracked` (lo no versionado, respetando `.gitignore`) y sin él (los archivos del índice), y los resultados se unen sin duplicados. Motivo: con git 2.53, `--untracked` recorre el árbol de trabajo sin leer el índice y omite los archivos versionados que coinciden con `.gitignore`.
 - **stderr es error.** Con un archivo ilegible, `git grep` imprime "failed to stat" y aun así termina con 0 o 1. Por eso cualquier texto en su stderr da 2.
@@ -787,7 +1087,10 @@ Cambiar la avidez de un cuantificador es equivalente, igual que en *Firmas expue
 - **29 comprobaciones** desde la enmienda *Selenium en el transporte y herencia*: las 24 anteriores, `R1-wild`, `R1-by`, `R1-imp`, `R1-her` y `R5-ext`.
   - `R1-imp` y `R1-her` unen dos `git grep` con awk (*Unión por imports*).
   - Si awk termina con un código distinto de 0, CHK-17 da 2 y el mensaje nombra awk, la regla y el motivo.
-- **Límite de PCRE.** Si una expresión agota el límite de backtracking de PCRE, `git grep` escribe `match limit exceeded` en stderr, y CHK-17 da 2: falla cerrado, nunca abierto. Las siete expresiones de *Firmas expuestas* recorren todos los archivos versionados sin agotarlo (enmienda *Firmas expuestas*), y las cinco nuevas de *Selenium en el transporte y herencia* también (su enmienda).
+- **34 comprobaciones** desde la enmienda *Clic nativo único, scripts cerrados y preferencias de Chrome* (parte 4): las 29 anteriores, `R5-js`, `R5-evt`, `R5-clic`, `R5-clic-max` y `D8-prefs`.
+  - `R5-clic-max` cuenta líneas (`check_max`) y `D8-prefs` exige presencia (`require`); las dos usan el ejecutor con guardas (*Conteo y presencia*).
+  - Una línea de presencia que falta se imprime como `archivo:0: D8: motivo`, igual que un directorio de capa: es una violación, no un error de la herramienta.
+- **Límite de PCRE.** Si una expresión agota el límite de backtracking de PCRE, `git grep` escribe `match limit exceeded` en stderr, y CHK-17 da 2: falla cerrado, nunca abierto. Las siete expresiones de *Firmas expuestas* recorren todos los archivos versionados sin agotarlo (enmienda *Firmas expuestas*), las cinco nuevas de *Selenium en el transporte y herencia* también (su enmienda), y las cinco de la parte 4 también (su enmienda).
 
 ### D8. Configuración pura del navegador en `src/main` (paso independiente)
 
@@ -807,7 +1110,7 @@ Cierra el otro pendiente heredado del ADR-001.
 - **Restricción:** el ancho y el alto se leen solo en modo headless, como hoy (`:72-77`).
 - **Ajustes de Chrome contra interferencias del propio navegador** *(enmienda 2026-10-13, parte 3)*. `BrowserSettings` también decide, como lógica pura, qué ajustes recibe Chrome, y `DriverFactory` solo los traduce:
   - **`--disable-component-update`**, en los argumentos de Chrome (`8d7ce8b`, registrado en D1 con el contrato de `abrir`).
-  - **`chromePreferences()`** (`3bab4b2`): para Chrome devuelve `profile.password_manager_leak_detection=false`; para Firefox, un mapa vacío; es inmutable. `DriverFactory` la aplica con `ChromeOptions.setExperimentalOption("prefs", …)`.
+  - **`chromePreferences()`** (`3bab4b2`): para Chrome devuelve `profile.password_manager_leak_detection=false`; para Firefox, un mapa vacío; es inmutable. `DriverFactory` la aplica con `ChromeOptions.setExperimentalOption("prefs", …)`. *(Enmienda 2026-10-13, parte 4: CHK-17 exige esa llamada en `DriverFactory.java`, y falla si falta la línea o el archivo (`D8-prefs`, D7).)*
     - **Motivo:** tras el inicio de sesión, la comprobación de contraseñas filtradas de Chrome abre un aviso que en headless no se ve y que, mientras está abierto, descarta los clics y las teclas nativos dirigidos a la página. Era la causa de los clics que terminaban en el respaldo JavaScript de D1 (`MEMORY.md` la tenía como "sin aislar").
     - **Evidencia** (engineer; no se ejecutó aquí, B-01). Según el coordinador, los clics con respaldo pasaron de 36 de 153 a 0 de 156 en Chrome local, con carga y sin ella, y en el Grid. Según el mensaje de `3bab4b2`: un A/B intercalado dio 0 de 6 clics con respaldo con la preferencia, frente a 3 de 6 sin ella; CHK-08 ×2 con `Tests run: 189, Failures: 0, Errors: 0, Skipped: 1`; PIT 132/132.
     - **Pruebas:** tres pruebas unitarias nuevas en `BrowserSettingsTest` (`chromeDisablesPasswordLeakDetectionInEveryMode`, `firefoxHasNoChromePreferences` y `chromePreferencesAreImmutable`), dentro de PIT (CHK-11).
@@ -1366,3 +1669,70 @@ Las decisiones de fondo y el estado no cambian: D7 se alinea con el script, que 
   ```markdown
   | CHK-17 | Capas (ADR-002): R1–R6 de D7, incluidas páginas como parámetro en acciones y `ResultadoClic` en miembros expuestos de páginas; las firmas expuestas incluyen anotaciones, cualquier orden de modificadores y `protected`, y en `transport`, `pages` y `actions` no hay interfaces, anotaciones ni records expuestos (D7, *Firmas expuestas*); en `transport`, ningún tipo de Selenium importado o calificado en firmas expuestas ni en la herencia, `By` solo como parámetro y sin comodines de Selenium, y `transport`, `actions` y `utils` no extienden clases (D7, *Selenium en el transporte y herencia*); falla cerrado (directorios de capa, `git grep` con rc ≥ 2 o con stderr, awk de la unión con rc ≠ 0) | Exit 0 en el script y en su autoprueba | engineer, verifier, devops |
   ```
+
+### 2026-10-13 — Clic nativo único, scripts cerrados y preferencias de Chrome en CHK-17 (R5 y D8)
+
+**Propuesta** del `qa-automation-architect` el 2026-10-13, a petición del coordinador (P2 que pidió el usuario para cerrar el proyecto). La aprueba el coordinador (Regla 01, nivel 2). Es la "parte 4" que citan D1, D6, D7 y D8. Las decisiones de fondo no cambian: CHK-17 pasa a comprobar la invariante de clic de la parte 3 (`d569a34`) y que `DriverFactory` aplique la preferencia de D8 (`3bab4b2`), dos cosas que hasta hoy solo protegía la revisión.
+
+- **Qué cambia:**
+  - **D7:** la fila R5 de la tabla, con su equivalente ArchUnit parcial; el bloque de comandos; la subsección *Clic nativo único, scripts cerrados y preferencias de Chrome* (huecos, dos decisiones con sus opciones, expresiones, `check_max` y `require`, migración, 30 casos negativos, 6 permitidos y 2 de error, 52 mutantes y riesgo residual), y la *Nota de ejecución* (34 comprobaciones).
+  - **Fuera de D7:** una nota en D1 (*Tope de clics* y PI-05), en D6 (casos previstos) y en D8 (`chromePreferences()`).
+- **Integración (D6),** en dos commits y en este orden:
+  1. el cambio de `Navegador` del engineer (paso 1 de *Migración*), con el verifier y el gate CRÍTICO;
+  2. el script, la autoprueba y esta enmienda, en el mismo commit (devops).
+  - Hasta el commit 2, CHK-17 es lo que ejecuta el script: 29 comprobaciones.
+  - Si la implementación se aparta de D7 en una expresión, un motivo, un caso o la semántica de `check_max` y `require`, se corrige el ADR antes del commit. La regla nunca se relaja.
+- **Comprobación sobre `HEAD`** (`950d6de`, 2026-10-13; solo `git grep`, B-01). Al comprobar, `src` no tenía cambios sin commit (`git status --short`). Cada búsqueda se hizo con `HEAD`, y también con `--untracked` y con `--cached`, con el mismo resultado. Al cerrar la enmienda, HEAD es `fb8f6ae`, y entre los dos commits `src`, `scripts` y `docs/adr` no cambian (`git diff --stat 950d6de fb8f6ae -- src scripts docs/adr` no da salida), así que los resultados valen para los dos:
+  - `JS` sobre `transport`: rc=0, con dos líneas, las dos que cambia el paso 1: `Navegador.java:223` (el literal de `desplazarA`) y `:335` (`executeScript(script)`).
+  - `FORMA`: rc=0, con una línea, `Navegador.java:132`, la de `click(By)`, que también cambia el paso 1.
+  - `CLIC`: dos líneas, `:132` y `:388`. Tras el paso 1 queda solo la de `clicNativoUnicoHastaCumplir`.
+  - `EVT`: rc=1, sin salida. Hoy `transport` no usa ninguna de esas vías.
+  - `PREFS` sobre `DriverFactory.java`: rc=0, con `:42`. La presencia se cumple.
+  - Fuera de esas tres líneas de `Navegador`, ninguna expresión encuentra nada, así que **tras el paso 1 no quedan violaciones**.
+  - **Límite de PCRE:** las cinco expresiones recorren con `git grep -lP` los archivos versionados de `src`, `scripts`, `docs` y `.github` sin texto en stderr.
+- **Control positivo de los casos,** sobre este ADR (líneas `:900-969` del bloque de casos al redactar; `:923-993` desde la corrección de `require`, que desplaza el bloque y solo le suma la línea de comentario de `D8-prefs-g`, así que los resultados no cambian):
+  - `JS` encuentra los 5 casos `R5-js*` y no `ok-35`.
+  - `EVT` encuentra los 10 casos `R5-evt*` y no `ok-36` ni `ok-37`.
+  - `FORMA` encuentra los 7 casos `R5-clic` a `-g`, y no `R5-clic-max` (forma exacta, con sangría) ni `ok-39` (forma exacta, en la columna 0).
+  - `CLIC` encuentra esos 7, `R5-clic-max` y `ok-39`, y no `ok-38`.
+  - `PREFS` encuentra la línea de `D8-prefs-e` (es la buena, pero en `Otro.java`) y `ok-40`, y no `D8-prefs-b`, `-c` ni `-d`.
+- **Control de los mutantes de `git grep`,** sobre el mismo bloque:
+  - J2 y J3 pierden `R5-js-e`; J7 pierde `R5-js-c` y `-d`; J8 pierde `R5-js-d`; J10 (sus cuatro variantes) suma `ok-35`.
+  - J4, J5, J6 y J9 se comprobaron sobre las dos líneas de *Migración* que llevan las llamadas de la lista (`executeScript(SCRIPT_DESPLAZAR_AL_CENTRO, elemento)` y `executeScript(SCRIPT_LEER_CODIGO_PAGINA_ERROR)`): `JS` no las encuentra, y cada mutante encuentra al menos una. Por eso el árbol base debe tener las dos formas.
+  - V2 pierde `R5-evt-d`; V3 (sus dos variantes) suma `ok-36`; V4 pierde `R5-evt` y `-b`; V5 pierde `-b`; V6, `-c`; V7, `-f`; V8, `-e` y `-j`; V9, `-j`; V10 y V11 suman `ok-37`; V12 pierde `-g`, `-h` o `-i`.
+  - K2 suma `R5-clic-max` (la forma exacta con sangría, como la del árbol base) y `ok-39`; K3 suma `R5-clic-max`; K4 suma `ok-39`; K5 pierde `R5-clic-g`; K6 pierde `-f`; K7 pierde `-d`; K9 suma `ok-38`.
+  - K8 se comprobó sobre la línea `public void click(By locator) {` del árbol base de la autoprueba (`scripts/tests/check-layers-test.sh:135` en `950d6de`): `CLIC` no la encuentra (rc=1), y el mutante sí.
+  - P3 suma `D8-prefs-b`; P4 pierde `ok-40`; P5 suma `-c`; P6 suma `-d`; P10 (sus dos variantes) pierde `ok-40`, y P11 (sus cinco variantes) también. El `\s*` posterior a la coma pierde además la línea buena de `-e`, así que ese mutante también rompe `valido`.
+  - Los mutantes de cableado y de conteo (J1, V1, K1, M1–M7, P1, P2, P7, P8, P9 y P12–P14) los ejecuta devops: B-01 no permite correr el script.
+- **Corrección de `require`** (2026-10-13, P1 del coordinador, antes del commit de devops). Devops halló que, con `--untracked`, `git grep` escribe un aviso en stderr cuando la ruta es un archivo dentro de un directorio inexistente, así que `require` daba 2 sin `transport` y `D7-20 directorio transport ausente` pasaba de 1 a 2. El arquitecto lo reprodujo con git 2.53.0 en este repositorio: `git grep --untracked -nP 'zzqqzz' -- src/test/java/com/demo/noexiste/F.java` da rc=1 y `warning: could not open directory 'src/test/java/com/demo/noexiste/': No such file or directory`; la misma ruta sin `--untracked`, la ruta del directorio sin `/` final y `src/test/java/com/demo/transport/Nada.java` dan rc=1 sin stderr. El coordinador eligió la opción A: `require` suma la guarda del directorio padre (*Conteo y presencia*, punto 2), con el caso `D8-prefs-g` y los mutantes P13 y P14. Son 414 casos y 52 mutantes (eran 412 y 50).
+- **Criterio de cierre:**
+  - **Paso 1 (`qa-automation-engineer`):** las comprobaciones de *Migración*, paso 1, con APROBADO del verifier y el gate CRÍTICO. Sobre el árbol, `JS`, `EVT` y `FORMA` no dan salida, y `CLIC` da una sola línea.
+  - **Paso 2 (`devops-engineer`):**
+    1. `scripts/check-layers.sh` define `JS_LISTA`, `JS`, `EVT`, `CLIC` y `PREFS` una sola vez, con el texto exacto de D7. Suma `R5-js`, `R5-evt`, `R5-clic` y `R5-clic-max` después de `R5-ext`, y `D8-prefs` después de los directorios de capa, con los motivos de la tabla. `check_max` y `require` cumplen *Conteo y presencia*.
+    2. El árbol base de la autoprueba cambia como dice *Casos de autoprueba*. La autoprueba suma los 30 casos negativos y los 6 permitidos en sus dos modos, y los 2 de error: 414 casos, con exit 0 en la matriz de CHK-18 (mawk, gawk, `gawk --posix` y busybox). `bash scripts/check-awk-portability.sh` da exit 0. `D7-20 directorio transport ausente` sigue con su esperado (1 y la línea de D6).
+    3. Sabotaje: cada mutante de la tabla (J1–J10, V1–V12, K1–K9, M1–M7 y P1–P14, con sus variantes) hace fallar al menos un caso. Se adjunta la tabla mutante → casos en rojo, y ninguno sobrevive.
+    4. `D8-prefs-f` y `D8-prefs-g` sin versionar dan exit 1, como prevé `require`. Si con alguna versión de git dieran 2 (texto en stderr), se informa al arquitecto antes del commit, porque cambia la semántica de *Conteo y presencia*.
+    5. `bash scripts/check-layers.sh` da 0 sobre el HEAD del paso 1.
+    6. La CI no cambia: CHK-17 sigue en el job `mutation` y en la etapa `Capas (CHK-17)` del `Jenkinsfile`.
+- **Reglas y agentes** (usuario, P-01). D7 es la definición normativa, así que el texto actual no es falso, pero la fila R5 y la descripción de CHK-17 quedan incompletas. Textos para pegar, que sustituyen a los del punto 5 de la parte 3:
+  - `.claude/agents/qa-automation-architect.md`, fila R5:
+
+    ```markdown
+    | R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; en `transport`, `executeScript` fuera de la lista cerrada de scripts, `executeAsyncScript`, un clic distinto de `elemento.click();` o más de uno, y eventos sintéticos u otras vías de entrada (teclado, envío de formularios, `Actions`, CDP y BiDi) (ADR-002, D7, *Clic nativo único, scripts cerrados y preferencias de Chrome*); clases de `transport`, `pages`, `actions` o `utils` que extienden otra |
+    ```
+
+  - el mismo archivo, paso 3 del *Procedimiento*:
+
+    ```markdown
+    3. Revisa las reglas de rechazo (forma final en ADR-002, D7; las comprueba `bash scripts/check-layers.sh`, CHK-17, que además exige los directorios de capa (D6) y que `DriverFactory` aplique las preferencias de Chrome (D8)):
+    ```
+
+  - `.claude/rules/04-quality-checks.md`, fila CHK-17:
+
+    ```markdown
+    | CHK-17 | Capas (ADR-002): R1–R6 de D7, incluidas páginas como parámetro en acciones y `ResultadoClic` en miembros expuestos de páginas; las firmas expuestas incluyen anotaciones, cualquier orden de modificadores y `protected`, y en `transport`, `pages` y `actions` no hay interfaces, anotaciones ni records expuestos (D7, *Firmas expuestas*); en `transport`, ningún tipo de Selenium importado o calificado en firmas expuestas ni en la herencia, `By` solo como parámetro y sin comodines de Selenium, y `transport`, `actions` y `utils` no extienden clases (D7, *Selenium en el transporte y herencia*); en `transport`, `executeScript` solo con la lista cerrada de scripts, un único clic nativo (`elemento.click();`) y ningún evento sintético ni otra vía de entrada, y `DriverFactory` aplica las preferencias de Chrome de `BrowserSettings` (D7, *Clic nativo único, scripts cerrados y preferencias de Chrome*); falla cerrado (directorios de capa, `git grep` con rc ≥ 2 o con stderr, awk de la unión con rc ≠ 0, regla de presencia sin coincidencias o sin su archivo) | Exit 0 en el script y en su autoprueba | engineer, verifier, devops |
+    ```
+
+- **Fuera de alcance (P2):**
+  - la escritura única (*Fuera de alcance* de la subsección), si el usuario la pide;
+  - el *Criterio de verificación* sigue pidiendo comprobar a mano que "el primer argumento de `executeScript` es una constante". Desde el commit 2 lo comprueba `R5-js`; la línea no se reescribe (registro histórico).
