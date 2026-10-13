@@ -564,7 +564,7 @@ En los PR de forks se omiten `test`, `e2e-firefox`, `e2e-grid` y `quarantine` (l
 
 Los jobs con navegador registran su versión antes de Maven: `google-chrome --version` en `test` y `quarantine`, la del contenedor del Grid en `e2e-grid` y `firefox --version` en `e2e-firefox`. Así, si una versión nueva de Chrome cambia algo (por ejemplo, renombra la preferencia de D8), el log dice con qué versión empezó.
 
-Cada job publica sus reportes como artefactos aunque falle, con una retención de 14 días. Los artefactos no pasan por el enmascarado de secrets de GitHub, por eso los logs de Maven (`test.log`, `quarantine.log`) no se suben, ni en GitHub ni en Jenkins. Los jobs con secrets los verifican al inicio con `scripts/check-required-secrets.sh`, que solo nombra las variables que faltan.
+Los jobs que ejecutan pruebas publican sus reportes como artefactos aunque fallen, con una retención de 14 días (`fork-pr-notice` no publica ninguno). Los artefactos no pasan por el enmascarado de secrets de GitHub, por eso los logs de Maven de los jobs con credenciales (`test.log`, `quarantine.log`) no se suben, ni en GitHub ni en Jenkins; solo se archiva `pit.log` de la mutación, que corre sin credenciales. Los jobs con secrets los verifican al inicio con `scripts/check-required-secrets.sh`, que solo nombra las variables que faltan.
 
 Las credenciales se cargan como *Secrets* del repositorio (`Settings → Secrets and variables → Actions`), uno por variable de `.env.example` y con el mismo nombre: `TEST_USER_STANDARD_USERNAME`, `TEST_USER_STANDARD_PASSWORD`, `TEST_LOGIN_CASES_LOCKED_USER_USERNAME`, `TEST_LOGIN_CASES_LOCKED_USER_PASSWORD`, `TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME` y `TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD`.
 
