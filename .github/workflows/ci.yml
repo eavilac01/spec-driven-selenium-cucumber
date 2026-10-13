@@ -12,8 +12,38 @@ on:
 permissions:
   contents: read
 
+# Un push nuevo a un PR cancela el run en curso de ese PR. En main (push y
+# workflow_dispatch comparten grupo) no se cancela el run en curso; GitHub sí
+# descarta un run pendiente si llega otro detrás (queda el del último commit).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# PR de forks: GitHub no les pasa los secrets, así que los jobs que los usan
+# (test, e2e-firefox, e2e-grid, quarantine) se omiten con esta condición y
+# fork-pr-notice lo avisa. Depende de quién origina el PR, nunca de que el
+# secret esté vacío: en main y en los PR internos un secret que falte sigue
+# fallando cerrado en check-required-secrets.sh. Ojo: un job omitido cuenta
+# como correcto en los checks requeridos; un mantenedor ejecuta los E2E antes
+# de fusionar (CONTRIBUTING.md).
 jobs:
+  # Solo en PR de forks: condición complementaria exacta de la de los jobs con
+  # secrets. Sin checkout, sin secrets y sin datos del evento en el `run`.
+  fork-pr-notice:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aviso de E2E omitidos
+        shell: bash
+        run: |
+          set -euo pipefail
+          msg="E2E omitidos: los PR de forks no reciben secrets, así que test, e2e-firefox, e2e-grid y quarantine no corren. Un mantenedor los ejecuta antes de fusionar (ver CONTRIBUTING.md). CHK-11/12/14/15/16/17 corren en el job mutation."
+          echo "::notice title=E2E omitidos en un PR de fork::$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+
   test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -25,8 +55,11 @@ jobs:
       TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD }}
 
     steps:
+      # Sin el token en .git/config: ningún paso usa git contra el remoto.
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Traceability SDD (CHK-12)
         run: bash scripts/check-traceability.sh
@@ -73,12 +106,14 @@ jobs:
             target/surefire-reports/
             target/allure-results/
           if-no-files-found: warn
+          retention-days: 14
 
   # ADR-002, R-6: ejercita la rama de Firefox de DriverFactory. Solo la suite
   # E2E (RunnerTest): las unitarias ya corren en `test`. Sin
   # -Dsurefire.failIfNoSpecifiedTests=false a propósito: si RunnerTest
   # desaparece, el job falla en vez de quedar en verde sin pruebas.
   e2e-firefox:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -90,8 +125,11 @@ jobs:
       TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD }}
 
     steps:
+      # Sin el token en .git/config: ningún paso usa git contra el remoto.
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
@@ -134,11 +172,13 @@ jobs:
             target/surefire-reports/
             target/allure-results/
           if-no-files-found: warn
+          retention-days: 14
 
   # ADR-002, R-6: ejercita la rama RemoteWebDriver contra un Grid real. La
   # versión de la imagen coincide con selenium.version del pom y con
   # docker-compose.yml; SE_NODE_MAX_SESSIONS = paralelismo de Cucumber.
   e2e-grid:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -159,8 +199,11 @@ jobs:
           SE_NODE_OVERRIDE_MAX_SESSIONS: true
 
     steps:
+      # Sin el token en .git/config: ningún paso usa git contra el remoto.
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
@@ -210,6 +253,7 @@ jobs:
             target/surefire-reports/
             target/allure-results/
           if-no-files-found: warn
+          retention-days: 14
 
   # CHK-11 (ADR-001, D5), CHK-14 (cuarentena) y CHK-17 (ADR-002, D6): en
   # paralelo a `test`, sin secrets ni navegador. CHK-14 y CHK-17 van aquí y no
@@ -225,8 +269,16 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      # Sin el token en .git/config: ningún paso usa git contra el remoto.
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # CHK-12 también aquí: este job corre en los PR de forks, donde `test`
+      # se omite por falta de secrets.
+      - name: Traceability SDD (CHK-12)
+        run: bash scripts/check-traceability.sh
 
       - name: Portabilidad de awk (estática y su autoprueba, runner de la matriz)
         run: |
@@ -283,6 +335,7 @@ jobs:
           name: mutation-report
           path: target/pit-reports/
           if-no-files-found: warn
+          retention-days: 14
 
   # CHK-14: los escenarios @quarantine, en una sola ejecución (sin reintentos,
   # CHK-02) y sin continue-on-error. scripts/evaluate-quarantine-run.sh cruza el
@@ -297,6 +350,7 @@ jobs:
   #     causa que las pruebas, un escenario sin fila, o cualquier resultado que
   #     no cuadre).
   quarantine:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -308,8 +362,11 @@ jobs:
       TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD }}
 
     steps:
+      # Sin el token en .git/config: ningún paso usa git contra el remoto.
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # Sin escenarios en cuarentena no se arranca Maven ni el navegador: se
       # informa y el resto de pasos se omite. Un rc de git grep >= 2 es un
@@ -378,14 +435,17 @@ jobs:
         if: ${{ !cancelled() && steps.maven.outcome != 'skipped' }}
         run: bash scripts/check-no-expected-override.sh quarantine.log
 
+      # quarantine.log no se sube: los artefactos no pasan por el enmascarado
+      # de secrets de la consola (como test.log en Jenkins). El log ya queda,
+      # enmascarado, en la salida del paso.
       - name: Upload quarantine reports
         if: always() && steps.detect.outputs.present == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: quarantine-reports
           path: |
-            quarantine.log
             target/cucumber-report.html
             target/surefire-reports/
             target/allure-results/
           if-no-files-found: warn
+          retention-days: 14
