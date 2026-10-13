@@ -87,7 +87,9 @@
 # lista cerrada JS_LISTA y nunca executeAsyncScript (R5-js); ningún evento
 # sintético ni otra vía de entrada: teclado, envío de formularios, Actions, CDP
 # y BiDi (EVT, R5-evt); toda línea de clic es exactamente "elemento.click();"
-# (FORMA, R5-clic) y hay una como mucho (check_max, R5-clic-max). Además,
+# (FORMA, R5-clic) y hay una como mucho (check_max, R5-clic-max); lo mismo
+# para la escritura, "elemento.sendKeys(texto);" (FORMA_ESC, R5-esc, y ESC con
+# check_max, R5-esc-max; Escritura única, parte 5). Además,
 # DriverFactory.java aplica las preferencias de Chrome de BrowserSettings
 # (PREFS, regla de presencia D8-prefs, con require). Los comentarios cuentan
 # como texto (D6).
@@ -142,6 +144,9 @@ JS='\bexecuteAsyncScript\b|\bexecuteScript\b(?!\((?:'"$JS_LISTA"')[,)])'
 EVT='\bKeys\b|dispatch\w*Event|executeCdpCommand|(?:\.|::)(?:requestSubmit|submit)\b|org\.openqa\.selenium\.(?:interactions|devtools|bidi)'
 CLIC='(?:\.|::)click\b'
 FORMA='^(?!\s*elemento\.click\(\);\s*$).*'"$CLIC"
+# Escritura única (D7, parte 5): la línea de escritura nativa y su forma exacta.
+ESC='(?:\.|::)sendKeys\b'
+FORMA_ESC='^(?!\s*elemento\.sendKeys\(texto\);\s*$).*'"$ESC"
 status=0
 
 errf="$(mktemp)"
@@ -384,6 +389,12 @@ check R5 "clic distinto de la línea de clic nativo del transporte" \
 #   … y hay una como mucho (líneas distintas de las dos pasadas)
 check_max R5 "más de un clic nativo en transport" 1 \
   "$CLIC" -- "$T/transport"
+#   … toda línea de escritura es exactamente elemento.sendKeys(texto); (Escritura única, parte 5)
+check R5 "escritura distinta de la línea de escritura nativa del transporte" \
+  "$FORMA_ESC" -- "$T/transport"
+#   … y hay una como mucho
+check_max R5 "más de una escritura nativa en transport" 1 \
+  "$ESC" -- "$T/transport"
 # R6: una línea por fila de D4 (runners excluido; src/main lo garantiza Maven)
 check R6 "transport nombra un paquete fuera de su fila de D4" \
   'com\.demo\.(pages|actions|steps|hooks|runners|data)\b' -- "$T/transport"

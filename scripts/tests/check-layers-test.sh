@@ -19,7 +19,8 @@
 #     herencia, D7) tienen casos de una línea y de dos (import en la 2 y
 #     declaración en la 3); R5-js, R5-evt, R5-clic y R5-clic-max (Clic nativo
 #     único, scripts cerrados y preferencias de Chrome, D7, parte 4) tienen un
-#     caso por alternativa, y D8-prefs reescribe la línea de preferencias del
+#     caso por alternativa, como R5-esc y R5-esc-max (Escritura única, parte
+#     5), y D8-prefs reescribe la línea de preferencias del
 #     DriverFactory.java del árbol base (o borra el archivo) y espera
 #     "archivo:0: D8: …";
 #   - exit 1 con una violación en un archivo versionado que coincide con
@@ -139,6 +140,10 @@ mkdir -p "$base"
     '    }' \
     '    public void click(By locator) {' \
     '        elemento.click();' \
+    '    }' \
+    '    public void escribir(By locator, String texto) {' \
+    '        elemento.clear();' \
+    '        elemento.sendKeys(texto);' \
     '    }' \
     '    public void desplazarA(By locator) {' \
     '        ((JavascriptExecutor) driver).executeScript(SCRIPT_DESPLAZAR_AL_CENTRO, driver.findElement(locator));' \
@@ -969,8 +974,10 @@ done
 # Casi-coincidencias permitidas de la parte 4.
 allowed "ok-35 identificadores que contienen los nombres de JS" "$T/transport/Otro.java" \
   '        boolean noexecuteScript = executeScriptado && noexecuteAsyncScript || executeAsyncScriptado;'
+# ok-36 (parte 5): sendKeys sin prefijo y Keystroke no son el token Keys ni una
+# escritura (antes era una escritura, que ahora sería la segunda).
 allowed "ok-36 sendKeys y Keystroke no son el token Keys" "$T/transport/Otro.java" \
-  '        elemento.sendKeys(texto); // Keystroke nativo'
+  '        boolean sendKeys = Keystroke;'
 allowed "ok-37 submit sin punto, y submitted" "$T/transport/Otro.java" \
   '        boolean submit = formulario.submitted;'
 allowed "ok-38 método que empieza por click" "$T/transport/Otro.java" \
@@ -993,6 +1000,30 @@ allowed_rewrite "ok-39 línea de clic del árbol base en la columna 0" "$T/trans
   '        elemento.click();' 'elemento.click();'
 allowed_rewrite "ok-40 otros nombres y espacios, en la columna 0" "$D8_FILE" \
   "$D8_LINE" 'opciones.setExperimentalOption( "prefs" , ajustes.chromePreferences() ) ;'
+
+# Escritura única (D7, enmienda 2026-10-13, parte 5). R5-esc: toda línea de
+# escritura es exactamente "elemento.sendKeys(texto);".
+R5ESC="escritura distinta de la línea de escritura nativa del transporte"
+violation "R5-esc" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '                elemento.sendKeys(textoEsperado);'
+violation "R5-esc-b" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '        elemento.sendKeys(texto + "\n");'
+violation "R5-esc-c" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '        new Actions(driver).sendKeys(elemento, texto).perform();'
+violation "R5-esc-d" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '        java.util.Optional.of(elemento).ifPresent(WebElement::sendKeys);'
+violation "R5-esc-e" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '            elemento.sendKeys(texto); elemento.sendKeys(texto);'
+violation "R5-esc-f" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '            campo.sendKeys(texto);'
+# R5-esc-max: forma exacta, pero es la segunda línea de escritura (la otra está
+# en el Navegador.java del árbol base).
+violation "R5-esc-max" R5 "más de una escritura nativa en transport" "$T/transport/Bad.java" \
+  '            elemento.sendKeys(texto);'
+allowed "ok-41 método que empieza por sendKeys" "$T/transport/Otro.java" \
+  '        this.sendKeysYEsperar(localizador, texto);'
+allowed_rewrite "ok-42 línea de escritura del árbol base en la columna 0" "$T/transport/Navegador.java" \
+  '        elemento.sendKeys(texto);' 'elemento.sendKeys(texto);'
 
 # Archivos que coinciden con .gitignore: --untracked omite incluso los
 # versionados (git 2.53), así que el script hace también una pasada sobre el
