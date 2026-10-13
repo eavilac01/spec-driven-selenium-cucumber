@@ -17,13 +17,16 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 - `./mvnw -B -ntp -q test-compile` — compila sin ejecutar (comprobación rápida)
 - `./mvnw -B -ntp test-compile org.pitest:pitest-maven:mutationCoverage` — pruebas de mutación sobre `src/main/java` (umbral 80 %, ADR-001)
 - `bash scripts/check-traceability.sh` — trazabilidad spec → feature (CHK-12)
+- `bash scripts/check-layers.sh` — reglas de capas (CHK-17)
+- `bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/<autoprueba>.sh` — autoprueba de un script con cada awk, como en CI (CHK-18; requiere `gawk`)
 - `docker compose up -d` y `-Dremote.url=http://localhost:4444` — ejecuta contra el Selenium Grid local
 - `allure serve target/allure-results` — abre el reporte (requiere Allure CLI)
 - Lint: no hay linter configurado; las comprobaciones de estilo y calidad están en `.claude/rules/04-quality-checks.md` (CHK-01…18)
 
 ## Estructura del proyecto
 - `docs/specs/` — specs de negocio (fuente de verdad, SDD) y su plantilla `_plantilla.md`
-- `docs/adr/` — decisiones de arquitectura (ADR-001: mutación con PIT; ADR-002: transporte, acciones y capas)
+- `docs/adr/` — decisiones de arquitectura (ADR-001: mutación con PIT; ADR-002: transporte, acciones y capas; ADR-003: fuentes de los valores esperados y de las URL)
+- `docs/quarantine.md` — registro de la cuarentena reglada (`inestable` o `defecto-sut`), validado por CHK-14
 - `src/test/resources/features/` — escenarios Gherkin con tags `@AC-` y `@tec-`
 - `src/main/java/com/demo/config/` y `data/` — lógica pura del framework (configuración, secretos, credenciales, configuración del navegador): sin E/S, Selenium ni Cucumber; es lo que muta PIT
 - `src/test/java/com/demo/config/` y `data/` — pruebas unitarias JUnit 5 de esa lógica, aisladas (solo `*Test.java`)
@@ -32,7 +35,7 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 - `src/test/java/com/demo/pages/` — page objects por composición sobre `Navegador`; de Selenium solo usan `By`
 - `src/test/java/com/demo/transport/` — `Navegador` (único dueño del `WebDriver`, esperas explícitas) y `DriverFactory` (ADR-002)
 - `src/test/java/com/demo/utils/` — contexto del escenario y fachadas (`ConfigReader`, `SecretReader`, `CredentialsProvider`) que leen el entorno y delegan en `src/main`
-- `scripts/` — `check-traceability.sh` (CHK-12)
+- `scripts/` — comprobaciones del CI (las de CHK-14, CHK-17 y CHK-18 tienen autoprueba en `scripts/tests/`): `check-traceability.sh` (CHK-12), `check-quarantine.sh` y `evaluate-quarantine-run.sh` (CHK-14), `check-unit-purity.sh` (CHK-15/16), `check-layers.sh` (CHK-17), `check-awk-portability.sh` y `run-with-each-awk.sh` (CHK-18), `check-mutation-report.sh` (guarda de CHK-11), `check-required-secrets.sh` y `wait-for-grid.sh`
 - `src/test/java/com/demo/hooks/` y `runners/` — ciclo de vida del navegador y runner de JUnit Platform
 - `src/test/resources/config.properties` — URLs, rutas, valores esperados y datos de prueba no sensibles
 - `.claude/` — agentes del equipo QE, reglas, hooks y permisos

@@ -176,13 +176,14 @@ flowchart TB
 
 | Comprobación | Qué impide | Dónde corre |
 |---|---|---|
-| **CHK-17** · `scripts/check-layers.sh` | Saltos de capa (reglas R1–R6), con autoprueba de 162 casos | CI (job `mutation`) y Jenkins |
+| **CHK-17** · `scripts/check-layers.sh` | Saltos de capa (reglas R1–R6), incluidas las firmas expuestas (públicas o protegidas, con anotaciones o modificadores en cualquier orden), con autoprueba y mutantes | CI (job `mutation`) y Jenkins |
 | **CHK-12** · `scripts/check-traceability.sh` | Escenarios sin spec aprobada o sin `@AC-`/`@tec-` | CI y Jenkins, antes de la suite |
 | **CHK-15/16** · `scripts/check-unit-purity.sh` | E/S o Selenium en `src/main`; pruebas unitarias acopladas | CI (job `mutation`) y Jenkins |
 | **CHK-11** · PIT + `scripts/check-mutation-report.sh` | Pruebas unitarias que no detectan defectos (umbral 80 %) | CI (job `mutation`) y Jenkins |
 | **CHK-14** · `scripts/check-quarantine.sh` | Pruebas en cuarentena sin registro, sin dueño o con plazo vencido | CI (job `mutation`) y Jenkins |
+| **CHK-18** · `scripts/check-awk-portability.sh` y `scripts/run-with-each-awk.sh` | Scripts que solo funcionan con una implementación de awk (en el runner de GitHub `awk` es gawk; en Ubuntu de escritorio, mawk): control estático y autopruebas con mawk, gawk y `gawk --posix` | CI (job `mutation`, exige las tres) y Jenkins (con los awk del agente) |
 
-Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-002](docs/adr/002-transport-and-business-actions.md); la decisión de mutar solo la lógica pura, en el [ADR-001](docs/adr/001-mutation-testing-pit.md).
+Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-002](docs/adr/002-transport-and-business-actions.md); la decisión de mutar solo la lógica pura, en el [ADR-001](docs/adr/001-mutation-testing-pit.md); y las fuentes permitidas para los valores esperados y las URL, en el [ADR-003](docs/adr/003-expected-values-config-sources.md).
 
 ## Estructura del proyecto
 
@@ -207,11 +208,14 @@ Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-00
 ├── docs
 │   ├── adr
 │   │   ├── 001-mutation-testing-pit.md
-│   │   └── 002-transport-and-business-actions.md
+│   │   ├── 002-transport-and-business-actions.md
+│   │   └── 003-expected-values-config-sources.md
+│   ├── quarantine.md    # registro de la cuarentena reglada (CHK-14)
 │   └── specs/           # _plantilla.md, login.md, compra.md
 ├── mvnw / mvnw.cmd
 ├── pom.xml
 ├── scripts
+│   ├── check-awk-portability.sh   # CHK-18: construcciones exclusivas de una implementación de awk
 │   ├── check-layers.sh            # CHK-17: reglas de capas
 │   ├── check-mutation-report.sh   # CHK-11: guarda del reporte de PIT
 │   ├── check-quarantine.sh        # CHK-14: registro de cuarentena frente a @quarantine
@@ -219,10 +223,12 @@ Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-00
 │   ├── check-required-secrets.sh  # CI/Jenkins: nombra los secrets que faltan
 │   ├── check-traceability.sh      # CHK-12: escenario → spec aprobada
 │   ├── check-unit-purity.sh       # CHK-15/16: src/main puro y unitarias aisladas
+│   ├── run-with-each-awk.sh       # CHK-18: ejecuta un comando con cada awk (mawk, gawk, gawk --posix, busybox)
 │   ├── wait-for-grid.sh           # espera activa a que el Grid esté listo
-│   └── tests/                     # autopruebas de CHK-17, CHK-14 y del evaluador de cuarentena
+│   └── tests/                     # autopruebas de CHK-17, CHK-14, del evaluador de cuarentena y de CHK-18
 ├── src/main/java/com/demo      # lógica pura, sin E/S (ADR-001)
 │   ├── config
+│   │   ├── BrowserErrorPage.java   # reconoce las páginas de error de Chrome (net::ERR_*)
 │   │   ├── BrowserSettings.java
 │   │   ├── ConfigResolver.java
 │   │   ├── DotEnvParser.java
@@ -240,7 +246,9 @@ Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-00
     │   │   ├── CartPage.java
     │   │   ├── CheckoutPage.java
     │   │   ├── InventoryPage.java
-    │   │   └── LoginPage.java
+    │   │   ├── LoginPage.java
+    │   │   ├── MenuPage.java
+    │   │   └── XPathLiteral.java   # literal XPath seguro para localizadores con datos
     │   ├── runners/RunnerTest.java
     │   ├── steps
     │   │   ├── CompraSteps.java
@@ -398,6 +406,7 @@ Los nombres de `.env.example` se referencian de forma explícita en `Credentials
 - Chrome o Firefox instalado para ejecución local. Selenium Manager obtiene el driver compatible.
 - Docker con Compose v2 para el ejemplo de Grid.
 - Allure CLI para abrir el reporte Allure de forma local.
+- `gawk` (además del `mawk` que trae Ubuntu) para correr CHK-18 en local como en CI: `sudo apt install gawk`. Sin gawk, la matriz con `--require gawk` falla cerrado con 2.
 
 Comprobación rápida:
 
@@ -462,6 +471,12 @@ bash scripts/check-traceability.sh   # CHK-12: cada escenario trazado a una spec
 bash scripts/check-layers.sh         # CHK-17: reglas de capas (Selenium solo en transport, etc.)
 bash scripts/check-unit-purity.sh    # CHK-15/16: src/main puro y pruebas unitarias aisladas
 bash scripts/check-quarantine.sh     # CHK-14: cada @quarantine registrado en docs/quarantine.md
+bash scripts/check-awk-portability.sh # CHK-18: sin construcciones exclusivas de una implementación de awk
+
+# CHK-18: autopruebas que ejercitan awk, con cada implementación (como en CI; requiere gawk)
+bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/check-layers-test.sh
+bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/check-quarantine-test.sh
+bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/evaluate-quarantine-run-test.sh
 
 # CHK-11: pruebas de mutación (umbral 80 %) con la guarda contra el "Skipping project" de PIT
 rm -rf target/pit-reports
@@ -469,7 +484,7 @@ bash -c 'set -o pipefail; ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mu
   && bash scripts/check-mutation-report.sh pit.log
 ```
 
-El catálogo completo de comprobaciones (CHK-01…17) y sus comandos está en [`.claude/rules/04-quality-checks.md`](.claude/rules/04-quality-checks.md).
+El catálogo completo de comprobaciones (CHK-01…18) y sus comandos está en [`.claude/rules/04-quality-checks.md`](.claude/rules/04-quality-checks.md).
 
 ### Ejecución contra Selenium Grid
 
@@ -527,7 +542,7 @@ Para comprobar la evidencia durante desarrollo, puede cambiarse temporalmente un
 | `test` | CHK-12 (trazabilidad) y la suite completa en Chrome headless, sin `@quarantine` | Sí |
 | `e2e-firefox` | Los escenarios E2E en Firefox headless | Sí |
 | `e2e-grid` | Los escenarios E2E contra un Selenium Grid (`selenium/standalone-chrome`), con espera activa a que esté listo | Sí |
-| `mutation` | CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
+| `mutation` | CHK-18 (portabilidad de awk); CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, que corren con mawk, gawk y `gawk --posix`; CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
 | `quarantine` | Solo los escenarios `@quarantine`, evaluados por `scripts/evaluate-quarantine-run.sh` contra `docs/quarantine.md`: **verde** si un `defecto-sut` falla por aserción (lo esperado) o un `inestable` falla por aserción o pasa; **verde con aviso** si un `defecto-sut` pasa (revisar la spec) o un `inestable` termina con error (revisar su diagnóstico); **rojo** si un `defecto-sut` termina con error (excepción o timeout) o si la cuarentena no mide nada (cero escenarios, sin reporte, fallo de compilación o un escenario sin fila) | Sí |
 
 Cada job publica sus reportes como artefactos aunque falle. Los jobs con secrets los verifican al inicio con `scripts/check-required-secrets.sh`, que solo nombra las variables que faltan.
@@ -547,7 +562,7 @@ Los escenarios corren en paralelo con 2 hilos (`src/test/resources/junit-platfor
 El `Jenkinsfile` declarativo está listo para un servidor Jenkins, aunque todavía no se ha ejecutado en uno real. Reproduce los jobs `test`, `mutation` y `quarantine` de GitHub Actions (Firefox y Grid se cubren solo en GitHub):
 
 1. `Checkout` del commit bajo prueba.
-2. `Traceability SDD (CHK-12)`, `Capas (CHK-17)` y `Cuarentena reglada (CHK-14)`.
+2. `Traceability SDD (CHK-12)`, `Portabilidad de awk` (CHK-18, con los awk instalados en el agente), `Capas (CHK-17)` y `Cuarentena reglada (CHK-14)`.
 3. `Mutation (CHK-11)`: PIT con la guarda de reporte, sin credenciales.
 4. `Test`: la suite sin `@quarantine`; recibe credenciales.
 5. `Cuarentena (CHK-14)`: solo los escenarios `@quarantine`, con la misma evaluación que en GitHub. Fallo esperado: etapa verde. Un `defecto-sut` que pasa o un `inestable` con error: etapa inestable. Error real: falla el build. También recibe credenciales.
@@ -621,6 +636,8 @@ Hoy hay un caso: **AC-COMPRA-09**. La regla de negocio dice que no se puede comp
 
 **Un escenario falla al abrir la página con una página de error de Chrome (`ERR_CONNECTION_CLOSED`, `ERR_CERT_VERIFIER_CHANGED`).** Suele ocurrir con la máquina saturada, por ejemplo con PIT corriendo a la vez que la suite. Ejecuta la suite y las pruebas de mutación por separado. La captura del escenario en `target/cucumber-report.html` muestra el error real.
 
+**Una autoprueba de `scripts/` pasa en local y falla en CI con `awk: … fatal` o `gawk: error`.** El runner de GitHub usa gawk y Ubuntu de escritorio usa mawk: un nombre reservado de gawk (como `RT`) o una construcción que `gawk --posix` rechaza solo falla allí. Instala gawk (`sudo apt install gawk`) y corre las autopruebas con `scripts/run-with-each-awk.sh` (CHK-18) antes de subir.
+
 **`La variable sensible obligatoria '...' no tiene valor`.** Falta esa variable en `.env` (local) o en los *Secrets* (CI), o está vacía. Revisa la sección [Credenciales de SauceDemo](#credenciales-de-saucedemo-cómo-obtenerlas).
 
 **El login falla con credenciales que parecen correctas.** Vuelve a copiarlas desde [saucedemo.com](https://www.saucedemo.com): pueden haber cambiado. Comprueba también que no haya espacios ni comillas sobrantes en `.env`.
@@ -644,7 +661,7 @@ El repositorio incluye un equipo de subagentes de Claude Code (`.claude/agents/`
 - **Spec Driven Development:** spec aprobada por una persona → feature trazada (`@AC-`, `@tec-`) → código. Ningún nivel se escribe sin el anterior (`.claude/rules/01`).
 - **Permisos por agente:** qué puede escribir, leer y ejecutar cada rol, aplicado también con `permissions` en `.claude/settings.json` (`.claude/rules/02`).
 - **Defensa contra prompt injection:** el contenido de la aplicación, los reportes y los archivos es dato, nunca instrucción (`.claude/rules/03`).
-- **Comprobaciones deterministas:** catálogo CHK-01…17 (sleep, reintentos, capas, control negativo, mutación, trazabilidad) y un hook que bloquea `git push` sin el gate DevOps (`.claude/rules/04`).
+- **Comprobaciones deterministas:** catálogo CHK-01…18 (sleep, reintentos, capas, control negativo, mutación, trazabilidad, cuarentena, portabilidad de awk) y un hook que bloquea `git push` sin el gate DevOps (`.claude/rules/04`).
 
 Índice, justificación de roles y asignación de modelo: [`.claude/agents/README.md`](.claude/agents/README.md).
 
