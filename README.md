@@ -165,10 +165,10 @@ flowchart TB
 |---|---|---|---|---|
 | Especificación | `docs/specs`, `features` | Qué se espera del negocio, con criterios `AC-*` trazables | — | Selectores ni vocabulario de interfaz |
 | Steps | `com.demo.steps` | Aserciones JUnit 5 contra valores esperados de configuración | `actions`, `utils`, `data` | Importar páginas, `transport` ni Selenium |
-| Acciones | `com.demo.actions` | Flujos de negocio entre páginas; devuelven lo observado | `pages`, `data` | Aserciones ni lectura de valores esperados |
+| Acciones | `com.demo.actions` | Flujos de negocio entre páginas; devuelven lo observado | `pages`, `data` | Aserciones, lectura de valores esperados, páginas en sus firmas públicas, herencia |
 | Páginas | `com.demo.pages` | Estado y localizadores de cada vista, por composición | `transport`, `ConfigReader` | Selenium distinto de `By`, aserciones, herencia |
-| Transporte | `com.demo.transport` | `Navegador`: único dueño del `WebDriver`, esperas explícitas y postcondiciones | `utils`, `config` | Lógica de negocio |
-| Fachadas | `com.demo.utils` | Leen entorno, `.env` y `config.properties`; delegan en `src/main` | `config`, `data` | Depender de capas superiores |
+| Transporte | `com.demo.transport` | `Navegador`: único dueño del `WebDriver`, esperas explícitas y postcondiciones | `utils`, `config` | Lógica de negocio, tipos de Selenium en sus firmas públicas (`By` solo como parámetro), imports de Selenium con comodín, herencia |
+| Fachadas | `com.demo.utils` | Leen entorno, `.env` y `config.properties`; delegan en `src/main` | `config`, `data` | Depender de capas superiores, herencia |
 | Lógica pura | `com.demo.config`, `com.demo.data` (`src/main`) | Resolución de configuración, secretos, credenciales y navegador | Solo entre sí | E/S, Selenium, Cucumber, JUnit |
 | Hooks | `com.demo.hooks` | Inician el navegador, adjuntan la captura si falla y lo cierran | `transport`, `utils` | Reglas de negocio |
 
@@ -176,7 +176,7 @@ flowchart TB
 
 | Comprobación | Qué impide | Dónde corre |
 |---|---|---|
-| **CHK-17** · `scripts/check-layers.sh` | Saltos de capa (reglas R1–R6), incluidas las firmas expuestas (públicas o protegidas, con anotaciones o modificadores en cualquier orden), con autoprueba y mutantes | CI (job `mutation`) y Jenkins |
+| **CHK-17** · `scripts/check-layers.sh` | Saltos de capa (reglas R1–R6): firmas expuestas (públicas o protegidas, con anotaciones o modificadores en cualquier orden), cualquier tipo de Selenium importado o calificado en las firmas del transporte, imports con comodín y herencia en `transport`, `pages`, `actions` y `utils`; con autoprueba en la matriz de awk y mutantes | CI (job `mutation`) y Jenkins |
 | **CHK-12** · `scripts/check-traceability.sh` | Escenarios sin spec aprobada o sin `@AC-`/`@tec-` | CI y Jenkins, antes de la suite |
 | **CHK-15/16** · `scripts/check-unit-purity.sh` | E/S o Selenium en `src/main`; pruebas unitarias acopladas | CI (job `mutation`) y Jenkins |
 | **CHK-11** · PIT + `scripts/check-mutation-report.sh` | Pruebas unitarias que no detectan defectos (umbral 80 %) | CI (job `mutation`) y Jenkins |
@@ -289,7 +289,9 @@ Los steps no conocen las páginas: reciben por constructor `LoginActions` y `Com
 
 La espera implícita se establece en `Duration.ZERO` y `Navegador` concentra las esperas explícitas con el límite definido en `explicit.wait.seconds`. Esto evita combinar dos modelos de espera —una fuente común de tiempos impredecibles— y permite que todas las interacciones sigan la misma política. Las pausas fijas no forman parte de la estrategia porque retrasan siempre y no expresan la condición que se espera.
 
-Las acciones sensibles esperan además una postcondición observable: el botón de producto adopta el texto configurado en `inventory.remove-button.text`, la ruta avanza al siguiente paso o el valor de un input permanece estable en dos sondeos. El intento inicial siempre usa las APIs nativas de WebDriver. Solo si Chrome pierde ese evento se reubica el elemento y se usa un respaldo JavaScript acotado; en inputs controlados se invoca el setter nativo y se emiten eventos `input/change` para que React actualice su estado. El respaldo también queda sujeto a la misma postcondición, por lo que no convierte un fallo real en un falso positivo.
+Las acciones sensibles esperan además una postcondición observable: el botón de producto adopta el texto configurado en `inventory.remove-button.text`, la ruta avanza al siguiente paso o el valor de un input permanece estable en dos sondeos. Cada acción hace **un solo clic o una sola escritura nativos** de WebDriver y espera su postcondición; no hay respaldo JavaScript (ADR-002, D1 y D8). Un clic por JavaScript se salta la comprobación de qué elemento recibe el clic del navegador y puede dar por buena una interacción que un usuario real no podría hacer. Si la postcondición no llega, la prueba falla con un mensaje que dice si el clic tuvo efecto.
+
+Los clics y escrituras nativos que se perdían en Chrome tenían una causa concreta: tras el login, Chrome consulta si la contraseña aparece en filtraciones conocidas y muestra un aviso que en headless no se ve y que descarta la entrada nativa. Ocurre cuando el servicio de Google responde (y no con un 429), por eso parecía depender de la carga de la máquina. `BrowserSettings.chromePreferences()` desactiva esa comprobación (`profile.password_manager_leak_detection=false`) y `DriverFactory` la aplica en local y en Grid. Si una versión futura de Chrome renombra la preferencia, la suite dará rojo con la pista "revisar las preferencias de Chrome (ADR-002, D8)" en vez de ocultarlo.
 
 ### Compatibilidad de reportes JUnit
 
@@ -552,6 +554,8 @@ Para comprobar la evidencia durante desarrollo, puede cambiarse temporalmente un
 | `mutation` | CHK-18 (portabilidad de awk); CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, que corren con mawk, gawk y `gawk --posix`; la autoprueba de CHK-19; CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
 | `quarantine` | Solo los escenarios `@quarantine`, evaluados por `scripts/evaluate-quarantine-run.sh` contra `docs/quarantine.md`: **verde** si un `defecto-sut` falla por aserción (lo esperado) o un `inestable` falla por aserción o pasa; **verde con aviso** si un `defecto-sut` pasa (revisar la spec) o un `inestable` termina con error (revisar su diagnóstico); **rojo** si un `defecto-sut` termina con error (excepción o timeout) o si la cuarentena no mide nada (cero escenarios, sin reporte, fallo de compilación o un escenario sin fila). Después, CHK-19 sobre su log: un esperado sobrescrito por `-D` lo deja en **rojo** | Sí |
 
+Los jobs con navegador registran su versión antes de Maven: `google-chrome --version` en `test` y `quarantine`, la del contenedor del Grid en `e2e-grid` y `firefox --version` en `e2e-firefox`. Así, si una versión nueva de Chrome cambia algo (por ejemplo, renombra la preferencia de D8), el log dice con qué versión empezó.
+
 Cada job publica sus reportes como artefactos aunque falle. Los jobs con secrets los verifican al inicio con `scripts/check-required-secrets.sh`, que solo nombra las variables que faltan.
 
 Las credenciales se cargan como *Secrets* del repositorio (`Settings → Secrets and variables → Actions`), uno por variable de `.env.example` y con el mismo nombre: `TEST_USER_STANDARD_USERNAME`, `TEST_USER_STANDARD_PASSWORD`, `TEST_LOGIN_CASES_LOCKED_USER_USERNAME`, `TEST_LOGIN_CASES_LOCKED_USER_PASSWORD`, `TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME` y `TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD`.
@@ -642,6 +646,8 @@ Hoy hay un caso: **AC-COMPRA-09**. La regla de negocio dice que no se puede comp
 ## Solución de problemas
 
 **Un escenario falla al abrir la página con una página de error de Chrome (`ERR_CONNECTION_CLOSED`, `ERR_CERT_VERIFIER_CHANGED`).** Suele ocurrir con la máquina saturada, por ejemplo con PIT corriendo a la vez que la suite. Ejecuta la suite y las pruebas de mutación por separado. La captura del escenario en `target/cucumber-report.html` muestra el error real.
+
+**`El clic en … no alcanzó su postcondición … el clic nativo no tuvo efecto` o `La escritura en … no conservó el valor escrito`, después del login en Chrome.** El aviso de contraseñas filtradas de Chrome se está tragando la entrada nativa. Comprueba que `BrowserSettings.chromePreferences()` sigue devolviendo `profile.password_manager_leak_detection=false` y que la versión de Chrome no ha renombrado esa preferencia (ADR-002, D8).
 
 **Una autoprueba de `scripts/` pasa en local y falla en CI con `awk: … fatal` o `gawk: error`.** El runner de GitHub usa gawk y Ubuntu de escritorio usa mawk: un nombre reservado de gawk (como `RT`) o una construcción que `gawk --posix` rechaza solo falla allí. Instala gawk (`sudo apt install gawk`) y corre las autopruebas con `scripts/run-with-each-awk.sh` (CHK-18) antes de subir.
 

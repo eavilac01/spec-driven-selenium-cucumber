@@ -45,11 +45,11 @@ Senior. Diseña la estructura para que **cada cambio se absorba en la capa más 
 
 | Regla | Rechaza |
 |---|---|
-| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;` (excepción permanente); tipos de Selenium en firmas expuestas del transporte; `By` en firmas expuestas de páginas; interfaces, anotaciones o records expuestos en `transport` o `pages`. "Expuesta" = pública o protegida, con anotaciones y modificadores en cualquier orden (ADR-002, D7, *Firmas expuestas*) |
+| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;` (excepción permanente); en `transport`, tipos de Selenium importados o calificados en firmas expuestas (`By`, solo como parámetro), heredar o implementar un tipo de Selenium e imports de Selenium con comodín; `By` en firmas expuestas de páginas; interfaces, anotaciones o records expuestos en `transport` o `pages`. "Expuesta" = pública o protegida, con anotaciones y modificadores en cualquier orden (ADR-002, D7, *Firmas expuestas* y *Selenium en el transporte y herencia*) |
 | R2 | Selenium en `steps` o `actions` (CHK-03 es su subconjunto rápido) |
 | R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas expuestas, como retorno o parámetro (los constructores sí las reciben); interfaces, anotaciones o records expuestos en `actions` |
 | R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions` |
-| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase |
+| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; clases de `transport`, `pages`, `actions` o `utils` que extienden otra |
 | R6 | Nombrar un paquete fuera de su fila del grafo de dependencias (ADR-002, D4); secretos fuera de `utils` y `steps`; `ResultadoClic` en un miembro expuesto (público o protegido) de una página (ADR-002, D1) |
 | R7 | Features con vocabulario de interfaz (CHK-04) |
 
