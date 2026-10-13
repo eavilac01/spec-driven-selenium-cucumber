@@ -39,6 +39,9 @@ public final class Navegador {
     private static final String PISTA_ENTRADA_NATIVA_SIN_EFECTO =
             "si ocurre en Chrome tras iniciar sesión, revisar las preferencias de Chrome (ADR-002, D8)";
 
+    /** Constante (PI-05): centra en la ventana el elemento que recibe como único argumento. */
+    private static final String SCRIPT_DESPLAZAR_AL_CENTRO = "arguments[0].scrollIntoView({block: 'center'});";
+
     /** Constante (PI-05): no incluye datos del SUT. Devuelve null fuera de una página de error de Chrome. */
     private static final String SCRIPT_LEER_CODIGO_PAGINA_ERROR = """
             if (!document.body || !document.body.classList.contains('neterror')) { return null; }
@@ -104,7 +107,7 @@ public final class Navegador {
         }
 
         // El script devuelve null si el documento no es una página de error; si lo es, el texto del código.
-        Object textoDelCodigo = ejecutarScriptConstante(SCRIPT_LEER_CODIGO_PAGINA_ERROR);
+        Object textoDelCodigo = leerCodigoPaginaError();
         if (textoDelCodigo instanceof String texto) {
             throw errorDeNavegacion(url, BrowserErrorPage.codeFromPageText(texto));
         }
@@ -127,9 +130,14 @@ public final class Navegador {
 
     // --- Interacción con postcondición ---
 
+    /**
+     * Un solo clic nativo, sin postcondición observable propia: el propio clic la cumple. Si el control nunca está
+     * visible y habilitado, falla como {@link #clickHastaCumplir(By, ExpectedCondition)} con 0 clics efectivos.
+     */
     public void click(By localizador) {
         verificarIniciado();
-        wait.until(ExpectedConditions.elementToBeClickable(localizador)).click();
+        AtomicInteger clicsEfectivos = new AtomicInteger();
+        clickHastaCumplir(localizador, webDriver -> clicsEfectivos.get() > 0, clicsEfectivos);
     }
 
     /**
@@ -220,7 +228,7 @@ public final class Navegador {
     public void desplazarA(By localizador) {
         verificarIniciado();
         WebElement elemento = elementoVisible(localizador);
-        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block: 'center'});", elemento);
+        ((JavascriptExecutor) driver).executeScript(SCRIPT_DESPLAZAR_AL_CENTRO, elemento);
     }
 
     // --- Lectura ---
@@ -330,9 +338,9 @@ public final class Navegador {
         return new IllegalStateException(mensaje);
     }
 
-    private Object ejecutarScriptConstante(String script) {
+    private Object leerCodigoPaginaError() {
         try {
-            return ((JavascriptExecutor) driver).executeScript(script);
+            return ((JavascriptExecutor) driver).executeScript(SCRIPT_LEER_CODIGO_PAGINA_ERROR);
         } catch (WebDriverException exception) {
             logger.debug("No se pudo leer el documento para detectar una página de error", exception);
             return null;
@@ -351,7 +359,12 @@ public final class Navegador {
      * no incluye texto leído del SUT ni credenciales.
      */
     private void clickHastaCumplir(By localizador, ExpectedCondition<Boolean> postcondicion) {
-        AtomicInteger clicsEfectivos = new AtomicInteger();
+        clickHastaCumplir(localizador, postcondicion, new AtomicInteger());
+    }
+
+    /** Igual que {@link #clickHastaCumplir(By, ExpectedCondition)}, con el contador que la postcondición puede leer. */
+    private void clickHastaCumplir(By localizador, ExpectedCondition<Boolean> postcondicion,
+                                   AtomicInteger clicsEfectivos) {
         try {
             wait.until(clicNativoUnicoHastaCumplir(localizador, postcondicion, clicsEfectivos));
         } catch (TimeoutException exception) {
