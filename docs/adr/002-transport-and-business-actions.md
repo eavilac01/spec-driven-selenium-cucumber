@@ -84,7 +84,7 @@ Las filas marcadas registran la API pública que la tabla original no recogía; 
   - Si el botón no existe, falla cerrado con `IllegalStateException`, porque un botón eliminado no se distingue de un localizador roto.
   - El estado lo observa después `permaneceEnCarrito`.
   - **Restricción (enmienda 2026-10-13):** ningún método público de una página recibe ni devuelve `ResultadoClic`. Si una página lo expusiera, una acción podría recibirlo con `var` sin nombrar `com.demo.transport`, y R6 no lo vería: es el punto ciego que D6 cierra en el origen.
-  - Se cumple, en `afb6693` y en `0de6962`: `git grep -nP '^\s*public\b.*\bResultadoClic\b' -- src/test/java/com/demo/pages` no da salida (rc=1). Incorporarla a CHK-17 queda como P2 (*Enmiendas*, 2026-10-13).
+  - Se cumple, en `afb6693` y en `0de6962`: `git grep -nP '^\s*public\b.*\bResultadoClic\b' -- src/test/java/com/demo/pages` no da salida (rc=1). **La comprueba CHK-17 (R6)** desde el commit de la enmienda *R6: `ResultadoClic` fuera de los miembros públicos de las páginas* (D7). Hasta entonces era un P2 (*Enmiendas*, 2026-10-13, parte 1).
 
 - **Algoritmos de sincronización.** Los de `BasePage.java:72-125` (clic y escritura con sus respaldos) se **mueven sin cambios**, y el diff se revisa como movimiento (*Criterio de verificación*).
 - **Lo que no puede cambiar al moverlos:**
@@ -193,7 +193,7 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
   - exit 1 con cada directorio de capa ausente;
   - exit 2 con cada error de evaluación de la *Nota de ejecución* de D7.
 
-  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`.
+  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`; 184 desde el commit de la enmienda sobre `ResultadoClic` (según devops).
 - **Dónde corren el script y la autoprueba:**
   - GitHub Actions: job `mutation`, pasos *Capas, autoprueba (CHK-17)* y *Capas (CHK-17)*, en paralelo a la suite y sin secrets (`ci.yml:66-84` en `f7f7a13`);
   - Jenkins: etapa `Capas (CHK-17)`, antes de la suite y fuera de `withCredentials` (`Jenkinsfile:22-29` en `f7f7a13`);
@@ -210,7 +210,7 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
 | R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas públicas, como tipo de retorno o como parámetro (los constructores sí las reciben, D3) | `noClasses().that().resideInAPackage("..steps..").should().dependOnClassesThat().resideInAnyPackage("..pages..", "..transport..")` |
 | R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions` | `noClasses().that().resideInAnyPackage("..transport..", "..pages..", "..actions..").should().dependOnClassesThat().resideInAnyPackage("org.junit..", "io.cucumber..")` |
 | R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase | `noClasses().that().resideOutsideOfPackage("..transport..").should().callMethodWhere(target(owner(assignableTo(SearchContext.class).or(assignableTo(JavascriptExecutor.class)))))` |
-| R6 | Nombrar un paquete fuera de su fila de D4; secretos fuera de `utils` y `steps` (las unitarias, por CHK-16) | `layeredArchitecture().consideringOnlyDependenciesInLayers()` con las filas de D4 (`whereLayer(…).mayOnlyBeAccessedByLayers(…)`) y `slices().matching("com.demo.(*)..").should().beFreeOfCycles()` |
+| R6 | Nombrar un paquete fuera de su fila de D4; secretos fuera de `utils` y `steps` (las unitarias, por CHK-16); `ResultadoClic` en un miembro público de una página (restricción de D1, enmienda del 2026-10-13) | `layeredArchitecture().consideringOnlyDependenciesInLayers()` con las filas de D4 (`whereLayer(…).mayOnlyBeAccessedByLayers(…)`) y `slices().matching("com.demo.(*)..").should().beFreeOfCycles()`. Para `ResultadoClic`: métodos y campos públicos de `..pages..` sin `Navegador.ResultadoClic` como tipo de retorno, de parámetro o de campo |
 | R7 | Vocabulario de interfaz en las features | No aplica (Gherkin): CHK-04, sin cambios |
 
 Comandos de CHK-17, transcritos de `scripts/check-layers.sh` (la implementación normativa, D6). Cada uno pasa **sin salida** y usa `-P`, como CHK-01:
@@ -240,6 +240,8 @@ git grep --untracked -nP '\bextends\b' -- "$T/pages"
 git grep --untracked -nP 'com\.demo\.(pages|actions|steps|hooks|runners|data)\b' -- "$T/transport"
 git grep --untracked -nP 'com\.demo\.utils\.(?!ConfigReader\b)' -- "$T/transport" "$T/pages"
 git grep --untracked -nP 'com\.demo\.(actions|steps|hooks|runners|config|data)\b' -- "$T/pages"
+# R6 (restricción de D1, enmienda 2026-10-13): ResultadoClic no sale de pages
+git grep --untracked -nP '^\s*public\b.*\bResultadoClic\b' -- "$T/pages"
 git grep --untracked -nP 'com\.demo\.(transport|utils|steps|hooks|runners|config)\b' -- "$T/actions"
 git grep --untracked -nP 'com\.demo\.(hooks|runners|config)\b' -- "$T/steps"
 git grep --untracked -nP 'com\.demo\.(transport|pages|actions|steps|hooks|runners)\b' -- "$T/utils"
@@ -255,16 +257,24 @@ git ls-files "$T/transport" "$T/pages" "$T/actions" "$T/steps"
 - Busca hasta el final de la línea, así que una anotación con argumentos no oculta el parámetro. A cambio, una línea con cuerpo que crea una página da un falso positivo, que falla cerrado.
 - Las firmas partidas en varias líneas siguen siendo riesgo residual aceptado (D6, R-5).
 
-**Nota de ejecución** (`scripts/check-layers.sh:10-38`, `:93-118`):
+**`ResultadoClic` en páginas** (R6, restricción de D1, enmienda del 2026-10-13). La expresión `^\s*public\b.*\bResultadoClic\b` busca el tipo en cualquier miembro público de una página:
+- Cubre el tipo de retorno, los parámetros y los campos públicos, con el nombre calificado (`Navegador.ResultadoClic`) o importado.
+- `\b` exige la palabra completa, así que `esResultadoClic` y `ResultadoClicados` pasan.
+- El uso interno, los métodos privados y los comentarios no empiezan por `public`, así que también pasan.
+- Los constructores de las páginas reciben `Navegador`, no `ResultadoClic`, así que no hace falta exceptuarlos.
+- Las firmas partidas en varias líneas siguen siendo riesgo residual aceptado (D6, R-5).
+
+**Nota de ejecución** (`scripts/check-layers.sh:11-39`, `:103-128`; eran `:10-38` y `:93-118` antes de la enmienda sobre `ResultadoClic`):
 - **Dos pasadas por comando.** Cada `git grep` corre con `--untracked` (lo no versionado, respetando `.gitignore`) y sin él (los archivos del índice), y los resultados se unen sin duplicados. Motivo: con git 2.53, `--untracked` recorre el árbol de trabajo sin leer el índice y omite los archivos versionados que coinciden con `.gitignore`.
 - **stderr es error.** Con un archivo ilegible, `git grep` imprime "failed to stat" y aun así termina con 0 o 1. Por eso cualquier texto en su stderr da 2.
 - **Códigos de salida:**
   - 0: sin violaciones;
   - 1: violaciones, una por línea, como `archivo:línea: R<n>: motivo`. Un directorio de capa sin archivos versionados se imprime como `directorio:0: D6: motivo`: es una violación de la estructura, no un error de la herramienta;
   - 2: no se pudo evaluar (falla cerrado). Ocurre con argumentos de más, una raíz que no es un directorio o no es la raíz de un repositorio, `git grep` con rc ≥ 2 o con texto en stderr, o un error de `git ls-files`.
-- **21 comprobaciones:**
+- **22 comprobaciones** (21 antes de la enmienda sobre `ResultadoClic`):
   - los 19 `git grep` originales de D7 (`D7-01`…`D7-19` en la autoprueba);
   - el de R3 para parámetros (`R3-param`);
+  - el de `ResultadoClic` en páginas (`D1-rc`);
   - el `git ls-files` de directorios (`D7-20`).
 
 ### D8. Configuración pura del navegador en `src/main` (paso independiente)
@@ -492,6 +502,7 @@ El estado del ADR y D1–D8 no cambian. **Enmienda aprobada por el coordinador e
 - La restricción sobre `ResultadoClic` (D1) se comprueba hoy a mano con su comando, que no da salida.
   - **P2 (`devops-engineer`):** llevarla a CHK-17 como una línea más de la fila de `pages` de R6: `git grep --untracked -nP '^\s*public\b.*\bResultadoClic\b' -- "$T/pages"`, con su caso negativo en la autoprueba.
   - Ese cambio enmienda D7 en el mismo commit (D6).
+  - **Cerrado** por la enmienda *R6: `ResultadoClic` fuera de los miembros públicos de las páginas*, en el mismo commit que el script.
 
 **2. `XPathLiteral` (D2): se queda en `pages`, sin ramas especulativas (aprobado por el coordinador, 2026-10-13).**
 
@@ -508,7 +519,7 @@ El estado del ADR y D1–D8 no cambian. **Enmienda aprobada por el coordinador e
 
 | Opción | Veredicto | Motivo |
 |---|---|---|
-| A. Mover a `src/main/java/com/demo/config`, con pruebas unitarias y PIT | Descartada hoy; es el camino si se activa el disparador | D4 no permite `pages` → `config` (R6, `check-layers.sh:156`): habría que abrir una arista solo para esta clase, con cambios en D7, en el script y en su autoprueba. `config` no es su sitio, porque componer localizadores es de la capa 2. Y probaría dos ramas que ningún dato ni AC necesita (SDD-02) |
+| A. Mover a `src/main/java/com/demo/config`, con pruebas unitarias y PIT | Descartada hoy; es el camino si se activa el disparador | D4 no permite `pages` → `config` (R6, `check-layers.sh:156` en `afb6693`; `:165-166` desde la enmienda sobre `ResultadoClic`): habría que abrir una arista solo para esta clase, con cambios en D7, en el script y en su autoprueba. `config` no es su sitio, porque componer localizadores es de la capa 2. Y probaría dos ramas que ningún dato ni AC necesita (SDD-02) |
 | B. Prueba unitaria en `src/test/java/com/demo/pages` | Descartada | R4 rechaza JUnit en `pages`; CHK-16 solo admite unitarias en `config` y `data`; Surefire solo las incluye ahí (`pom.xml:185-190`); y PIT no muta `target/test-classes` (ADR-001, R-1). Serían excepciones en cuatro controles para una función de ocho líneas |
 | C. Ejercitar las ramas 2 y 3 desde la E2E | Imposible | Ningún producto del SUT tiene comillas: un dato de entrada con comillas no encuentra producto, así que solo probaría el fallo |
 | D. Quitar las ramas 2 y 3 y fallar al instante | **Elegida** | Ver *Decisión* |
@@ -525,7 +536,7 @@ El estado del ADR y D1–D8 no cambian. **Enmienda aprobada por el coordinador e
 - **Disparador para reabrir:** una spec o un dato que necesite nombres con `'`. Entonces se aplica la opción A en un solo cambio:
   - la clase pasa a `src/main/java/com/demo/config`, con pruebas y PIT;
   - D4 suma `pages` → `config` (solo `XPathLiteral`);
-  - la fila de `pages` de R6 pasa a `com\.demo\.(actions|steps|hooks|runners|data)\b` y `com\.demo\.config\.(?!XPathLiteral\b)`, como la excepción de `ConfigReader` (`check-layers.sh:153-154`), con sus casos en la autoprueba.
+  - la fila de `pages` de R6 pasa a `com\.demo\.(actions|steps|hooks|runners|data)\b` y `com\.demo\.config\.(?!XPathLiteral\b)`, como la excepción de `ConfigReader` (`check-layers.sh:153-154` en `afb6693`; `:163-164` desde la enmienda sobre `ResultadoClic`), con sus casos en la autoprueba.
 
 *Pasos para `qa-automation-engineer` (cada uno deja la suite en verde):*
 1. En `XPathLiteral.java` se eliminan las ramas de `:16-19`.
@@ -565,4 +576,29 @@ El estado del ADR y D1–D8 no cambian. **Enmienda aprobada por el coordinador e
 - Las citas `ci.yml:<línea>` y `Jenkinsfile:<línea>` quedaron desfasadas con cada job y etapa nuevos. Desde esta fecha, este ADR cita la CI por el nombre del job, del paso o de la etapa.
 - Las citas con número de línea que quedan son registro histórico e indican su commit: *Contexto* (fila de la configuración del navegador), D6, R-4 y la enmienda de los pasos 1 a 3.
 
-**Pendientes (P2):** la restricción de `ResultadoClic` en CHK-17 (`devops-engineer`, parte 1) y `README.md:317` (usuario, parte 2). *(Al cierre del 2026-10-13: `README.md:317` está hecho en `2671a20`. La restricción de `ResultadoClic` la implementa devops, y D7 se enmendará con su regla exacta.)*
+**Pendientes (P2):** la restricción de `ResultadoClic` en CHK-17 (`devops-engineer`, parte 1) y `README.md:317` (usuario, parte 2). *(Al cierre del 2026-10-13: `README.md:317` está hecho en `2671a20`. La restricción de `ResultadoClic` la implementa devops, y D7 se enmendará con su regla exacta. Hecho en la enmienda siguiente.)*
+
+### 2026-10-13 — R6: `ResultadoClic` fuera de los miembros públicos de las páginas (CHK-17)
+
+Las decisiones de fondo y el estado no cambian: D7 se alinea con el script, que es la implementación normativa (D6). Esta enmienda va **en el mismo commit** que `scripts/check-layers.sh` y su autoprueba (`devops-engineer`), así que no cita un hash propio: es "este commit".
+- **Regla.** `check R6 "ResultadoClic en un miembro público de una página" '^\s*public\b.*\bResultadoClic\b' -- "$T/pages"` (`check-layers.sh:167-169`), justo después de la línea de `pages` de R6.
+  - Imprime `archivo:línea: R6: ResultadoClic en un miembro público de una página`.
+  - Es la expresión que propuso la parte 1 de la enmienda anterior.
+- **D7, en este ADR:**
+  - la fila R6 de la tabla, con su equivalente ArchUnit de referencia;
+  - la línea nueva en los comandos;
+  - el párrafo *`ResultadoClic` en páginas*;
+  - la *Nota de ejecución*, que cita `check-layers.sh:11-39` y `:103-128` y pasa a 22 comprobaciones (`D1-rc`).
+- Cambiaron las líneas citadas en la opción A de la parte 2 de la enmienda anterior: la fila de `pages` de R6 pasa a `:165-166` y la excepción de `ConfigReader` a `:163-164`.
+- **Autoprueba** (según devops; B-01 no permite ejecutarla). Tiene 184 casos (162 antes):
+  - violaciones `D1-rc`, `-b`, `-c` y `-d` (retorno calificado, retorno importado, parámetro y campo público), versionadas y sin versionar;
+  - casi-violaciones permitidas `ok-5` a `ok-11`: método privado, variable local, `enum` público en `transport`, comentario, identificador que empieza por `public`, y el nombre como sufijo y como prefijo.
+  - **Control negativo:** sin el `check`, fallan 8 de los 184 casos, que son los cuatro casos `D1-rc` en sus dos variantes.
+- **Sobre HEAD:** la regla no da salida (`git grep -nP '^\s*public\b.*\bResultadoClic\b' -- src/test/java/com/demo/pages`, rc=1).
+- **Blobs:** los que citó devops (`dac56a09…` para el script y `ae090375…` para la autoprueba) no se pueden comprobar con B-01, porque no hay nada en el índice y `git hash-object` no está permitido. El commit fija los dos archivos junto a esta enmienda.
+- **Cierra:**
+  - el P2 de la parte 1 de la enmienda anterior;
+  - la restricción de D1, que pasa de "a mano" a CHK-17.
+- **Reglas y agentes.** El usuario aplicó la mención de esta regla, sin commit al redactar esta enmienda, en dos archivos:
+  - en la descripción de CHK-17 de `.claude/rules/04-quality-checks.md:23`;
+  - en la fila R6 de `.claude/agents/qa-automation-architect.md:53`.

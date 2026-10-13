@@ -20,7 +20,7 @@ Comprobaciones deterministas que los agentes citan por ID. Una CHK en rojo es un
 | CHK-14 | Cuarentena reglada, con dos tipos | Cada `@quarantine` tiene su fila en `docs/quarantine.md` con su tipo: `inestable` (dueño, ingreso, issue, diagnóstico y límite ≤ 14 días, no vencido) o `defecto-sut` (dueño, referencia al defecto en la spec según SDD-08, comportamiento esperado frente a observado y próxima revisión ≤ 90 días, no vencida); una fila por cada `@AC-` en cuarentena (propia o heredada) y ninguna fila sin escenario. Exit 0 en el script y en su autoprueba; con exit 1 imprime `archivo:línea: motivo` | devops |
 | CHK-15 | `src/main/java` puro: sin entorno, archivos, Selenium, Cucumber ni JUnit (ADR-001) | Sin salida | engineer, verifier, devops |
 | CHK-16 | Pruebas unitarias aisladas: sin Selenium, Cucumber, capas de prueba, entorno ni `.env` real, y solo `*Test.java` en sus directorios (ADR-001) | Sin salida | engineer, verifier |
-| CHK-17 | Capas (ADR-002): R1–R6 de D7, incluidas páginas como parámetro en acciones; falla cerrado (directorios de capa, `git grep` con rc ≥ 2 o con stderr) | Exit 0 en el script y en su autoprueba | engineer, verifier, devops |
+| CHK-17 | Capas (ADR-002): R1–R6 de D7, incluidas páginas como parámetro en acciones y `ResultadoClic` en miembros públicos de páginas; falla cerrado (directorios de capa, `git grep` con rc ≥ 2 o con stderr) | Exit 0 en el script y en su autoprueba | engineer, verifier, devops |
 
 ## Comandos (copiar tal cual)
 

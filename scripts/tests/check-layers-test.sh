@@ -7,10 +7,11 @@
 # mínimo que reproduce las capas, y exige:
 #   - exit 0 sobre el árbol válido, que incluye casi-violaciones permitidas
 #     (import de By en pages, ConfigReader en pages, constructor de acciones
-#     con páginas, JUnit en las unitarias, Javadoc que nombra SecretReader);
+#     con páginas, JUnit en las unitarias, Javadoc que nombra SecretReader,
+#     ResultadoClic público en transport y solo dentro de una página);
 #   - exit 1, con la línea "archivo:línea: R<n>: motivo" esperada, por cada
-#     comando de D7 y por la ampliación de R3, con la violación versionada y
-#     sin versionar;
+#     comando de D7, por la ampliación de R3 y por la restricción de
+#     ResultadoClic de D1, con la violación versionada y sin versionar;
 #   - exit 1 con una violación en un archivo versionado que coincide con
 #     .gitignore, y exit 0 si ese archivo no está versionado;
 #   - exit 1 ("directorio:0: D6: …") por cada directorio de capa ausente o
@@ -130,6 +131,10 @@ mkdir -p "$base"
     '    public String texto(By locator) {' \
     '        return driver.findElement(locator).getText();' \
     '    }' \
+    '    public enum ResultadoClic { AVANZO, NO_AVANZO, NO_DISPONIBLE }' \
+    '    public ResultadoClic clickYObservarUrlContiene(By locator, String fragmento) {' \
+    '        return ResultadoClic.AVANZO;' \
+    '    }' \
     '}'
   put "$T/transport/DriverFactory.java" \
     'package com.demo.transport;' \
@@ -179,6 +184,32 @@ mkdir -p "$base"
     '    }' \
     '    public String obtenerTitulo() {' \
     '        return navegador.texto(TITULO);' \
+    '    }' \
+    '}'
+
+  # ResultadoClic solo dentro de la página: variable local en un método público
+  # y método privado que lo devuelve (D1, enmienda 2026-10-13).
+  put "$T/pages/CartPage.java" \
+    'package com.demo.pages;' \
+    '' \
+    'import org.openqa.selenium.By;' \
+    'import com.demo.transport.Navegador;' \
+    '' \
+    'public final class CartPage {' \
+    '    private static final By TRAMITAR = By.id("checkout");' \
+    '    private final Navegador navegador;' \
+    '    public CartPage(Navegador navegador) {' \
+    '        this.navegador = navegador;' \
+    '    }' \
+    '    /** Exige que avance; no expone el {@link Navegador.ResultadoClic}. */' \
+    '    public void iniciarCheckout() {' \
+    '        Navegador.ResultadoClic resultado = pulsarTramitar();' \
+    '        if (resultado != Navegador.ResultadoClic.AVANZO) {' \
+    '            throw new IllegalStateException("no avanzó");' \
+    '        }' \
+    '    }' \
+    '    private Navegador.ResultadoClic pulsarTramitar() {' \
+    '        return navegador.clickYObservarUrlContiene(TRAMITAR, "checkout");' \
     '    }' \
     '}'
 
@@ -438,6 +469,22 @@ allowed "ok-2 método no público de acciones con página" "$T/actions/OtraActio
   '    void usar(LoginPage pagina) {'
 allowed "ok-3 import de By en pages" "$T/pages/OtraPage.java" \
   'import org.openqa.selenium.By;'
+# ResultadoClic (D1): uso interno de una página, el enum público en transport y
+# casi-coincidencias de cada parte de la expresión (^\s*, public\b, \b…\b).
+allowed "ok-5 ResultadoClic en un método privado de una página" "$T/pages/OtraPage.java" \
+  '    private Navegador.ResultadoClic pulsar() {'
+allowed "ok-6 ResultadoClic en una variable local de una página" "$T/pages/OtraPage.java" \
+  '        Navegador.ResultadoClic resultado = navegador.clickYObservarUrlContiene(TRAMITAR, "x");'
+allowed "ok-7 ResultadoClic público en transport" "$T/transport/Otro.java" \
+  '    public enum ResultadoClic { AVANZO, NO_AVANZO, NO_DISPONIBLE }'
+allowed "ok-8 comentario de una página con public y ResultadoClic" "$T/pages/OtraPage.java" \
+  '    // no es public: ResultadoClic queda dentro de la página'
+allowed "ok-9 identificador que empieza por public en una página" "$T/pages/OtraPage.java" \
+  '    publicar(Navegador.ResultadoClic.AVANZO);'
+allowed "ok-10 método público con ResultadoClic como sufijo" "$T/pages/OtraPage.java" \
+  '    public boolean esResultadoClic() {'
+allowed "ok-11 método público con ResultadoClic como prefijo" "$T/pages/OtraPage.java" \
+  '    public int ResultadoClicados() {'
 
 # Un caso negativo por comando de D7 (D7-01…D7-19 son los git grep; D7-20 es
 # la presencia de directorios) y por la ampliación de R3 (R3-param).
@@ -527,6 +574,16 @@ violation "D7-19" R6 "SecretReader o CredentialsProvider fuera de utils y steps"
   "$T/actions/Bad.java" '    // Un comentario que nombra SecretReader también cuenta (D6).'
 violation "D7-19b" R6 "SecretReader o CredentialsProvider fuera de utils y steps" \
   "$T/pages/BadPage.java" '    private CredentialsProvider proveedor;'
+# Restricción de D1 (enmienda 2026-10-13): ResultadoClic en un miembro público
+# de una página, como retorno (calificado o importado), parámetro o campo.
+violation "D1-rc" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" '    public Navegador.ResultadoClic pulsar() {'
+violation "D1-rc-b" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" '    public ResultadoClic pulsar() {'
+violation "D1-rc-c" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" '    public void decidir(Navegador.ResultadoClic resultado) {'
+violation "D1-rc-d" R6 "ResultadoClic en un miembro público de una página" \
+  "$T/pages/BadPage.java" '    public static final Navegador.ResultadoClic INICIAL = null;'
 
 # Archivos que coinciden con .gitignore: --untracked omite incluso los
 # versionados (git 2.53), así que el script hace también una pasada sobre el

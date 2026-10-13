@@ -4,7 +4,8 @@
 # Uso: bash scripts/check-layers.sh [raíz]   (raíz por defecto: .)
 #
 # Ejecuta los comandos de D7 tal como están especificados (git grep
-# --untracked -nP, con exclusiones ":!") más una ampliación de R3 (ver abajo).
+# --untracked -nP, con exclusiones ":!") más una ampliación de R3 y la
+# restricción de ResultadoClic de D1 (ver abajo).
 # Cada comando pasa si no produce salida.
 #
 # Cada comando corre en dos pasadas, y la salida se une sin duplicados:
@@ -52,6 +53,15 @@
 # anotación con argumentos no oculta el parámetro; a cambio, una línea con
 # cuerpo que cree una página da un falso positivo, que falla cerrado.
 # Riesgo residual aceptado (D6, R-5): firmas partidas en varias líneas.
+#
+# Restricción de D1 (enmienda 2026-10-13), en la fila de pages de R6: ningún
+# miembro público de una página recibe ni devuelve Navegador.ResultadoClic.
+# Si una página lo expusiera, una acción podría recibirlo con "var" sin nombrar
+# com.demo.transport, y la línea de actions de R6 no lo vería. La expresión
+# '^\s*public\b.*\bResultadoClic\b' cubre el tipo de retorno, los parámetros y
+# los campos públicos, calificado (Navegador.ResultadoClic) o importado. El uso
+# dentro del cuerpo o en un método privado no empieza por "public" y pasa.
+# Mismo riesgo residual: una firma pública partida en varias líneas.
 #
 # Solo bash, coreutils, git (con PCRE), grep y awk POSIX (compatible con mawk).
 set -euo pipefail
@@ -154,6 +164,9 @@ check R6 "transport o pages nombran utils distinto de ConfigReader" \
   'com\.demo\.utils\.(?!ConfigReader\b)' -- "$T/transport" "$T/pages"
 check R6 "pages nombra un paquete fuera de su fila de D4" \
   'com\.demo\.(actions|steps|hooks|runners|config|data)\b' -- "$T/pages"
+# R6 (restricción de D1, enmienda 2026-10-13): ResultadoClic no sale de pages
+check R6 "ResultadoClic en un miembro público de una página" \
+  '^\s*public\b.*\bResultadoClic\b' -- "$T/pages"
 check R6 "actions nombra un paquete fuera de su fila de D4" \
   'com\.demo\.(transport|utils|steps|hooks|runners|config)\b' -- "$T/actions"
 check R6 "steps nombra un paquete fuera de su fila de D4" \
