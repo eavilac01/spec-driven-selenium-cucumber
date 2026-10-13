@@ -1,6 +1,6 @@
 # ADR-003 — Fuentes de configuración de los valores esperados y de los destinos de red
 
-- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). Se propuso el mismo día con D1 a D4; D5 incorpora la decisión del usuario sobre R-3, tomada en la conversación el 2026-10-13.
+- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). Se propuso el mismo día con D1 a D4; D5 incorpora la decisión del usuario sobre R-3, tomada en la conversación el 2026-10-13. Está completamente implementado desde el 2026-10-13 (*Enmiendas*, paso 3).
 - **Fecha:** 2026-10-13
 - **Autor:** `qa-automation-architect`
 - **Aprueba:** coordinador (Regla 01, nivel 2). `AGENTS.md` y `.claude/rules/` los cambia el usuario (P-01, PI-07). `README.md` no tiene dueño en la matriz: el usuario designa quién lo edita.
@@ -147,7 +147,7 @@ Todos están aplicados (2026-10-13): `AGENTS.md` y `README.md` en `2671a20`, y l
 | 0 | Coordinador | Aprueba este ADR | — | Hecho (aprobado por el coordinador, 2026-10-13; D5 por decisión del usuario, 2026-10-13) |
 | 1 | `qa-automation-engineer` | D1 a D3 y D5, en un commit: primero las pruebas, después `ConfigResolver` y `ConfigReader` (*Pasos para el engineer*) | *Criterio de verificación* | Hecho (`2c33885`, *Enmiendas*) |
 | 2 | `qa-test-verifier` | *Criterio de verificación* completo | APROBADO | Hecho (APROBADO, según el coordinador: controles positivos, CHK-10 de regresión y PIT 129/129) |
-| 3 | `devops-engineer` | Gate. Es CRÍTICO: toca `src/main/java/com/demo/config/`. Incluye `-Dremote.url` contra el Grid local (`docker compose`) o el job `e2e-grid` en verde | APROBADO | En curso (2026-10-13) |
+| 3 | `devops-engineer` | Gate. Es CRÍTICO: toca `src/main/java/com/demo/config/`. Incluye `-Dremote.url` contra el Grid local (`docker compose`) o el job `e2e-grid` en verde | APROBADO | Hecho (2026-10-13, sobre `2c33885` y `2671a20`; según el coordinador, la suite contra el Grid local con `-Dremote.url=http://localhost:4444` quedó en verde y sin el aviso de D3; *Enmiendas*) |
 | 4 | Usuario | *Cambios propuestos a documentación* | — | Hecho (`2671a20` y, PI-08, `4f3a7a2`) |
 
 ### Pasos para el engineer
@@ -271,4 +271,15 @@ Las decisiones no cambian.
 - **Paso 4:**
   - `2671a20` aplica en `AGENTS.md:48` y en `README.md` (hoy `:298`, `:304` y `:308`) los textos de *Cambios propuestos a documentación*.
   - `4f3a7a2` aplica la aclaración opcional de PI-08 (`.claude/rules/03-prompt-injection.md:35`).
-- **Pendiente:** el paso 3. Es el gate CRÍTICO de `devops-engineer`, con `-Dremote.url` contra el Grid.
+- **Pendiente:** el paso 3. Es el gate CRÍTICO de `devops-engineer`, con `-Dremote.url` contra el Grid. *(Hecho el 2026-10-13: enmienda siguiente.)*
+
+### 2026-10-13 — Paso 3 (gate con `-Dremote.url` contra el Grid) y cierre
+
+Las decisiones no cambian. Con este paso, el ADR queda **completamente implementado** (pasos 0 a 4).
+- **Paso 3: Hecho.** Lo registra el coordinador. El 2026-10-13, la suite corrió contra el Grid local (`docker compose`) con `-Dremote.url=http://localhost:4444`.
+  - Terminó en verde.
+  - El log no contiene el aviso de D3 (`La clave de esperado`): un `-D` sobre un destino de red no avisa (D5).
+  - Cubre la implementación de `2c33885` y la documentación de `2671a20`, los dos firmados (`git log --format='%h %G?'`). Los dos son anteriores a `5329cf1` en `main`.
+- **La CI usa el mismo canal.** El job `e2e-grid`, paso *Run E2E (Selenium Grid, Chrome)*, pasa `-Dheadless=true -Dremote.url=http://localhost:4444`. El `Jenkinsfile` no usa `remote.url` (`git grep -n remote.url -- .github Jenkinsfile`).
+- **Sin confirmar desde aquí:** el run remoto de `e2e-grid` sobre `5329cf1`. No hay `gh` ni red (B-01), así que lo confirma el usuario. No hace falta para cerrar el paso: su criterio admite el Grid local o el job `e2e-grid`.
+- **Sigue abierto (P2):** R-2. Es de `devops-engineer`: que los jobs E2E fallen si su log contiene el aviso de D3.
