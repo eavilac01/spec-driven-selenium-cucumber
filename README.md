@@ -476,6 +476,23 @@ flowchart LR
             └── login.feature
 ```
 
+### Vista de diseño
+
+La misma estructura, organizada en cuatro bloques, con la etiqueta del dueño de cada carpeta según la [Regla 02](.claude/rules/02-agent-permissions.md):
+
+1. **Código del framework**
+2. **Especificación y decisiones**
+3. **Calidad y entrega**
+4. **Gobierno y comunidad**
+
+<p align="center">
+  <a href="docs/assets/estructura-del-proyecto.png">
+    <img src="docs/assets/estructura-del-proyecto.png" alt="Estructura del proyecto: cuatro bloques. 01 Código del framework (src/main/java, src/test/java/com/demo y src/test/resources, del engineer). 02 Especificación y decisiones (docs/specs y features del designer, docs/adr del architect y docs/quarantine.md de devops). 03 Calidad y entrega (scripts y CI/CD y build, de devops). 04 Gobierno y comunidad (.claude del usuario; instrucciones, memoria y archivos del repositorio público, del coordinador)." width="100%">
+  </a>
+</p>
+
+> Haz clic en la imagen para verla a tamaño completo (3120×2980).
+
 ## Decisiones de arquitectura
 
 ### `Navegador`: un dueño del `WebDriver` por escenario (ADR-002)
