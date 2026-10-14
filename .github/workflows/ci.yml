@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+# Selenium Manager no envía telemetría (también fijado en Surefire, pom.xml).
+env:
+  SE_AVOID_STATS: true
+
 # Un push nuevo a un PR cancela el run en curso de ese PR. En main (push y
 # workflow_dispatch comparten grupo) no se cancela el run en curso; GitHub sí
 # descarta un run pendiente si llega otro detrás (queda el del último commit).

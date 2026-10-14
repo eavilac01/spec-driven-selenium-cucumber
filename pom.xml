@@ -188,6 +188,10 @@
                         <include>com/demo/config/**/*Test.java</include>
                         <include>com/demo/data/**/*Test.java</include>
                     </includes>
+                    <!-- Selenium Manager hereda el entorno del JVM de Surefire: sin telemetría. -->
+                    <environmentVariables>
+                        <SE_AVOID_STATS>true</SE_AVOID_STATS>
+                    </environmentVariables>
                     <systemPropertyVariables>
                         <SE_SKIP_DRIVER_IN_PATH>true</SE_SKIP_DRIVER_IN_PATH>
                         <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
