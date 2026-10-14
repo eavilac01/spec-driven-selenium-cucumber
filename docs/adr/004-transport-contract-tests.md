@@ -1,6 +1,6 @@
 # ADR-004 — Pruebas de contrato del transporte con páginas locales y clic nativo único como lógica pura
 
-- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). El usuario aprobó los textos de los grupos A y B. El grupo A está aplicado en `d5b18ef`, y el B en `4ccb344`. Se propuso el mismo día. Los pasos 1 a 6 están hechos (`51e81bd`, `409b427`, `aa3cda5`, `dcd2aaf` y `4ccb344`), y el 7, en verificación (*Plan de implementación*).
+- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). El usuario aprobó los textos de los grupos A y B. El grupo A está aplicado en `d5b18ef`, y el B en `4ccb344`. Se propuso el mismo día. Los pasos 1 a 6 están hechos (`51e81bd`, `409b427`, `aa3cda5`, `dcd2aaf` y `4ccb344`), y el 7, en verificación (*Plan de implementación*). *(Al 2026-10-13: **completamente implementado y verificado**. El verifier dio APROBADO al paso 7, y el CI del PR #1 (merge `9416b5d`) terminó en verde en todos los jobs, incluido `e2e-firefox` con el contrato y CHK-20, según el usuario. Ver *Enmiendas*.)*
 - **Fecha:** 2026-10-13
 - **Autor:** `qa-automation-architect`
 - **Aprueba:** coordinador (Regla 01, nivel 2). Los textos para reglas y agentes (*Cambios propuestos*) los aprueba y aplica el usuario (P-01, PI-07).
@@ -176,7 +176,7 @@ contract.expected.causa-interceptada=ElementClickInterceptedException
 | Job `quarantine` | — | No corren: solo ejecuta `@quarantine` con `-Dtest=RunnerTest` | Ninguno |
 | Local con snap | Firefox | `-Dbrowser=firefox -Dwebdriver.gecko.driver=/snap/bin/geckodriver`. El repositorio está bajo `$HOME`, que el snap puede leer; un temporal de `/tmp` no lo sería (snap tiene su propio `/tmp`) | — |
 
-- **Coste:** unos 45–55 s por navegador. Lo dominan cuatro esperas completas (CT-04 a CT-07) de `explicit.wait.seconds` (10 s), más el arranque del navegador. Las demás pruebas tardan menos de un segundo. El engineer mide el tiempo real de la clase en el reporte de Surefire, en Chrome y en Firefox, y lo registra en el paso 3. No se acorta el plazo solo para estas pruebas: `TIEMPO_MAXIMO_ESPERA` es estático y compartido con la E2E, y una ejecución de Surefire aparte rompería los jobs con `-Dtest` (*Alternativas*).
+- **Coste:** unos 45–55 s por navegador. Lo dominan cuatro esperas completas (CT-04 a CT-07) de `explicit.wait.seconds` (10 s), más el arranque del navegador. Las demás pruebas tardan menos de un segundo. El engineer mide el tiempo real de la clase en el reporte de Surefire, en Chrome y en Firefox, y lo registra en el paso 3. *(Medido: unos 42–44 s por navegador con las 8 pruebas; ver *Riesgos*, R-6.)* No se acorta el plazo solo para estas pruebas: `TIEMPO_MAXIMO_ESPERA` es estático y compartido con la E2E, y una ejecución de Surefire aparte rompería los jobs con `-Dtest` (*Alternativas*).
 - **CHK-20 (nueva; devops): las pruebas de contrato corrieron.** Por cada `*Test.java` versionado en `src/test/java/com/demo/contract`, su reporte `TEST-<clase>.xml` de Surefire existe y su `testsuite` tiene `tests` > 0 y `skipped`, `failures` y `errors` en 0.
   - Falla cerrado (1) si no hay ninguna clase versionada, si falta un reporte o un atributo, o si un valor no cumple. Imprime `<ruta>: CHK-20: <motivo>`.
   - Da 2 si no puede evaluar: argumentos de más o fallo de `git ls-files`.
@@ -589,9 +589,9 @@ Cada paso deja la suite en verde. Cada paso del engineer pasa por el verifier y 
 | 2 | `devops-engineer` | En **un commit** con la enmienda del paso 1: CHK-17 sin `A4-D6` (D8), la autoprueba con el árbol base y los casos, y en `pom.xml` el include de Surefire y `excludedTestClasses` | `bash scripts/check-layers.sh` da 0 sobre HEAD (aún no hay `contract`); autoprueba en 0 con 516 casos (432 + 84, D8) en la matriz de CHK-18; N1–N23 mueren; CHK-08 ×2 con el mismo `Tests run` que antes (el include no encuentra nada); CHK-13 | Hecho en `51e81bd` (2026-10-13): 42 comprobaciones, 516 casos en mawk, gawk, `gawk --posix` y busybox, N1–N23 muertos, CHK-08 ×2 con 204 |
 | 3 | `qa-automation-engineer` | `com.demo.contract` con CT-01 a CT-07, las cuatro páginas y las 10 claves. **Cierra el pendiente 1** | CHK-01, 03, 07 y 17; CHK-08 ×2 (`Tests run` + 7); cada CT sola (`-Dtest=…#método`); las 7 en Firefox local; tiempo de la clase en los dos navegadores; MC-1, MC-2, MC-3, MC-5 (sobre la guarda de `clicNativoUnicoHastaCumplir`) y MC-6 en rojo; las filas de D6 a) de CT-01 a CT-07 en rojo | Hecho en `409b427` (2026-10-13; integrado por devops, evidencia del engineer) |
 | 4 | `qa-automation-engineer` | `ClicNativoUnico` y sus pruebas (UC-01 a UC-10), el cableado de `Navegador` y CT-08. **Cierra el P2.** Gate CRÍTICO (`src/main/java/com/demo/config/` y `transport`) | CT-08 en rojo con el `Navegador` anterior y en verde después; CHK-01, 03, 07, 15, 16 y 17; CHK-08 ×2; CHK-11 ≥ 80 % con la guarda en 0 y `ClicNativoUnico` sin sobrevivientes sin justificar; D6 del ADR-001 sigue en `BUILD FAILURE`; MC-4, MC-5 (sobre `sondear`), MC-7 y MC-8 en rojo; CHK-09 y CHK-10 de `@AC-LOGIN-01` (`click(By)`) y de `@AC-COMPRA-03` (tramitar) | Hecho en `aa3cda5` (2026-10-13; integrado por devops, evidencia del engineer) |
-| 5 | `devops-engineer` | `A4-D6` y su caso (517), y en el bloque de D7 del ADR-002 la línea de directorios con `"$CT"`, sin el comentario provisional; CHK-20 con su autoprueba; jobs `test` y `e2e-firefox` (CHK-20 y el `-Dtest` de Firefox), `mutation` (autoprueba de CHK-20) y Jenkins (`Test` y la autoprueba) | CHK-17 y su autoprueba en 0; N24 muere; CHK-20 en 0 sobre un CHK-08 real y en 1 con el include quitado (control negativo local, sin commit); autoprueba de CHK-20 en 0; CHK-13; `e2e-firefox` en verde con el contrato en su reporte (según el usuario) | Hecho en `dcd2aaf` (2026-10-13): 517 casos en CHK-17, N24 muerto; CHK-20 con 36 casos en su autoprueba (D5, *Decisiones de implementación*); CHK-08 ×2 con 222, y CHK-19 y CHK-20 en 0; sin el include, CHK-20 en 1 (según el mensaje del commit). Falta el run remoto de `e2e-firefox` (según el usuario) |
+| 5 | `devops-engineer` | `A4-D6` y su caso (517), y en el bloque de D7 del ADR-002 la línea de directorios con `"$CT"`, sin el comentario provisional; CHK-20 con su autoprueba; jobs `test` y `e2e-firefox` (CHK-20 y el `-Dtest` de Firefox), `mutation` (autoprueba de CHK-20) y Jenkins (`Test` y la autoprueba) | CHK-17 y su autoprueba en 0; N24 muere; CHK-20 en 0 sobre un CHK-08 real y en 1 con el include quitado (control negativo local, sin commit); autoprueba de CHK-20 en 0; CHK-13; `e2e-firefox` en verde con el contrato en su reporte (según el usuario) | Hecho en `dcd2aaf` (2026-10-13): 517 casos en CHK-17, N24 muerto; CHK-20 con 36 casos en su autoprueba (D5, *Decisiones de implementación*); CHK-08 ×2 con 222, y CHK-19 y CHK-20 en 0; sin el include, CHK-20 en 1 (según el mensaje del commit). Falta el run remoto de `e2e-firefox` (según el usuario). *(Confirmado el 2026-10-13: CI del PR #1 en verde, con `e2e-firefox` ejecutando el contrato y CHK-20, y `mutation` con 517 casos, según el usuario.)* |
 | 6 | Usuario | Grupo B; `README.md` y `AGENTS.md` (quien designe) | — | Hecho en `4ccb344` (grupo B, `README.md` y `AGENTS.md`) |
-| 7 | `qa-test-verifier` | *Criterio de verificación* completo | APROBADO | En verificación (2026-10-13) |
+| 7 | `qa-test-verifier` | *Criterio de verificación* completo | APROBADO | En verificación (2026-10-13). *(Hecho, 2026-10-13: APROBADO de los pasos 3, 4 y 5, con CHK-10 de contrato 10/10 exactas, PIT 164/164, CHK-20 y Firefox 8/8, según el coordinador.)* |
 
 ## Criterio de verificación
 
@@ -645,6 +645,34 @@ Este ADR se escribió sin ejecutar nada fuera de B-01: solo se leyeron archivos 
 | R-7 | Una página inerte equivale, para `Navegador`, al clic que Chrome descarta con su aviso | Por construcción: en los dos casos `click()` retorna y la postcondición no llega | Ninguna prueba del proyecto puede reproducir el aviso sin el servicio de Google. Sigue como límite aceptado (ADR-002, D8, *Límite*) |
 | R-8 | Con dos patrones en `-Dtest`, Surefire no falla si uno no encuentra nada | Documentación de Surefire (`failIfNoSpecifiedTests` mira el total) | Si fallara, CHK-20 sobraría en `e2e-firefox` pero seguiría cubriendo el job `test` |
 
+*Estado de los supuestos (2026-10-13; según los mensajes de los commits, el verifier y el usuario, sin ejecutar nada aquí, B-01):*
+- **R-1 confirmado:** CT-05 y CT-07 en verde (`409b427`), con el control negativo de las claves del verifier (10/10).
+- **R-2 confirmado:** las 8 pruebas de contrato pasan en Firefox (local, según el verifier, y en `e2e-firefox` del PR #1) y en Chrome (CHK-08).
+- **R-3 confirmado:** CT-08 está en verde en Chrome y en Firefox (`aa3cda5`) con `ElementClickInterceptedException` como causa.
+- **R-4 confirmado:** CT-08 está en rojo con el `Navegador` anterior y en verde después (`aa3cda5`).
+- **R-5 sin incidencias:** CHK-08 ×2 dio 222 y 222 (`dcd2aaf`), y el CI del PR #1 terminó en verde.
+- **R-6 confirmado:** con las 8 pruebas, la clase tarda unos 42–44 s por navegador, dentro del rango previsto de 45–55 s o por debajo, y lejos del umbral de 2 min (según el coordinador):
+  - engineer: Chrome entre 41,99 y 43,12 s, y Firefox entre 43,89 y 43,93 s;
+  - verifier: Chrome 42,49 s dentro de CHK-08, y Firefox 43,58 s;
+  - devops: 42,6 s dentro de CHK-08.
+- **R-7:** sigue como límite aceptado.
+- **R-8 confirmado:** con un patrón mal escrito en `-Dtest`, Surefire quedó en verde y CHK-20 dio 1 (`dcd2aaf`).
+
 ## Enmiendas
 
-Ninguna.
+### 2026-10-13 — Implementación, verificación y cierre
+
+Las decisiones no cambian. Con esta enmienda, el ADR queda **completamente implementado y verificado**.
+- **Commits** (todos en `main` con el PR #1, `tanda/cierre-pendientes`, merge `9416b5d`):
+  - grupo A en `d5b18ef`;
+  - pasos 1 y 2 en `51e81bd`: ADR-002 parte 6; CHK-17 con 42 comprobaciones y 516 casos;
+  - paso 3 en `409b427`: CT-01 a CT-07;
+  - paso 4 en `aa3cda5`: `ClicNativoUnico`, UC-01 a UC-10 y CT-08;
+  - paso 5 en `dcd2aaf`: `A4-D6` con 517 casos, y CHK-20 con su autoprueba de 36 casos;
+  - grupo B en `4ccb344`;
+  - registro de D5 (*Decisiones de implementación*) en `8e0800a`.
+- **Verificación (paso 7):** APROBADO del verifier sobre los pasos 3, 4 y 5, con CHK-10 de contrato 10/10 exactas, PIT 164/164, CHK-20 y Firefox 8/8 (según el coordinador).
+- **CI remoto:** el PR #1 terminó en verde en todos los jobs, según el usuario. Incluye `e2e-firefox` con el contrato y CHK-20, y `mutation` con 517 casos en CHK-17.
+- **Jenkins real:** el build 3, sobre `a66ea58`, terminó en `SUCCESS` con 10 etapas y 222 pruebas, según el usuario. La etapa `Test` incluye el contrato y CHK-20 (ADR-002, R-4).
+- **Pendientes que cierra:** el punto 1 (la pista de D8 en vivo, CT-04 y CT-05) y el punto 2 (el P2 de `click(By)`, UC-06 y CT-08) de *Contexto*.
+- **Supuestos:** ver *Riesgos*, *Estado de los supuestos*. No queda ninguno abierto que bloquee. R-6 no tiene dato registrado, y R-7 es un límite aceptado. *(R-6 confirmado con los tiempos medidos: unos 42–44 s por navegador. **Ningún supuesto queda abierto**; R-7 es un límite aceptado.)*

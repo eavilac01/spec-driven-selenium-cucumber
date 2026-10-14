@@ -1,6 +1,6 @@
 # ADR-003 — Fuentes de configuración de los valores esperados y de los destinos de red
 
-- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). Se propuso el mismo día con D1 a D4; D5 incorpora la decisión del usuario sobre R-3, tomada en la conversación el 2026-10-13. Está completamente implementado desde el 2026-10-13 (*Enmiendas*, paso 3). Su último P2, R-2, está implementado en `3be5956` como CHK-19 y cerrado con el control real con Maven del gate de `3bab4b2` (*Enmiendas*, *R-2 implementado*). *(Enmienda 2026-10-13, D6, aprobada por el coordinador: cada destino de red deja en el log su fuente y su host, y CHK-19 exige la fuente esperada en cada job. Paso 1 en `02cf8fe` y paso 3 en `ec18ce3`; G8 pendiente del run remoto. Ver *Enmiendas*, *D6*, *Estado*.)*
+- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). Se propuso el mismo día con D1 a D4; D5 incorpora la decisión del usuario sobre R-3, tomada en la conversación el 2026-10-13. Está completamente implementado desde el 2026-10-13 (*Enmiendas*, paso 3). Su último P2, R-2, está implementado en `3be5956` como CHK-19 y cerrado con el control real con Maven del gate de `3bab4b2` (*Enmiendas*, *R-2 implementado*). *(Enmienda 2026-10-13, D6, aprobada por el coordinador: cada destino de red deja en el log su fuente y su host, y CHK-19 exige la fuente esperada en cada job. Paso 1 en `02cf8fe`, paso 3 en `ec18ce3` y textos en `4ccb344`. G8 se confirmó en verde con el CI del PR #1 (merge `9416b5d`), según el usuario. **D6 está completamente implementada**, y este ADR no tiene P2 abiertos. Ver *Enmiendas*, *D6*, *Estado*.)*
 - **Fecha:** 2026-10-13
 - **Autor:** `qa-automation-architect`
 - **Aprueba:** coordinador (Regla 01, nivel 2). `AGENTS.md` y `.claude/rules/` los cambia el usuario (P-01, PI-07). `README.md` no tiene dueño en la matriz: el usuario designa quién lo edita.
@@ -282,7 +282,7 @@ Las decisiones no cambian. Con este paso, el ADR queda **completamente implement
   - El log no contiene el aviso de D3 (`La clave de esperado`): un `-D` sobre un destino de red no avisa (D5).
   - Cubre la implementación de `2c33885` y la documentación de `2671a20`, los dos firmados (`git log --format='%h %G?'`). Los dos son anteriores a `5329cf1` en `main`.
 - **La CI usa el mismo canal.** El job `e2e-grid`, paso *Run E2E (Selenium Grid, Chrome)*, pasa `-Dheadless=true -Dremote.url=http://localhost:4444`. El `Jenkinsfile` no usa `remote.url` (`git grep -n remote.url -- .github Jenkinsfile`).
-- **Sin confirmar desde aquí:** el run remoto de `e2e-grid` sobre `5329cf1`. No hay `gh` ni red (B-01), así que lo confirma el usuario. No hace falta para cerrar el paso: su criterio admite el Grid local o el job `e2e-grid`.
+- **Sin confirmar desde aquí:** el run remoto de `e2e-grid` sobre `5329cf1`. No hay `gh` ni red (B-01), así que lo confirma el usuario. No hace falta para cerrar el paso: su criterio admite el Grid local o el job `e2e-grid`. *(Desde entonces, `e2e-grid` terminó en verde en cada CI confirmado. El último es el del PR #1 (merge `9416b5d`, 2026-10-13), con CHK-19 y `--destino-d`, según el usuario.)*
 - **Sigue abierto (P2):** R-2. Es de `devops-engineer`: que los jobs E2E fallen si su log contiene el aviso de D3. *(Implementado en `3be5956`: enmienda siguiente.)*
 
 ### 2026-10-13 — R-2 implementado (CHK-19)
@@ -602,5 +602,6 @@ Si G7 no reproduce el hueco (el script de `4b91990` da 1 o 2), se informa al arq
   - G3, G4 y G5: 1 con el script nuevo y 0 con el de `4b91990`;
   - G6: 0, 1 y 1;
   - G7: G7b y G7c dan 0 con el script de `4b91990` y 2 con el nuevo; G7a da 2 con los dos (*Hueco* y S-3).
-- **G8: pendiente** del run remoto de GitHub Actions (lo confirma el usuario).
-- **Paso 4** (textos de la Regla 04, `README.md` y `AGENTS.md`): lo registra el coordinador cuando se apliquen.
+- **G8: pendiente** del run remoto de GitHub Actions (lo confirma el usuario). *(Confirmado el 2026-10-13: el CI del PR #1 (`tanda/cierre-pendientes`, merge `9416b5d`) terminó en verde en todos los jobs, según el usuario. Entre ellos están `e2e-grid` con CHK-19 y `--destino-d remote.url=localhost:4444`, y la autoprueba de CHK-19 en `mutation`.)*
+- **Paso 4** (textos de la Regla 04, `README.md` y `AGENTS.md`): lo registra el coordinador cuando se apliquen. *(Aplicados en `4ccb344`: la fila, el comentario del comando y el *Estado actual* de CHK-19 en la Regla 04, la fila de CHK-19 de `README.md` y la mención de `AGENTS.md` ("CHK-19, ADR-003 R-2 y D6").)*
+- **Cierre (2026-10-13):** D6 queda completamente implementada y verificada. No queda ningún paso ni P2 abierto en este ADR.
