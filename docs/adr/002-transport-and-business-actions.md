@@ -1269,6 +1269,10 @@ Cierra el otro pendiente heredado del ADR-001.
     - **Evidencia** (engineer; no se ejecutó aquí, B-01). Según el coordinador, los clics con respaldo pasaron de 36 de 153 a 0 de 156 en Chrome local, con carga y sin ella, y en el Grid. Según el mensaje de `3bab4b2`: un A/B intercalado dio 0 de 6 clics con respaldo con la preferencia, frente a 3 de 6 sin ella; CHK-08 ×2 con `Tests run: 189, Failures: 0, Errors: 0, Skipped: 1`; PIT 132/132.
     - **Pruebas:** tres pruebas unitarias nuevas en `BrowserSettingsTest` (`chromeDisablesPasswordLeakDetectionInEveryMode`, `firefoxHasNoChromePreferences` y `chromePreferencesAreImmutable`), dentro de PIT (CHK-11).
     - **Límite:** las pruebas unitarias fijan el nombre y el valor de la preferencia, pero no pueden probar que Chrome la respete. Chrome ignora en silencio una preferencia que no reconoce. Si una versión futura la renombra, solo lo detecta la E2E, y solo si nada tapa el síntoma: por eso se retira el respaldo JavaScript del clic (*Enmiendas*, *Preferencias de Chrome y respaldo JavaScript*).
+- **Aviso conocido, aceptado** *(2026-10-13, según el coordinador)*. Con Selenium 4.45 y Chrome 155, cada sesión registra `WARNING: Unable to find CDP implementation matching 155`.
+  - Es inocuo: el framework no usa CDP. R5 lo prohíbe en `transport`: `EVT` rechaza `executeCdpCommand` y los paquetes `devtools` y `bidi` (D7, *Clic nativo único, scripts cerrados y preferencias de Chrome*). Ninguna otra capa puede importar Selenium (R1).
+  - No se silencia: desaparece al subir `selenium.version` a una versión que traiga la implementación de CDP para el Chrome en curso. La versión de Chrome queda en el log de cada job (pasos *Chrome version*).
+  - Si un día el aviso viniera con un fallo, no es este caso: se diagnostica, como cualquier rojo.
 
 ## Alternativas consideradas
 

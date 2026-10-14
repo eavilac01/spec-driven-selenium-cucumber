@@ -1,6 +1,6 @@
 # ADR-004 — Pruebas de contrato del transporte con páginas locales y clic nativo único como lógica pura
 
-- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). El usuario aprobó los textos de los grupos A y B. El grupo A está aplicado en `d5b18ef`, y el B se aplica con el paso 5. Se propuso el mismo día.
+- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). El usuario aprobó los textos de los grupos A y B. El grupo A está aplicado en `d5b18ef`, y el B en `4ccb344`. Se propuso el mismo día. Los pasos 1 a 6 están hechos (`51e81bd`, `409b427`, `aa3cda5`, `dcd2aaf` y `4ccb344`), y el 7, en verificación (*Plan de implementación*).
 - **Fecha:** 2026-10-13
 - **Autor:** `qa-automation-architect`
 - **Aprueba:** coordinador (Regla 01, nivel 2). Los textos para reglas y agentes (*Cambios propuestos*) los aprueba y aplica el usuario (P-01, PI-07).
@@ -184,6 +184,13 @@ contract.expected.causa-interceptada=ElementClickInterceptedException
   - Corre después de Maven en los jobs `test` y `e2e-firefox` y en la etapa `Test` de Jenkins, aunque Maven falle y sin tapar su rc (como CHK-19). Su autoprueba corre en el job `mutation` y en Jenkins, sin secrets ni navegador.
   - Sin awk, o con awk POSIX y la matriz de CHK-18.
   - **Autoprueba** (repositorio temporal fuera del repo): exit 0 con un reporte válido; exit 1 sin clases versionadas, sin reporte, con `tests="0"`, con `skipped="1"`, con `failures="1"`, con `errors="1"`, sin el atributo `tests` y con dos clases de las que falta un reporte; exit 2 con argumentos de más.
+  - **Decisiones de implementación** (`scripts/check-contract-ran.sh`, `dcd2aaf`, devops, 2026-10-13). Van más allá del texto de arriba y no cambian el criterio:
+    - **Enteros comparados como texto.** Cada valor se valida como dígitos (`^[0-9]{1,9}$`), y "cero" es `^0+$`, sin aritmética de bash. Con aritmética, un `08` se lee en base octal y da un error de expansión. Ese error abandona el lazo sin pasar por `set -e` y deja un "ok" falso.
+    - **Guarda de recuento.** Cada clase se cuenta después de evaluarla. Si el lazo termina antes, el recuento no cuadra y el resultado es 2, nunca un verde.
+    - **Los dos mutantes que lo demuestran** (tabla de devops; no son los C1–C21 del ADR-003): C19, aritmética con la guarda, sale con 2; C19x, aritmética sin la guarda, da el verde falso.
+    - **Uso: exactamente un argumento,** el directorio de reportes. Sin argumentos, con más de uno o con uno vacío, da 2. No hay valor por defecto: CI, Jenkins y el gate pasan `target/surefire-reports`.
+    - Sin awk: solo bash, coreutils y git, así que CHK-18 no aplica.
+    - **Autoprueba:** 36 casos. De 27 mutantes mueren 26. C21 (quitar solo la guarda) es equivalente mientras ningún otro fallo abandone el lazo, y lo justifica el par C19/C19x. El mensaje de `dcd2aaf` dice "25 mutantes muertos" por un error de conteo; son 26 (según el coordinador).
 
 ### D6. Controles negativos
 
@@ -480,7 +487,7 @@ import com.demo.contractual.X;
 
 Los aplica el usuario (P-01, PI-07). **Grupo A** antes del paso 3: el engineer escribe las páginas y el verifier hace el control negativo de las pruebas nuevas. **Grupo B** con el paso 5: CHK-20 y la presencia de `contract` ya existen. Hasta entonces, la definición normativa de las reglas nuevas es D8 de este ADR, transcrita en D7 del ADR-002 por la enmienda del paso 1.
 
-**Estado (2026-10-13):** el grupo A está aplicado en `d5b18ef`. La parte 5 del ADR-002 (`fe566e3`) cambia dos de estas filas: R5 del arquitecto y CHK-17 de la Regla 04.
+**Estado (2026-10-13):** el grupo A está aplicado en `d5b18ef`, y el B en `4ccb344`, que también aplica la fila R5 combinada. La parte 5 del ADR-002 (`fe566e3`) cambia dos de estas filas: R5 del arquitecto y CHK-17 de la Regla 04.
 - La fila CHK-17 del grupo B ya combina las dos.
 - La fila R5 aplicada en `d5b18ef` no lleva la escritura única. Su texto combinado está en el ADR-002, *Enmiendas*, parte 6, *Reglas y agentes*.
 
@@ -578,13 +585,13 @@ Cada paso deja la suite en verde. Cada paso del engineer pasa por el verifier y 
 | Paso | Dueño | Qué | Verde si | Estado |
 |---|---|---|---|---|
 | 0 | Coordinador y usuario | El coordinador aprueba este ADR; el usuario aplica el grupo A antes del paso 3 | — | Hecho (aprobado el 2026-10-13; grupo A en `d5b18ef`) |
-| 1 | `qa-automation-architect` | Enmienda del ADR-002: fila de `contract` en D4 y, en D7, el bloque de D8 de este ADR con referencia (D6 del ADR-002 exige enmendar D7 en el mismo cambio que el script) | El coordinador la aprueba | Redactada el 2026-10-13 sobre `fe566e3` (ADR-002, *Enmiendas*, parte 6); se integra en el commit del paso 2 |
+| 1 | `qa-automation-architect` | Enmienda del ADR-002: fila de `contract` en D4 y, en D7, el bloque de D8 de este ADR con referencia (D6 del ADR-002 exige enmendar D7 en el mismo cambio que el script) | El coordinador la aprueba | Hecho: redactada el 2026-10-13 sobre `fe566e3` (ADR-002, *Enmiendas*, parte 6) e integrada en `51e81bd` con el paso 2 |
 | 2 | `devops-engineer` | En **un commit** con la enmienda del paso 1: CHK-17 sin `A4-D6` (D8), la autoprueba con el árbol base y los casos, y en `pom.xml` el include de Surefire y `excludedTestClasses` | `bash scripts/check-layers.sh` da 0 sobre HEAD (aún no hay `contract`); autoprueba en 0 con 516 casos (432 + 84, D8) en la matriz de CHK-18; N1–N23 mueren; CHK-08 ×2 con el mismo `Tests run` que antes (el include no encuentra nada); CHK-13 | Hecho en `51e81bd` (2026-10-13): 42 comprobaciones, 516 casos en mawk, gawk, `gawk --posix` y busybox, N1–N23 muertos, CHK-08 ×2 con 204 |
 | 3 | `qa-automation-engineer` | `com.demo.contract` con CT-01 a CT-07, las cuatro páginas y las 10 claves. **Cierra el pendiente 1** | CHK-01, 03, 07 y 17; CHK-08 ×2 (`Tests run` + 7); cada CT sola (`-Dtest=…#método`); las 7 en Firefox local; tiempo de la clase en los dos navegadores; MC-1, MC-2, MC-3, MC-5 (sobre la guarda de `clicNativoUnicoHastaCumplir`) y MC-6 en rojo; las filas de D6 a) de CT-01 a CT-07 en rojo | Hecho en `409b427` (2026-10-13; integrado por devops, evidencia del engineer) |
 | 4 | `qa-automation-engineer` | `ClicNativoUnico` y sus pruebas (UC-01 a UC-10), el cableado de `Navegador` y CT-08. **Cierra el P2.** Gate CRÍTICO (`src/main/java/com/demo/config/` y `transport`) | CT-08 en rojo con el `Navegador` anterior y en verde después; CHK-01, 03, 07, 15, 16 y 17; CHK-08 ×2; CHK-11 ≥ 80 % con la guarda en 0 y `ClicNativoUnico` sin sobrevivientes sin justificar; D6 del ADR-001 sigue en `BUILD FAILURE`; MC-4, MC-5 (sobre `sondear`), MC-7 y MC-8 en rojo; CHK-09 y CHK-10 de `@AC-LOGIN-01` (`click(By)`) y de `@AC-COMPRA-03` (tramitar) | Hecho en `aa3cda5` (2026-10-13; integrado por devops, evidencia del engineer) |
-| 5 | `devops-engineer` | `A4-D6` y su caso (517), y en el bloque de D7 del ADR-002 la línea de directorios con `"$CT"`, sin el comentario provisional; CHK-20 con su autoprueba; jobs `test` y `e2e-firefox` (CHK-20 y el `-Dtest` de Firefox), `mutation` (autoprueba de CHK-20) y Jenkins (`Test` y la autoprueba) | CHK-17 y su autoprueba en 0; N24 muere; CHK-20 en 0 sobre un CHK-08 real y en 1 con el include quitado (control negativo local, sin commit); autoprueba de CHK-20 en 0; CHK-13; `e2e-firefox` en verde con el contrato en su reporte (según el usuario) | Hecho en local (2026-10-13, devops, commit siguiente a `aa3cda5`); falta el run remoto de `e2e-firefox` (según el usuario) |
-| 6 | Usuario | Grupo B; `README.md` y `AGENTS.md` (quien designe) | — | Pendiente |
-| 7 | `qa-test-verifier` | *Criterio de verificación* completo | APROBADO | Pendiente |
+| 5 | `devops-engineer` | `A4-D6` y su caso (517), y en el bloque de D7 del ADR-002 la línea de directorios con `"$CT"`, sin el comentario provisional; CHK-20 con su autoprueba; jobs `test` y `e2e-firefox` (CHK-20 y el `-Dtest` de Firefox), `mutation` (autoprueba de CHK-20) y Jenkins (`Test` y la autoprueba) | CHK-17 y su autoprueba en 0; N24 muere; CHK-20 en 0 sobre un CHK-08 real y en 1 con el include quitado (control negativo local, sin commit); autoprueba de CHK-20 en 0; CHK-13; `e2e-firefox` en verde con el contrato en su reporte (según el usuario) | Hecho en `dcd2aaf` (2026-10-13): 517 casos en CHK-17, N24 muerto; CHK-20 con 36 casos en su autoprueba (D5, *Decisiones de implementación*); CHK-08 ×2 con 222, y CHK-19 y CHK-20 en 0; sin el include, CHK-20 en 1 (según el mensaje del commit). Falta el run remoto de `e2e-firefox` (según el usuario) |
+| 6 | Usuario | Grupo B; `README.md` y `AGENTS.md` (quien designe) | — | Hecho en `4ccb344` (grupo B, `README.md` y `AGENTS.md`) |
+| 7 | `qa-test-verifier` | *Criterio de verificación* completo | APROBADO | En verificación (2026-10-13) |
 
 ## Criterio de verificación
 

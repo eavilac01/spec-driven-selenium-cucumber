@@ -1,6 +1,6 @@
 # ADR-003 — Fuentes de configuración de los valores esperados y de los destinos de red
 
-- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). Se propuso el mismo día con D1 a D4; D5 incorpora la decisión del usuario sobre R-3, tomada en la conversación el 2026-10-13. Está completamente implementado desde el 2026-10-13 (*Enmiendas*, paso 3). Su último P2, R-2, está implementado en `3be5956` como CHK-19 y cerrado con el control real con Maven del gate de `3bab4b2` (*Enmiendas*, *R-2 implementado*). *(Enmienda 2026-10-13, D6, propuesta: cada destino de red deja en el log su fuente y su host, y CHK-19 exige la fuente esperada en cada job. Ver *Enmiendas*, *D6*.)*
+- **Estado:** Aceptado (aprobado por el coordinador, 2026-10-13). Se propuso el mismo día con D1 a D4; D5 incorpora la decisión del usuario sobre R-3, tomada en la conversación el 2026-10-13. Está completamente implementado desde el 2026-10-13 (*Enmiendas*, paso 3). Su último P2, R-2, está implementado en `3be5956` como CHK-19 y cerrado con el control real con Maven del gate de `3bab4b2` (*Enmiendas*, *R-2 implementado*). *(Enmienda 2026-10-13, D6, aprobada por el coordinador: cada destino de red deja en el log su fuente y su host, y CHK-19 exige la fuente esperada en cada job. Paso 1 en `02cf8fe` y paso 3 en `ec18ce3`; G8 pendiente del run remoto. Ver *Enmiendas*, *D6*, *Estado*.)*
 - **Fecha:** 2026-10-13
 - **Autor:** `qa-automation-architect`
 - **Aprueba:** coordinador (Regla 01, nivel 2). `AGENTS.md` y `.claude/rules/` los cambia el usuario (P-01, PI-07). `README.md` no tiene dueño en la matriz: el usuario designa quién lo edita.
@@ -320,11 +320,13 @@ Las decisiones no cambian: D3 sigue siendo un aviso en el log, y R-2 lo conviert
 - D5 deja los destinos de red sin aviso cuando gana `-D`: `-Dremote.url` es el uso normal del job `e2e-grid`, y PI-08 admite `-Dbase.url` en el comando.
 - Dentro del JVM no se distingue un `-D` escrito en el comando de uno que llegó por `MAVEN_ARGS`, `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS` o `JDK_JAVA_OPTIONS` (*Contexto*).
 - Por eso, una variable de entorno de un agente puede llevar la suite a otro host, con las credenciales y la sesión, y el run queda en verde sin rastro. CHK-19 solo mira los esperados.
-- **Hallazgo: CHK-19 tampoco es robusto para los esperados.** Exige la *ausencia* de un WARN, y el mismo canal puede quitarlo. Según la documentación de slf4j-simple y de Surefire (no se ejecutó aquí, B-01), hay dos formas:
-  - `-Dorg.slf4j.simpleLogger.defaultLogLevel=error`: slf4j-simple lee su nivel de las propiedades del sistema;
-  - `-Dmaven.test.redirectTestOutputToFile=true`: Surefire manda la salida del fork a `target/surefire-reports`.
+- **Hallazgo: CHK-19 tampoco es robusto para los esperados.** Exige la *ausencia* de un WARN, y el mismo canal puede quitarlo sin quitar la línea `Tests run` de `RunnerTest`, que escribe Maven y no el fork. El control G7 (gate de devops del paso 3, `ec18ce3`) lo confirma en dos formas y lo descarta en una. En cada una se sobrescribió un esperado con su mismo valor (`-Dinventory.expected.title=Products`):
+  - **G7b, lo reproduce.** `-Dmaven.test.redirectTestOutputToFile=true`: Surefire manda la salida del fork a `target/surefire-reports`, así que el WARN no llega al log y `Tests run` sí. El script de `4b91990` da 0.
+  - **G7c, lo reproduce.** El nivel `error` solo para el logger `com.demo.utils.ConfigReader` (propiedad `org.slf4j.simpleLogger.log.<logger>` de slf4j-simple) quita el WARN y deja el resto del log. El script de `4b91990` da 0.
+  - **G7a, no lo reproduce.** `-Dorg.slf4j.simpleLogger.defaultLogLevel=error` también baja el nivel del slf4j-simple del propio Maven, y desaparece su línea INFO `Tests run … RunnerTest`. El script de `4b91990` ya daba 2: falla cerrado.
+  - Con el script de D6, los tres dan 2, porque faltan las líneas de destino (presencia).
 
-  En los dos casos el log conserva la línea `Tests run` de `RunnerTest`, porque la escribe Maven y no el fork, así que CHK-19 daría 0 con un esperado sobrescrito. El control G7 lo confirma o lo refuta.
+  *(Redacción corregida el 2026-10-13 con los resultados de G7. La propuesta decía, según la documentación y sin ejecutar nada (B-01), que el nivel general y la salida redirigida conservaban los dos la línea `Tests run`. Lo segundo es cierto, lo primero no. El nivel solo para `ConfigReader` no estaba en la lista.)*
 
 *Decisión: la opción (a), con el host y con presencia obligatoria.*
 
@@ -415,14 +417,14 @@ Las decisiones no cambian: D3 sigue siendo un aviso en el log, y R-2 lo conviert
 |---|---|---|---|
 | S-1 | El INFO de `ConfigReader` en el fork llega al log de Maven por el mismo camino que el WARN de D3 | El control real de R-2 (gate de `3bab4b2`): CHK-19 nombró la clave a partir de ese WARN. Mismo logger y mismo flujo | CHK-19 da 2 en todos los jobs (falla cerrado). Se revisa el destino de slf4j-simple |
 | S-2 | `MAVEN_ARGS`, `JAVA_TOOL_OPTIONS`, `JDK_JAVA_OPTIONS` y `_JAVA_OPTIONS` llegan al fork como propiedades del sistema | Documentación de Maven 3.9 y del JDK. Lo demuestran por primera vez los controles G3 a G5 | Si un canal no llega al fork, no puede cambiar el destino. G3 a G5 lo dejan escrito |
-| S-3 | Un nivel de log o una salida redirigida ocultan hoy el aviso de D3 sin quitar `Tests run` (*Hueco*) | Control G7, con el script de `4b91990` y con el nuevo | Si no lo ocultan, el hallazgo era falso, pero la presencia sigue siendo necesaria para fallar cerrado |
+| S-3 | Un nivel de log o una salida redirigida ocultan hoy el aviso de D3 sin quitar `Tests run` (*Hueco*) | Control G7, con el script de `4b91990` y con el nuevo. **Confirmado en parte** (`ec18ce3`): lo reproducen G7b (salida del fork redirigida) y G7c (nivel `error` solo para `ConfigReader`), con el script de `4b91990` en 0 y el nuevo en 2. G7a (nivel general `error`) no lo reproduce: también quita la línea `Tests run` de Maven, y el script de `4b91990` ya daba 2 | Si no lo ocultan, el hallazgo era falso, pero la presencia sigue siendo necesaria para fallar cerrado. *(No aplica: el hallazgo se confirmó con G7b y G7c, y D6 no cambia.)* |
 
 *Riesgo residual aceptado:*
 - Un cambio versionado de la bandera, de `config.properties` o del código. Lo ve la revisión (Regla 02, *Límite honesto*).
 - La ruta de red, que no es el destino declarado: los proxies del JVM (`https.proxyHost`) o del sistema (`HTTPS_PROXY`) y la resolución de nombres. D6 registra adónde se pide ir, no por dónde pasa el tráfico. Ninguna de las opciones (a) a (c) lo vería.
 - Un nivel de log por encima de INFO puesto a propósito y versionado (por ejemplo, con un `simplelogger.properties`). CHK-19 da 2 y hay que enmendar D6. Es un falso positivo que falla cerrado.
 
-*P2 relacionado, fuera de D6 (`qa-automation-engineer`):* `BrowserSettings.toUrl` compone su error con la `remote.url` completa (`'%s'`). Con una URL de Grid que llevara la clave en el usuario y fuera inválida, el mensaje la imprimiría (PI-09). Hoy ninguna URL lleva usuario, así que no se explota. Se podría usar la misma descripción del host.
+*P2 relacionado, fuera de D6 (`qa-automation-engineer`):* `BrowserSettings.toUrl` compone su error con la `remote.url` completa (`'%s'`). Con una URL de Grid que llevara la clave en el usuario y fuera inválida, el mensaje la imprimiría (PI-09). Hoy ninguna URL lleva usuario, así que no se explota. Se podría usar la misma descripción del host. *(Cerrado en `02cf8fe`: `toUrl` usa `describeHost`. Ver D6, *Dónde vive*.)*
 
 *Migración* (cada paso deja la suite en verde):
 
@@ -560,7 +562,7 @@ Las decisiones no cambian: D3 sigue siendo un aviso en el log, y R-2 lo conviert
 | G7 | `-Dinventory.expected.title=Products` (el valor del archivo) con `-Dorg.slf4j.simpleLogger.defaultLogLevel=error`; y aparte, con `-Dmaven.test.redirectTestOutputToFile=true` | Maven en verde. El script de `4b91990` da 0 (el hueco); el nuevo, 2 (sin líneas de destino) |
 | G8 | Run de GitHub Actions con los cinco jobs que corren CHK-19 o su autoprueba | En verde (según el usuario) |
 
-Si G7 no reproduce el hueco (el script de `4b91990` da 1 o 2), se informa al arquitecto: el hallazgo de *Hueco* era falso, pero D6 no cambia (S-3).
+Si G7 no reproduce el hueco (el script de `4b91990` da 1 o 2), se informa al arquitecto: el hallazgo de *Hueco* era falso, pero D6 no cambia (S-3). *(Resultado en `ec18ce3`: G7a no lo reproduce y G7b y G7c sí; ver *Hueco*, S-3 y *Estado*.)*
 
 *Textos* (usuario, P-01; `README.md` y `AGENTS.md`, quien designe el usuario):
 - `.claude/rules/04-quality-checks.md`, fila CHK-19:
@@ -589,3 +591,16 @@ Si G7 no reproduce el hueco (el script de `4b91990` da 1 o 2), se informa al arq
   Por eso la tabla de expectativas lleva una sola bandera.
 - `git grep -n -F "Destino de red '" HEAD -- src scripts .github Jenkinsfile`: sin salida (rc=1). La marca, con su comilla, no choca con ningún texto vigente. Sin la comilla aparece en el Javadoc de `NETWORK_DESTINATION_KEY` (`ConfigResolver.java:28`), que no llega al log.
 - `git grep -n -F 'Sin esperados sobrescritos por -D (ADR-003, R-2)' HEAD -- .github/workflows/ci.yml`: `:95`, `:161`, `:242` y `:434`, en los jobs `test`, `e2e-firefox`, `e2e-grid` y `quarantine`. Las etapas `Test` y `Cuarentena (CHK-14)` del `Jenkinsfile` llaman al control con un solo argumento, el log.
+
+*Estado (2026-10-13; según el coordinador y los mensajes de los commits, no se ejecutó aquí, B-01):*
+- **Paso 0:** aprobada por el coordinador.
+- **Paso 1: hecho en `02cf8fe`** (`qa-automation-engineer`). Incluye `describeHost` como `public static` y los mensajes del transporte solo con el host (D6, *Dónde vive*; ADR-002, D1, parte 6).
+- **Paso 3: hecho en `ec18ce3`** (`devops-engineer`): el script, su autoprueba y `--destino-d remote.url=localhost:4444` en `e2e-grid`. Resultados de los controles:
+  - G1: 67 casos en la autoprueba, todos en verde;
+  - sabotaje C1–C21 (22 mutantes, con C14a y C14b): ninguno vivo;
+  - G2: 0;
+  - G3, G4 y G5: 1 con el script nuevo y 0 con el de `4b91990`;
+  - G6: 0, 1 y 1;
+  - G7: G7b y G7c dan 0 con el script de `4b91990` y 2 con el nuevo; G7a da 2 con los dos (*Hueco* y S-3).
+- **G8: pendiente** del run remoto de GitHub Actions (lo confirma el usuario).
+- **Paso 4** (textos de la Regla 04, `README.md` y `AGENTS.md`): lo registra el coordinador cuando se apliquen.
