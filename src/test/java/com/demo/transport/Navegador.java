@@ -90,7 +90,8 @@ public final class Navegador {
     /**
      * Abre la URL y falla de inmediato si el navegador responde con su propia página de error
      * (Chrome: documento {@code neterror}; Firefox: {@code about:neterror}). No reintenta. El mensaje
-     * incluye la URL solicitada y, si es válido, el código {@code net::ERR_…}; nunca texto de la página.
+     * lleva solo el host de la URL solicitada ({@code ConfigResolver.describeHost}, PI-09) y, si es válido, el
+     * código {@code net::ERR_…}; nunca el resto de la URL ni texto de la página.
      */
     public void abrir(String url) {
         verificarIniciado();
