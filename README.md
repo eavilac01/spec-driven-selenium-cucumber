@@ -104,34 +104,114 @@ Las versiones de Cucumber y JUnit se administran con sus respectivos BOM en `dep
 
 ## Arquitectura por capas
 
-Cada flecha del diagrama es una **dependencia autorizada** por el [ADR-002](docs/adr/002-transport-and-business-actions.md). Cualquier otra —un step que importe una página, Selenium fuera de `transport`— la rechaza **CHK-17** en cada ejecución del CI.
+La arquitectura se describe en tres vistas, de lo general a lo particular:
+
+1. **Contexto:** con qué sistemas externos habla el framework.
+2. **Capas:** cómo se organiza el código y qué dependencias están autorizadas.
+3. **Cadena de calidad:** qué controles recorre un cambio hasta llegar a `main`.
+
+Las decisiones que las sostienen están en los ADR de [`docs/adr/`](docs/adr/).
+
+### Vista de contexto
+
+```mermaid
+flowchart LR
+    qa(["<b>Equipo QA</b><br/>y contribuidores"])
+    agents["<b>Equipo de agentes QE</b><br/>Claude Code · .claude/<br/>reglas, permisos y hooks"]
+
+    subgraph REPO["Repositorio · GitHub"]
+        direction TB
+        fw["<b>spec-driven-selenium-cucumber</b><br/>Java 17 · Selenium 4 · Cucumber 7 · JUnit 5"]
+        docs["<b>docs/</b><br/>specs aprobadas · ADR · cuarentena"]
+    end
+
+    subgraph CI["Integración continua"]
+        direction TB
+        gha["<b>GitHub Actions</b><br/>6 jobs · checks requeridos en main"]
+        jenkins["<b>Jenkins</b><br/>Jenkinsfile equivalente"]
+    end
+
+    subgraph EXT["Servicios externos"]
+        direction TB
+        sut[("<b>SauceDemo</b><br/>sistema bajo prueba")]
+        grid[("<b>Selenium Grid</b><br/>Docker, imagen por digest")]
+        central[("<b>Maven Central</b><br/>Maven 3.9.9 con checksum<br/>y dependencias")]
+    end
+
+    reports[["<b>Evidencia</b><br/>Cucumber HTML · Allure<br/>Surefire · PIT"]]
+
+    qa -->|spec, PR y revisión| REPO
+    agents -->|delegación con gate y control negativo| REPO
+    docs -.->|rige| fw
+    REPO -->|push / pull request| gha
+    REPO -->|pipeline| jenkins
+    fw ==>|HTTPS · navegador real| sut
+    fw -.->|remote.url| grid
+    grid ==> sut
+    gha & jenkins -.->|./mvnw| central
+    gha & jenkins -->|publican| reports
+
+    classDef actor fill:#FFFFFF,stroke:#0F172A,stroke-width:1.5px,color:#0F172A
+    classDef core fill:#FFFFFF,stroke:#1D4ED8,stroke-width:3px,color:#0F172A
+    classDef neutral fill:#FFFFFF,stroke:#94A3B8,stroke-width:1px,color:#0F172A
+    classDef external fill:#0F172A,stroke:#0F172A,color:#FFFFFF
+    class qa,agents actor
+    class fw core
+    class docs,gha,jenkins,reports neutral
+    class sut,grid,central external
+    style REPO fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+    style CI fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+    style EXT fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+```
+
+**Sin salidas de red no autorizadas:**
+- La única URL del SUT es `base.url` (PI-08).
+- Selenium Manager no envía telemetría (`SE_AVOID_STATS=true`).
+- Chrome no consulta el servicio de contraseñas filtradas (ADR-002, D8).
+- Las pruebas de contrato del transporte usan páginas locales `file:`, sin red (ADR-004).
+
+### Vista de capas
+
+Cada flecha del diagrama es una **dependencia autorizada** por el [ADR-002](docs/adr/002-transport-and-business-actions.md) (D4) y el [ADR-004](docs/adr/004-transport-contract-tests.md). Cualquier otra la rechaza **CHK-17** en cada ejecución del CI, por ejemplo:
+- un step que importe una página;
+- Selenium fuera de `transport`;
+- un segundo clic nativo;
+- una clase que nombre `contract`.
 
 ```mermaid
 flowchart TB
-    subgraph SDD["Especificación · SDD"]
+    subgraph SDD["Especificación · SDD (Regla 01)"]
         direction TB
         spec["<b>Spec aprobada</b><br/>criterios AC con su ID<br/>docs/specs"]
         feat["<b>features</b><br/>Gherkin con @AC- y @tec-<br/>src/test/resources/features"]
     end
 
-    runner["<b>runners · RunnerTest</b><br/>JUnit Platform Suite + Cucumber"]
+    subgraph ORQ["Orquestación y contrato · capa 5"]
+        direction TB
+        runner["<b>runners · RunnerTest</b><br/>JUnit Platform Suite + Cucumber"]
+        hooks["<b>hooks</b><br/>inician, capturan y cierran"]
+        contract["<b>contract</b> · ADR-004<br/>pruebas JUnit de Navegador<br/>contra páginas locales"]
+    end
 
     subgraph CAPAS["Capas de ejecución · verificadas por CHK-17"]
         direction TB
         steps["<b>steps</b><br/>aserciones contra valores esperados"]
         actions["<b>actions</b><br/>flujos de negocio, sin aserciones"]
         pages["<b>pages</b><br/>estado y localizadores · solo By"]
-        transport["<b>transport · Navegador</b><br/>único dueño del WebDriver y de las esperas"]
+        transport["<b>transport · Navegador</b><br/>único dueño del WebDriver y de las esperas<br/>un clic y una escritura nativos por acción<br/><b>DriverFactory</b>: Chrome, Firefox o Grid"]
     end
 
     selenium[("<b>Selenium WebDriver</b><br/>Chrome · Firefox · Grid")]
 
-    subgraph SOPORTE["Soporte"]
+    subgraph SOPORTE["Soporte · datos y configuración (capa 4)"]
         direction TB
-        utils["<b>utils · fachadas</b><br/>leen entorno, .env y config"]
-        pure["<b>src/main · lógica pura</b><br/>sin E/S ni Selenium · PIT 89/89"]
-        hooks["<b>hooks</b><br/>inician, capturan y cierran"]
+        utils["<b>utils · fachadas</b><br/>ConfigReader · SecretReader<br/>CredentialsProvider · TestContext<br/>leen entorno, .env y config"]
+        pure["<b>src/main · lógica pura</b><br/>config: ConfigResolver · BrowserSettings<br/>BrowserErrorPage · ClicNativoUnico<br/>data: Credentials<br/>sin E/S ni Selenium · mutada por PIT"]
+        props[/"<b>config.properties</b> · URL, rutas y *.expected*<br/><b>.env</b> o Secrets · credenciales"/]
     end
+
+    sut[("<b>SauceDemo</b><br/>base.url")]
+    localpages[/"<b>Páginas locales</b><br/>src/test/resources/contract · file:"/]
 
     spec -->|deriva| feat
     feat ==>|enlaza| steps
@@ -140,9 +220,15 @@ flowchart TB
     actions ==>|orquesta| pages
     pages ==>|solo vía Navegador| transport
     transport ==>|controla| selenium
+    selenium ==>|HTTPS| sut
     steps -.->|configura| utils
     utils -.->|delega| pure
+    utils -.->|lee| props
+    pages -.->|rutas y textos| utils
+    transport -.->|configuración, describeHost<br/>y ClicNativoUnico| pure
     hooks -.->|ciclo de vida| transport
+    contract ==>|API pública| transport
+    contract -.->|abre| localpages
 
     classDef layer fill:#FFFFFF,stroke:#1D4ED8,stroke-width:1.5px,color:#0F172A
     classDef owner fill:#FFFFFF,stroke:#1D4ED8,stroke-width:3px,color:#0F172A
@@ -150,14 +236,15 @@ flowchart TB
     classDef driver fill:#0F172A,stroke:#0F172A,color:#FFFFFF
     class steps,actions,pages layer
     class transport owner
-    class spec,feat,runner,utils,pure,hooks neutral
-    class selenium driver
+    class spec,feat,runner,utils,pure,hooks,contract,props,localpages neutral
+    class selenium,sut driver
     style CAPAS fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
     style SDD fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+    style ORQ fill:#F5F6F8,stroke:#D5DAE1,color:#334155
     style SOPORTE fill:#F5F6F8,stroke:#D5DAE1,color:#334155
 ```
 
-> Flechas gruesas: cadena de ejecución de un escenario. Flechas punteadas: soporte (descubrimiento, configuración y ciclo de vida).
+> Flechas gruesas: cadena de ejecución de un escenario y de una prueba de contrato. Flechas punteadas: soporte (descubrimiento, configuración, datos y ciclo de vida). Ningún paquete nombra `contract`, y `contract` solo nombra `transport` y `ConfigReader`.
 
 ### Responsabilidad de cada capa
 
@@ -167,10 +254,12 @@ flowchart TB
 | Steps | `com.demo.steps` | Aserciones JUnit 5 contra valores esperados de configuración | `actions`, `utils`, `data` | Importar páginas, `transport` ni Selenium |
 | Acciones | `com.demo.actions` | Flujos de negocio entre páginas; devuelven lo observado | `pages`, `data` | Aserciones, lectura de valores esperados, páginas en sus firmas públicas, herencia |
 | Páginas | `com.demo.pages` | Estado y localizadores de cada vista, por composición | `transport`, `ConfigReader` | Selenium distinto de `By`, aserciones, herencia |
-| Transporte | `com.demo.transport` | `Navegador`: único dueño del `WebDriver`, esperas explícitas y postcondiciones | `utils`, `config` | Lógica de negocio, tipos de Selenium en sus firmas públicas (`By` solo como parámetro), imports de Selenium con comodín, herencia |
+| Transporte | `com.demo.transport` | `Navegador`: único dueño del `WebDriver`, esperas explícitas y postcondiciones, con un solo clic y una sola escritura nativos por acción. `DriverFactory`: Chrome, Firefox o Grid, con las preferencias de D8 | `utils` (solo `ConfigReader`), `config` | Lógica de negocio, tipos de Selenium en sus firmas públicas (`By` solo como parámetro), imports de Selenium con comodín, herencia |
 | Fachadas | `com.demo.utils` | Leen entorno, `.env` y `config.properties`; delegan en `src/main` | `config`, `data` | Depender de capas superiores, herencia |
-| Lógica pura | `com.demo.config`, `com.demo.data` (`src/main`) | Resolución de configuración, secretos, credenciales y navegador | Solo entre sí | E/S, Selenium, Cucumber, JUnit |
+| Lógica pura | `com.demo.config`, `com.demo.data` (`src/main`) | Resolución de configuración y de su fuente, secretos, credenciales, opciones y preferencias del navegador (D8), páginas de error de Chrome, el clic nativo único (`ClicNativoUnico`, ADR-004) y `describeHost`, la única regla para nombrar una URL en un log (PI-09) | Solo entre sí | E/S, Selenium, Cucumber, JUnit |
 | Hooks | `com.demo.hooks` | Inician el navegador, adjuntan la captura si falla y lo cierran | `transport`, `utils` | Reglas de negocio |
+| Runners | `com.demo.runners` | `RunnerTest`: JUnit Platform Suite que ejecuta Cucumber con su glue y sus plugins | Ninguno: el glue se declara como texto | Lógica de prueba |
+| Contrato del transporte | `com.demo.contract` (ADR-004) | Pruebas JUnit de la API pública de `Navegador` contra páginas locales estáticas (`src/test/resources/contract`, por `file:`): clic único, pista de D8 y fallo cerrado | `transport`, `ConfigReader` | Selenium distinto de `By`, red, `base.url`/`remote.url`, temporizadores o eventos sintéticos en sus páginas; ningún otro paquete la nombra |
 
 ### Garantías automáticas
 
@@ -184,63 +273,172 @@ flowchart TB
 | **CHK-18** · `scripts/check-awk-portability.sh` y `scripts/run-with-each-awk.sh` | Scripts que solo funcionan con una implementación de awk (en el runner de GitHub `awk` es gawk; en Ubuntu de escritorio, mawk): control estático y autopruebas con mawk, gawk y `gawk --posix` | CI (job `mutation`, exige las tres) y Jenkins (con los awk del agente) |
 | **CHK-19** · `scripts/check-no-expected-override.sh` | Una ejecución E2E en verde contra un valor esperado inyectado por `-D` (por ejemplo desde `MAVEN_ARGS`): si el log trae el aviso de `ConfigReader`, el job falla (ADR-003, R-2) | CI (`test`, `e2e-firefox`, `e2e-grid`, `quarantine`; autoprueba en `mutation`) y Jenkins (`Test`, `Cuarentena (CHK-14)`) |
 
+### Cadena de calidad: de un cambio a `main`
+
+```mermaid
+flowchart LR
+    subgraph LOCAL["Local · equipo de agentes"]
+        direction TB
+        change["<b>Cambio</b><br/>spec → feature → código<br/>o ADR → código"]
+        verifier["<b>Verificador independiente</b><br/>control negativo · mutación<br/>sin permisos de escritura"]
+        gate["<b>Gate DevOps</b><br/>CHK-01…19 · CHK-08 ×2<br/>.claude/devops-gate.json"]
+        hook{{"<b>Hook de push</b><br/>sin gate APROBADO<br/>sobre HEAD: bloqueado"}}
+    end
+
+    subgraph GH["GitHub"]
+        direction TB
+        branch["<b>Rama</b><br/>commits firmados"]
+        pr["<b>Pull request</b><br/>plantilla con trazabilidad y CHK"]
+        actions["<b>GitHub Actions</b><br/>test · e2e-firefox · e2e-grid<br/>mutation · quarantine"]
+        ruleset{{"<b>Ruleset proteger-main</b><br/>5 checks en verde · firmas<br/>sin force push ni push directo"}}
+        main[("<b>main</b>")]
+    end
+
+    change --> verifier --> gate --> hook
+    hook -->|git push| branch --> pr --> actions --> ruleset -->|merge commit| main
+
+    classDef step fill:#FFFFFF,stroke:#94A3B8,stroke-width:1px,color:#0F172A
+    classDef control fill:#FFFFFF,stroke:#1D4ED8,stroke-width:3px,color:#0F172A
+    classDef target fill:#0F172A,stroke:#0F172A,color:#FFFFFF
+    class change,branch,pr,actions step
+    class verifier,gate,hook,ruleset control
+    class main target
+    style LOCAL fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+    style GH fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+```
+
+> En los pull requests de forks, los E2E se omiten porque no reciben secrets (`fork-pr-notice`), y un mantenedor los ejecuta antes de aprobar. Jenkins reproduce los jobs `test`, `mutation` y `quarantine` (ver [Jenkins](#jenkins)).
+
 Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-002](docs/adr/002-transport-and-business-actions.md); la decisión de mutar solo la lógica pura, en el [ADR-001](docs/adr/001-mutation-testing-pit.md); y las fuentes permitidas para los valores esperados y las URL, en el [ADR-003](docs/adr/003-expected-values-config-sources.md).
 
 ## Estructura del proyecto
 
+### Mapa del repositorio y sus dueños
+
+Cada parte del repositorio tiene **un dueño** que puede escribirla. Los demás solo la leen y le devuelven el trabajo por handoff ([Regla 02](.claude/rules/02-agent-permissions.md)). Las flechas indican qué artefacto origina a cuál.
+
+```mermaid
+flowchart LR
+    subgraph USR["Usuario (autor del repositorio)"]
+        direction TB
+        cfg[".claude/ · CLAUDE.md · AGENTS.md<br/>reglas, agentes, hooks y permisos"]
+        approve["Aprobación de specs<br/>y de PR"]
+    end
+
+    subgraph ARQ["qa-automation-architect"]
+        adr["docs/adr/<br/>ADR-001 … ADR-004"]
+    end
+
+    subgraph DIS["qa-test-designer"]
+        specs["docs/specs/<br/>login · compra"]
+        features["src/test/resources/features/"]
+    end
+
+    subgraph ENG["qa-automation-engineer"]
+        direction TB
+        main["src/main/java<br/>lógica pura"]
+        test["src/test/java<br/>capas, unitarias y contrato"]
+        res["config.properties · contract/<br/>.env.example"]
+    end
+
+    subgraph OPS["devops-engineer"]
+        direction TB
+        ci[".github/ · Jenkinsfile<br/>docker-compose.yml"]
+        build["pom.xml (plugins) · .mvn/wrapper/<br/>junit-platform.properties"]
+        scripts["scripts/ · docs/quarantine.md<br/>.claude/devops-gate.json"]
+    end
+
+    subgraph VER["qa-test-verifier"]
+        ver["Solo lee y ejecuta<br/>veredicto independiente"]
+    end
+
+    coord["<b>Coordinador</b><br/>MEMORY.md · README.md<br/>CONTRIBUTING.md · SECURITY.md"]
+
+    approve -->|aprueba| specs
+    specs -->|deriva| features
+    features -->|SDD-02| test
+    adr -->|aplica| test
+    adr -->|aplica| scripts
+    test -.->|revisa| ver
+    ver -.->|APROBADO| scripts
+    coord -.->|delega| ARQ & DIS & ENG & OPS & VER
+
+    classDef box fill:#FFFFFF,stroke:#94A3B8,stroke-width:1px,color:#0F172A
+    classDef lead fill:#FFFFFF,stroke:#1D4ED8,stroke-width:3px,color:#0F172A
+    class cfg,approve,adr,specs,features,main,test,res,ci,build,scripts,ver box
+    class coord lead
+    style USR fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+    style ARQ fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+    style DIS fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+    style ENG fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+    style OPS fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+    style VER fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+```
+
+### Árbol de archivos
+
 ```text
 .
-├── .claude
-│   ├── agents/          # equipo de agentes QE (ver README interno)
-│   ├── rules/           # SDD, permisos, prompt injection, CHK
-│   ├── hooks/           # gate DevOps y protección de .claude/**, CLAUDE.md, MEMORY.md, AGENTS.md y .github/** frente a escrituras por Bash (+ pruebas)
-│   └── settings.json
-├── .env.example
+├── .claude                      # configuración del equipo de agentes (la cambia solo el usuario)
+│   ├── agents/                  # README del equipo y los 5 agentes:
+│   │                            #   qa-automation-architect, qa-test-designer, qa-automation-engineer,
+│   │                            #   qa-test-verifier y devops-engineer
+│   ├── rules/                   # 01 SDD · 02 permisos · 03 prompt injection · 04 catálogo CHK-01…19
+│   ├── hooks
+│   │   ├── devops-gate-hook.sh      # bloquea git push sin .claude/devops-gate.json APROBADO sobre HEAD
+│   │   ├── protect-config-hook.sh   # bloquea escrituras por Bash en .claude/**, CLAUDE.md, MEMORY.md,
+│   │   │                            # AGENTS.md y .github/** (solo Edit/Write, con confirmación)
+│   │   └── tests/                   # batería del hook de protección
+│   └── settings.json            # permisos (deny/ask) y registro de los hooks
 ├── .github
-│   ├── workflows/ci.yml
-│   ├── ISSUE_TEMPLATE/   # defecto del framework y divergencia sistema/spec
-│   └── PULL_REQUEST_TEMPLATE.md
-├── CONTRIBUTING.md      # flujo SDD, comprobaciones locales y PR de forks
-├── SECURITY.md          # reporte privado de vulnerabilidades y alcance
-├── .mvn/wrapper/maven-wrapper.properties
-├── AGENTS.md
-├── CLAUDE.md
-├── MEMORY.md
-├── Jenkinsfile
-├── LICENSE
-├── README.md
-├── .gitignore
-├── docker-compose.yml
+│   ├── workflows/ci.yml         # 6 jobs; acciones fijadas por SHA e imagen del Grid por digest
+│   ├── ISSUE_TEMPLATE/          # defecto del framework · divergencia sistema/spec · enlace al reporte privado
+│   └── PULL_REQUEST_TEMPLATE.md # trazabilidad (spec, AC, ADR) y CHK ejecutadas
+├── .mvn/wrapper/maven-wrapper.properties   # Maven 3.9.9 con distributionSha256Sum
+├── .env.example                 # nombres de las 6 variables de credenciales, sin valores
+├── .gitattributes · .gitignore
+├── AGENTS.md                    # guía para cualquier agente de código
+├── CLAUDE.md                    # coordinación del equipo y reglas obligatorias
+├── MEMORY.md                    # estado, decisiones y próximos pasos entre sesiones
+├── CONTRIBUTING.md              # flujo SDD, comprobaciones locales y PR de forks
+├── SECURITY.md                  # reporte privado de vulnerabilidades y alcance
+├── README.md · LICENSE (MIT)
+├── Jenkinsfile                  # pipeline equivalente a test, mutation y quarantine (verificado en Jenkins real)
+├── docker-compose.yml           # Selenium Grid local: hub + nodo Chrome, por digest
+├── mvnw / mvnw.cmd · pom.xml    # Maven Wrapper y build (Surefire, PIT, SE_AVOID_STATS)
 ├── docs
 │   ├── adr
-│   │   ├── 001-mutation-testing-pit.md
-│   │   ├── 002-transport-and-business-actions.md
-│   │   └── 003-expected-values-config-sources.md
-│   ├── quarantine.md    # registro de la cuarentena reglada (CHK-14)
-│   └── specs/           # _plantilla.md, login.md, compra.md
-├── mvnw / mvnw.cmd
-├── pom.xml
+│   │   ├── 001-mutation-testing-pit.md                 # PIT solo sobre la lógica pura
+│   │   ├── 002-transport-and-business-actions.md       # capas, transporte y reglas de CHK-17
+│   │   ├── 003-expected-values-config-sources.md       # fuentes de esperados y URL; CHK-19
+│   │   └── 004-transport-contract-tests.md             # pruebas de contrato del transporte; ClicNativoUnico
+│   ├── quarantine.md            # registro de la cuarentena reglada (CHK-14)
+│   └── specs/                   # _plantilla.md · login.md · compra.md (aprobadas)
 ├── scripts
-│   ├── check-awk-portability.sh   # CHK-18: construcciones exclusivas de una implementación de awk
-│   ├── check-layers.sh            # CHK-17: reglas de capas
-│   ├── check-mutation-report.sh   # CHK-11: guarda del reporte de PIT
-│   ├── check-no-expected-override.sh # CHK-19: el log E2E sin esperados sobrescritos por -D
-│   ├── check-quarantine.sh        # CHK-14: registro de cuarentena frente a @quarantine
-│   ├── evaluate-quarantine-run.sh # evalúa el job quarantine (fallo esperado vs. error real)
-│   ├── check-required-secrets.sh  # CI/Jenkins: nombra los secrets que faltan
-│   ├── check-traceability.sh      # CHK-12: escenario → spec aprobada
-│   ├── check-unit-purity.sh       # CHK-15/16: src/main puro y unitarias aisladas
-│   ├── run-with-each-awk.sh       # CHK-18: ejecuta un comando con cada awk (mawk, gawk, gawk --posix, busybox)
-│   ├── wait-for-grid.sh           # espera activa a que el Grid esté listo
-│   └── tests/                     # autopruebas de CHK-17, CHK-14, del evaluador de cuarentena y de CHK-18
-├── src/main/java/com/demo      # lógica pura, sin E/S (ADR-001)
+│   ├── check-awk-portability.sh      # CHK-18: construcciones exclusivas de una implementación de awk
+│   ├── check-layers.sh               # CHK-17: reglas de capas (R1–R6)
+│   ├── check-mutation-report.sh      # CHK-11: guarda del reporte de PIT
+│   ├── check-no-expected-override.sh # CHK-19: esperados y destinos de red por -D, por job
+│   ├── check-quarantine.sh           # CHK-14: registro de cuarentena frente a @quarantine
+│   ├── check-required-secrets.sh     # CI/Jenkins: nombra los secrets que faltan
+│   ├── check-traceability.sh         # CHK-12: escenario → spec aprobada
+│   ├── check-unit-purity.sh          # CHK-15/16: src/main puro y unitarias aisladas
+│   ├── evaluate-quarantine-run.sh    # evalúa el job quarantine (fallo esperado vs. error real)
+│   ├── run-with-each-awk.sh          # CHK-18: ejecuta un comando con cada awk (mawk, gawk, gawk --posix, busybox)
+│   ├── wait-for-grid.sh              # espera activa a que el Grid esté listo
+│   └── tests/                        # autopruebas:
+│                                     #   check-awk-portability-test.sh · check-layers-test.sh
+│                                     #   check-no-expected-override-test.sh · check-quarantine-test.sh
+│                                     #   evaluate-quarantine-run-test.sh · run-with-each-awk-test.sh
+├── src/main/java/com/demo       # lógica pura, sin E/S ni Selenium (ADR-001); la muta PIT
 │   ├── config
-│   │   ├── BrowserErrorPage.java   # reconoce las páginas de error de Chrome (net::ERR_*)
-│   │   ├── BrowserSettings.java
-│   │   ├── ConfigResolver.java
+│   │   ├── BrowserErrorPage.java     # reconoce las páginas de error de Chrome (net::ERR_*), solo con el host
+│   │   ├── BrowserSettings.java      # opciones del navegador y preferencias de Chrome (D8)
+│   │   ├── ClicNativoUnico.java      # un clic nativo por acción; fallo cerrado si el clic lanza (ADR-004)
+│   │   ├── ConfigResolver.java       # precedencia -D > entorno > archivo (esperados y URL sin entorno), fuente y describeHost
 │   │   ├── DotEnvParser.java
 │   │   └── SecretResolver.java
-│   └── data/Credentials.java
+│   └── data/Credentials.java         # credenciales con toString enmascarado
 └── src/test
     ├── java/com/demo
     │   ├── config/      # pruebas unitarias de src/main/.../config
@@ -248,6 +446,7 @@ Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-00
     │   ├── actions
     │   │   ├── CompraActions.java
     │   │   └── LoginActions.java
+    │   ├── contract/    # pruebas de contrato de Navegador contra páginas locales (ADR-004)
     │   ├── hooks/Hooks.java
     │   ├── pages
     │   │   ├── CartPage.java
@@ -261,16 +460,17 @@ Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-00
     │   │   ├── CompraSteps.java
     │   │   └── LoginSteps.java
     │   ├── transport
-    │   │   ├── DriverFactory.java
-    │   │   └── Navegador.java
+    │   │   ├── DriverFactory.java  # Chrome, Firefox o Grid; aplica chromePreferences (D8)
+    │   │   └── Navegador.java      # único dueño del WebDriver; un clic y una escritura nativos por acción
     │   └── utils
-    │       ├── ConfigReader.java
+    │       ├── ConfigReader.java       # fachada de configuración; avisa de esperados por -D y registra destinos
     │       ├── CredentialsProvider.java
     │       ├── SecretReader.java
     │       └── TestContext.java
     └── resources
-        ├── config.properties
+        ├── config.properties           # URL, rutas, valores esperados (*.expected*) y datos no sensibles
         ├── junit-platform.properties   # paralelismo por escenario (2 hilos)
+        ├── contract/                   # páginas HTML estáticas de las pruebas de contrato (ADR-004)
         └── features
             ├── compra_e2e.feature
             └── login.feature
