@@ -86,7 +86,7 @@ Las filas marcadas registran la API pública que la tabla original no recogía; 
     - **Motivo:** el engineer demostró con un arnés que Selenium repetía la URL completa, con usuario, clave y token, en 5 casos (según el coordinador; no se ejecutó aquí, B-01). Una URL de Grid en la nube puede llevar su clave de acceso (PI-09).
     - **Coste aceptado:** en `abrir` y en el Grid se pierde el detalle del mensaje original de Selenium; queda el tipo de la excepción. El código `net::ERR_…` validado de los casos 1 y 2 no cambia.
   - **Dónde vive la lógica.** Clasificar el mensaje y la URL, validar el código y componer el mensaje es lógica pura. Vive en `src/main/java/com/demo/config/BrowserErrorPage.java`, con pruebas unitarias y PIT. Cumple el criterio D1 del ADR-001, porque un defecto en sus guardas pasaría inadvertido para la suite. La arista `transport` → `config` ya la permite D4.
-  - El mismo commit agrega `--disable-component-update` a los argumentos de Chrome en `BrowserSettings` (D8).
+  - El mismo commit agrega `--disable-component-update` a los argumentos de Chrome en `BrowserSettings` (D8). *(Enmienda 2026-10-13, parte 7: no era la mitigación de `net::ERR_CERT_VERIFIER_CHANGED`. La causa, la consulta de hora de red de Chrome, y su arreglo están en D8, *Argumentos de Chrome*.)*
 - **`ResultadoClic`** es un tipo de Java del transporte, no de Selenium, así que cumple R1. Solo lo usan las páginas, dentro de su código: `CartPage.iniciarCheckout`, su método privado `pulsarTramitar` y `CartPage.intentarIniciarCheckout`.
   - Desde `0de6962`, `intentarIniciarCheckout` solo acepta "no se puede tramitar" (`NO_DISPONIBLE`) con prueba positiva: el carrito cargó y el botón de tramitar está presente en el DOM (`existeEnTiempoMaximo`) pero deshabilitado u oculto.
   - Si el botón no existe, falla cerrado con `IllegalStateException`, porque un botón eliminado no se distingue de un localizador roto.
@@ -1263,7 +1263,7 @@ Cierra el otro pendiente heredado del ADR-001.
   No cambia el POM ni las pruebas existentes del ADR-001.
 - **Restricción:** el ancho y el alto se leen solo en modo headless, como hoy (`:72-77`).
 - **Ajustes de Chrome contra interferencias del propio navegador** *(enmienda 2026-10-13, parte 3)*. `BrowserSettings` también decide, como lógica pura, qué ajustes recibe Chrome, y `DriverFactory` solo los traduce:
-  - **`--disable-component-update`**, en los argumentos de Chrome (`8d7ce8b`, registrado en D1 con el contrato de `abrir`).
+  - **`--disable-component-update`**, en los argumentos de Chrome (`8d7ce8b`, registrado en D1 con el contrato de `abrir`). *(Enmienda 2026-10-13, parte 7: no era la mitigación de `net::ERR_CERT_VERIFIER_CHANGED`. Se mantiene por otro motivo: ver *Argumentos de Chrome*, abajo.)*
   - **`chromePreferences()`** (`3bab4b2`): para Chrome devuelve `profile.password_manager_leak_detection=false`; para Firefox, un mapa vacío; es inmutable. `DriverFactory` la aplica con `ChromeOptions.setExperimentalOption("prefs", …)`. *(Enmienda 2026-10-13, parte 4: CHK-17 exige esa llamada en `DriverFactory.java`, y falla si falta la línea o el archivo (`D8-prefs`, D7).)*
     - **Motivo:** tras el inicio de sesión, la comprobación de contraseñas filtradas de Chrome abre un aviso que en headless no se ve y que, mientras está abierto, descarta los clics y las teclas nativos dirigidos a la página. Era la causa de los clics que terminaban en el respaldo JavaScript de D1 (`MEMORY.md` la tenía como "sin aislar").
     - **Evidencia** (engineer; no se ejecutó aquí, B-01). Según el coordinador, los clics con respaldo pasaron de 36 de 153 a 0 de 156 en Chrome local, con carga y sin ella, y en el Grid. Según el mensaje de `3bab4b2`: un A/B intercalado dio 0 de 6 clics con respaldo con la preferencia, frente a 3 de 6 sin ella; CHK-08 ×2 con `Tests run: 189, Failures: 0, Errors: 0, Skipped: 1`; PIT 132/132.
@@ -1273,6 +1273,49 @@ Cierra el otro pendiente heredado del ADR-001.
   - Es inocuo: el framework no usa CDP. R5 lo prohíbe en `transport`: `EVT` rechaza `executeCdpCommand` y los paquetes `devtools` y `bidi` (D7, *Clic nativo único, scripts cerrados y preferencias de Chrome*). Ninguna otra capa puede importar Selenium (R1).
   - No se silencia: desaparece al subir `selenium.version` a una versión que traiga la implementación de CDP para el Chrome en curso. La versión de Chrome queda en el log de cada job (pasos *Chrome version*).
   - Si un día el aviso viniera con un fallo, no es este caso: se diagnostica, como cualquier rojo.
+- **Argumentos de Chrome y su motivo** *(enmienda 2026-10-13, parte 7)*. Los decide `BrowserSettings`, y `DriverFactory` los traduce igual en local, en headless y en el Grid. Firefox solo recibe `-headless`, `--width` y `--height` en modo headless. La preferencia de perfil está arriba (`chromePreferences()`).
+
+  | Argumento | Cuándo | Motivo | Desde |
+  |---|---|---|---|
+  | `--no-sandbox` | Siempre | El sandbox de Chrome necesita privilegios del núcleo que los contenedores y algunos runners de CI no dan, y sin él Chrome no arranca allí. Se acepta menos aislamiento porque Chrome solo visita el SUT y las páginas locales del ADR-004 | `DriverFactory` original (*Contexto*) |
+  | `--disable-dev-shm-usage` | Siempre | Docker da 64 MB a `/dev/shm` por defecto, y Chrome falla con páginas grandes; así usa `/tmp` | `DriverFactory` original |
+  | `--disable-component-update` | Siempre | Congela los componentes de Chrome durante la sesión: no hay descargas de Google en cada prueba, y no cambian a mitad de la sesión los que afectan a la verificación de certificados. **No es** el arreglo de `net::ERR_CERT_VERIFIER_CHANGED` (ver la decisión de abajo) | `8d7ce8b` |
+  | `--disable-features=NetworkTimeServiceQuerying` | Siempre | Evita que la consulta de hora de red de Chrome reconstruya el verificador de certificados con una navegación en vuelo (abajo) | Parte 7 |
+  | `--headless=new` | Headless | Modo headless actual de Chrome | `DriverFactory` original |
+  | `--window-size=<ancho>,<alto>` | Headless | El tamaño de `browser.window.width` y `browser.window.height`. Sin él, la ventana headless es pequeña y la maqueta del SUT cambia. Sin headless, `DriverFactory` maximiza la ventana | `DriverFactory` original |
+
+  - **Causa de `net::ERR_CERT_VERIFIER_CHANGED`** (engineer, según el coordinador; no se ejecutó aquí, B-01):
+    - Al arrancar, Chrome consulta la hora de red (`clients2.google.com/time/1/current`).
+    - Cuando llega la respuesta, reconstruye el verificador de certificados (evento NetLog `CERT_VERIFY_PROC_CREATED`) y corta los streams HTTP/2 en vuelo con -716.
+    - Si la primera navegación al SUT va en vuelo, `abrir` falla al instante con ese código (D1). Es una carrera, de en torno al 1 % por sesión.
+  - **Evidencia:**
+    - Sin el arreglo: 10 fallos en 1.000 sesiones; 1 en 500 con un solo hilo; 4 en 500 con un `HOME` aislado por sesión.
+    - Con `--disable-features=NetworkTimeServiceQuerying`: 0 en 2.000 (p ≈ 0,001, según el engineer). Por la regla del tres, la tasa por sesión queda por debajo de ~0,15 % con un 95 % de confianza (3/2.000). No es cero.
+    - NetLog: en 60 de 60 sesiones sin el arreglo, el verificador se reconstruye después del inicio de la navegación, entre 19 y 138 ms después. Con el arreglo, en 0 de 100, y ninguna hace la petición `/time/1/current`.
+  - **Descartado:**
+    - la base NSS compartida: Chrome 155 usa `$HOME/.local/share/pki/nssdb`, y no hubo ningún evento de cambio de almacén; además, con `HOME` aislado siguió fallando;
+    - una carrera de Root Store o de CRLSet en el arranque;
+    - el paralelismo: falló también con un solo hilo;
+    - la carga de la máquina, que se tenía por causa sin medición: el fallo aparece con un solo hilo, y la causa medida es otra;
+    - la actualización de componentes: el 1 % se midió con `--disable-component-update` ya activo.
+  - **Regla: un único `--disable-features` propio.**
+    - Lo exige la prueba unitaria `chromeDisablesNetworkTimeQueryingOnceInEveryMode`, en local, headless y Grid. `firefoxDoesNotReceiveChromeFeatureSwitches` comprueba que Firefox no lo recibe. Las dos están dentro de PIT.
+    - **Observado** (verifier, en `clientInfo.command_line` de la NetLog; no se ejecutó aquí, B-01): ChromeDriver une sus propios `--disable-features` con el nuestro en un solo argumento, `--disable-features=IgnoreDuplicateNavs,Prewarm,NetworkTimeServiceQuerying`. Así, nuestra feature llega a Chrome. Con el Grid, la unión la hace el ChromeDriver del nodo; no se observó.
+    - Una feature nueva que haya que desactivar va en el mismo argumento, separada por comas, y la prueba se actualiza en el mismo cambio.
+    - **No verificado:** con dos argumentos propios, el resultado depende de cómo los combinen ChromeDriver y Chrome. Por eso la prueba impide un segundo `--disable-features`.
+    - La prueba solo ve la lista de `BrowserSettings`. Lo que llega de verdad a Chrome (la unión de ChromeDriver, o un argumento que añadiera el Grid) solo lo ve la línea de comandos de la NetLog, en la medición de abajo.
+  - **Riesgo: Chrome renombra o retira la feature.** Chrome ignora en silencio una feature que no reconoce, como una preferencia (*Límite*, arriba), y la carrera vuelve, en torno al 1 %.
+    - **Síntoma:** reaparece `net::ERR_CERT_VERIFIER_CHANGED` en `abrir`. El mensaje lleva el código (D1), y la versión de Chrome queda en el log de cada job.
+    - **Cómo volver a medirlo:** con el arnés de la medición del engineer (fuera de la suite), unas 100 sesiones con NetLog, en menos de un minuto. Se cuentan las sesiones con una petición `/time/1/current` o con `CERT_VERIFY_PROC_CREATED` después del inicio de la primera navegación. Debe dar 0. Además, en cada sesión, el `--disable-features` de `clientInfo.command_line` debe incluir `NetworkTimeServiceQuerying`.
+    - **Cuándo:** con cada versión mayor nueva de Chrome en CI, o en cuanto reaparezca el error. No es una CHK: depende del navegador y de la red, como el aviso de contraseñas (D8, *Límite*).
+  - **Decisión: `--disable-component-update` se mantiene, con el motivo corregido.**
+
+    | Opción | Veredicto | Motivo |
+    |---|---|---|
+    | A. Mantenerlo, con el motivo de la tabla | **Elegida** | Toda la evidencia del arreglo (0 en 2.000 y 0 en 100 con NetLog) se midió con el argumento activo: retirarlo cambia la configuración validada. Las actualizaciones de componentes son descargas de Google en cada sesión. Algunos de esos componentes (CRLSet y el almacén de raíces de Chrome) cambian la configuración del verificador, que es la misma clase de evento que produce el -716. Esto último es un supuesto, según el diseño de Chromium, y no se midió aquí. El descarte de "Root Store o CRLSet en el arranque" se hizo con el argumento activo, así que no apoya retirarlo |
+    | B. Retirarlo, porque no era el arreglo | Descartada | Quita un argumento sin ganancia medible y reabre una vía de cambio del verificador a mitad de sesión que hoy está cerrada |
+    | C. Retirarlo y volver a medir | Descartada hoy | Cuesta una medición sin beneficio. **Disparador:** que Chrome retire el argumento o que dé un problema; entonces se mide sin él con NetLog (unas 100 sesiones, sin descargas de componentes ni reconstrucciones del verificador) antes de decidir |
+  - **Estado:** el cambio de `BrowserSettings` y de sus pruebas es del engineer, y no tenía commit al redactar esta enmienda. No cambia ningún comando de CHK-17 ni la API pública de `BrowserSettings`.
 
 ## Alternativas consideradas
 
@@ -1986,3 +2029,21 @@ Las decisiones de fondo y el estado no cambian: D7 se alinea con el script, que 
     ```
 
   - La fila CHK-17 de la Regla 04 (grupo B del ADR-004, con su paso 5) ya combina la parte 5 y el ADR-004. Ver ADR-004, *Cambios propuestos*, grupo B.
+- *(Integrada en `51e81bd`; la fila R5 combinada se aplicó en `4ccb344`.)*
+
+### 2026-10-13 — Argumentos de Chrome y `net::ERR_CERT_VERIFIER_CHANGED` (D8, parte 7)
+
+**Propuesta** del `qa-automation-architect` el 2026-10-13, a petición del coordinador (P2). La aprueba el coordinador (Regla 01, nivel 2). Las decisiones de fondo no cambian: D8 sigue decidiendo los ajustes de Chrome como lógica pura en `BrowserSettings`, y `DriverFactory` solo los traduce.
+
+- **Qué cambia:**
+  - **D8:** una tabla con cada argumento vigente de Chrome y su motivo; la causa de `net::ERR_CERT_VERIFIER_CHANGED` (la consulta de hora de red de Chrome), con la evidencia del engineer y lo descartado; la regla de un único `--disable-features` propio, que ChromeDriver une con los suyos (observado por el verifier); el riesgo de que Chrome renombre la feature, con la medición NetLog para comprobarlo; y la decisión de mantener `--disable-component-update`, con su motivo corregido.
+  - **Notas** en D1 (*Contrato de `abrir`*) y en D8 (`--disable-component-update`): ese argumento no era la mitigación de este fallo.
+- **Atribuciones corregidas:** ningún ADR atribuía el fallo a la carga de la máquina. Fuera de `docs/adr`:
+  - `README.md` lo atribuía a "la máquina saturada" (`:1284` en `9416b5d`). Al redactar esta enmienda ya está corregido en el árbol de trabajo, sin commit (`:522` y `:1286`). La entrada de `ERR_CONNECTION_CLOSED` (`:1288`) conserva la máquina saturada como causa posible, sin medición.
+  - `MEMORY.md:35` ("intermitente en local … vigilar") sigue igual. Lo actualiza el coordinador: la causa es la consulta de hora de red, y el arreglo es el argumento de D8.
+- **Código:** `BrowserSettings` y `BrowserSettingsTest` son del engineer (sin commit al redactar esta enmienda). Esta enmienda no pide más cambios de código: `--disable-component-update` se mantiene.
+- **Verificación** (verifier, sobre el commit del engineer):
+  - CHK-07, CHK-08 ×2 y CHK-11 con `BrowserSettings` sin sobrevivientes nuevos sin justificar;
+  - `chromeDisablesNetworkTimeQueryingOnceInEveryMode` falla si se quita el argumento o si se añade un segundo `--disable-features` (control negativo manual, como en D8);
+  - la medición NetLog del engineer adjunta: 0 de 100 sesiones con `/time/1/current` o con una reconstrucción del verificador después de la primera navegación.
+

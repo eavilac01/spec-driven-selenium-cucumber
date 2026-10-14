@@ -436,7 +436,7 @@ flowchart LR
 ├── src/main/java/com/demo       # lógica pura, sin E/S ni Selenium (ADR-001); la muta PIT
 │   ├── config
 │   │   ├── BrowserErrorPage.java     # reconoce las páginas de error de Chrome (net::ERR_*), solo con el host
-│   │   ├── BrowserSettings.java      # opciones del navegador y preferencias de Chrome (D8)
+│   │   ├── BrowserSettings.java      # opciones y preferencias de Chrome (D8), sin consulta de hora de red
 │   │   ├── ClicNativoUnico.java      # un clic nativo por acción; fallo cerrado si el clic lanza (ADR-004)
 │   │   ├── ConfigResolver.java       # precedencia -D > entorno > archivo (esperados y URL sin entorno), fuente y describeHost
 │   │   ├── DotEnvParser.java
@@ -518,6 +518,8 @@ La espera implícita se establece en `Duration.ZERO` y `Navegador` concentra las
 Las acciones sensibles esperan además una postcondición observable: el botón de producto adopta el texto configurado en `inventory.remove-button.text`, la ruta avanza al siguiente paso o el valor de un input permanece estable en dos sondeos. Cada acción hace **un solo clic o una sola escritura nativos** de WebDriver y espera su postcondición; no hay respaldo JavaScript (ADR-002, D1 y D8). Un clic por JavaScript se salta la comprobación de qué elemento recibe el clic del navegador y puede dar por buena una interacción que un usuario real no podría hacer. Si la postcondición no llega, la prueba falla con un mensaje que dice si el clic tuvo efecto.
 
 Los clics y escrituras nativos que se perdían en Chrome tenían una causa concreta: tras el login, Chrome consulta si la contraseña aparece en filtraciones conocidas y muestra un aviso que en headless no se ve y que descarta la entrada nativa. Ocurre cuando el servicio de Google responde (y no con un 429), por eso parecía depender de la carga de la máquina. `BrowserSettings.chromePreferences()` desactiva esa comprobación (`profile.password_manager_leak_detection=false`) y `DriverFactory` la aplica en local y en Grid. Si una versión futura de Chrome renombra la preferencia, la suite dará rojo con la pista "revisar las preferencias de Chrome (ADR-002, D8)" en vez de ocultarlo.
+
+Una segunda causa de Chrome producía fallos intermitentes al abrir el SUT: la **consulta de hora de red** al arrancar. Cuando llega la respuesta, Chrome reconstruye su verificador de certificados y corta la primera navegación si sigue en curso (`net::ERR_CERT_VERIFIER_CHANGED`, en torno al 1 % de las sesiones, con o sin carga y con uno o dos hilos). `BrowserSettings` añade `--disable-features=NetworkTimeServiceQuerying` en local, headless y Grid: medido, 10 fallos en 1.000 sesiones sin el argumento y 0 en 2.000 con él. Chrome usa entonces la hora del sistema, como cualquier cliente TLS.
 
 ### Compatibilidad de reportes JUnit
 
@@ -1281,7 +1283,9 @@ Hoy hay un caso: **AC-COMPRA-09**. La regla de negocio dice que no se puede comp
 
 ## Solución de problemas
 
-**Un escenario falla al abrir la página con una página de error de Chrome (`ERR_CONNECTION_CLOSED`, `ERR_CERT_VERIFIER_CHANGED`).** Suele ocurrir con la máquina saturada, por ejemplo con PIT corriendo a la vez que la suite. Ejecuta la suite y las pruebas de mutación por separado. La captura del escenario en `target/cucumber-report.html` muestra el error real.
+**Un escenario falla al abrir la página con `net::ERR_CERT_VERIFIER_CHANGED`.** Es la carrera de la consulta de hora de red de Chrome: al arrancar pide la hora a Google y, cuando llega la respuesta, reconstruye su verificador de certificados y corta la primera navegación si sigue en curso (en torno al 1 % de las sesiones). `BrowserSettings` lo evita con `--disable-features=NetworkTimeServiceQuerying` (ADR-002, D8). Si vuelve a aparecer, comprueba que ese argumento sigue llegando a Chrome, que es el **único** `--disable-features` propio (ChromeDriver lo une con los suyos; una feature nueva va en el mismo argumento, separada por comas) y que la versión de Chrome no ha renombrado la feature. No lo arregles con reintentos.
+
+**Un escenario falla al abrir la página con otra página de error de Chrome (por ejemplo, `ERR_CONNECTION_CLOSED`).** `Navegador.abrir` falla al instante y el mensaje nombra el código `net::ERR_*` y solo el host. Suele ser un problema de red o de la máquina saturada, por ejemplo con PIT corriendo a la vez que la suite: ejecuta la suite y las pruebas de mutación por separado. La captura del escenario en `target/cucumber-report.html` muestra el error real.
 
 **`El clic en … no alcanzó su postcondición … el clic nativo no tuvo efecto` o `La escritura en … no conservó el valor escrito`, después del login en Chrome.** El aviso de contraseñas filtradas de Chrome se está tragando la entrada nativa. Comprueba que `BrowserSettings.chromePreferences()` sigue devolviendo `profile.password_manager_leak_detection=false` y que la versión de Chrome no ha renombrado esa preferencia (ADR-002, D8).
 
