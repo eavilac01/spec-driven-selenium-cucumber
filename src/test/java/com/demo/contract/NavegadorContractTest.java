@@ -2,6 +2,7 @@ package com.demo.contract;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,6 +40,7 @@ class NavegadorContractTest {
     private static final String PAGINA_AVANZA = "avanza.html";
     private static final String PAGINA_INERTE = "inerte.html";
     private static final String PAGINA_DESHABILITADO = "deshabilitado.html";
+    private static final String PAGINA_VELADO = "velado.html";
 
     private final Navegador navegador = new Navegador();
 
@@ -139,6 +141,21 @@ class NavegadorContractTest {
         assertTrue(capturado.salida().contains(esperado("contract.expected.clics-efectivos.cero")),
                 capturado.salida());
         assertFalse(capturado.salida().contains(esperado("contract.expected.pista")), capturado.salida());
+    }
+
+    // --- Un clic que lanza sale envuelto, sin contarse ni repetirse (P2, ADR-004, D2) ---
+
+    @Test
+    void ct08ClicQueLanzaSaleEnvueltoSinContarseNiRepetirse() {
+        abrir(PAGINA_VELADO);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> navegador.click(ACCION));
+
+        String causaEsperada = esperado("contract.expected.causa-interceptada");
+        assertNotNull(error.getCause(), error.getMessage());
+        assertEquals(causaEsperada, error.getCause().getClass().getSimpleName());
+        assertTrue(error.getMessage().contains(causaEsperada), error.getMessage());
+        assertEquals(esperadoEntero("contract.expected.clics-en-pagina.interceptado"), clicsEnPagina());
     }
 
     // --- Utilidades ---

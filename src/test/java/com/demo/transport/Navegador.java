@@ -18,6 +18,7 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.demo.config.BrowserErrorPage;
+import com.demo.config.ClicNativoUnico;
 import com.demo.config.ConfigResolver;
 import com.demo.utils.ConfigReader;
 
@@ -150,8 +151,8 @@ public final class Navegador {
      */
     public void click(By localizador) {
         verificarIniciado();
-        AtomicInteger clicsEfectivos = new AtomicInteger();
-        clickHastaCumplir(localizador, webDriver -> clicsEfectivos.get() > 0, clicsEfectivos);
+        ClicNativoUnico clic = new ClicNativoUnico(localizador.toString());
+        clickHastaCumplir(localizador, webDriver -> clic.clicsEfectivos() > 0, clic);
     }
 
     /**
@@ -177,14 +178,13 @@ public final class Navegador {
      */
     public ResultadoClic clickYObservarUrlContiene(By localizador, String fragmentoUrl) {
         verificarIniciado();
-        AtomicInteger clicsEfectivos = new AtomicInteger();
+        ClicNativoUnico clic = new ClicNativoUnico(localizador.toString());
         try {
-            wait.until(clicNativoUnicoHastaCumplir(
-                    localizador, ExpectedConditions.urlContains(fragmentoUrl), clicsEfectivos));
-            logger.info("El clic en {} avanzó con {} clic(s) efectivo(s)", localizador, clicsEfectivos.get());
+            wait.until(clicNativoUnicoHastaCumplir(localizador, ExpectedConditions.urlContains(fragmentoUrl), clic));
+            logger.info("El clic en {} avanzó con {} clic(s) efectivo(s)", localizador, clic.clicsEfectivos());
             return ResultadoClic.AVANZO;
         } catch (TimeoutException exception) {
-            int clics = clicsEfectivos.get();
+            int clics = clic.clicsEfectivos();
             if (clics == 0) {
                 logger.info("El clic en {} no avanzó; clics efectivos: {}", localizador, clics);
                 return ResultadoClic.NO_DISPONIBLE;
@@ -367,22 +367,21 @@ public final class Navegador {
 
     /**
      * Hace un solo clic nativo cuando el control está visible y habilitado, y espera la postcondición dentro del
-     * tiempo máximo (ADR-002, D1). No repite el clic: si la postcondición no se cumple, lanza
+     * tiempo máximo (ADR-002, D1; ADR-004, D2). No repite el clic: si la postcondición no se cumple, lanza
      * {@link TimeoutException} con el localizador, el plazo y los clics efectivos (0 o 1); con 1, añade la pista de
      * D8. El localizador puede llevar el nombre de un producto del escenario (dato propio de la prueba); el mensaje
      * no incluye texto leído del SUT ni credenciales.
      */
     private void clickHastaCumplir(By localizador, ExpectedCondition<Boolean> postcondicion) {
-        clickHastaCumplir(localizador, postcondicion, new AtomicInteger());
+        clickHastaCumplir(localizador, postcondicion, new ClicNativoUnico(localizador.toString()));
     }
 
-    /** Igual que {@link #clickHastaCumplir(By, ExpectedCondition)}, con el contador que la postcondición puede leer. */
-    private void clickHastaCumplir(By localizador, ExpectedCondition<Boolean> postcondicion,
-                                   AtomicInteger clicsEfectivos) {
+    /** Igual que {@link #clickHastaCumplir(By, ExpectedCondition)}, con el clic que la postcondición puede leer. */
+    private void clickHastaCumplir(By localizador, ExpectedCondition<Boolean> postcondicion, ClicNativoUnico clic) {
         try {
-            wait.until(clicNativoUnicoHastaCumplir(localizador, postcondicion, clicsEfectivos));
+            wait.until(clicNativoUnicoHastaCumplir(localizador, postcondicion, clic));
         } catch (TimeoutException exception) {
-            int clics = clicsEfectivos.get();
+            int clics = clic.clicsEfectivos();
             throw new TimeoutException(
                     "El clic en %s no alcanzó su postcondición en %d s (clics efectivos: %d; %s)"
                             .formatted(localizador, TIEMPO_MAXIMO_ESPERA.toSeconds(), clics,
@@ -394,27 +393,27 @@ public final class Navegador {
     }
 
     /**
-     * Condición de espera que da un único clic nativo: es verdadera en cuanto se cumple la postcondición; mientras
-     * no haya clic, pulsa el control si está visible y habilitado (contando el clic antes de pulsar); después del
-     * clic solo vuelve a evaluar la postcondición.
+     * Condición de espera que delega cada sondeo en {@link ClicNativoUnico#sondear} (ADR-004, D2): es verdadera en
+     * cuanto se cumple la postcondición; mientras no haya intento, pulsa el control si está visible y habilitado, y
+     * solo cuenta la pulsación que retorna. Una pulsación que lanza sale como {@link IllegalStateException} con su
+     * causa, sin contarse ni repetirse.
      */
     private static ExpectedCondition<Boolean> clicNativoUnicoHastaCumplir(
-            By localizador, ExpectedCondition<Boolean> postcondicion, AtomicInteger clicsEfectivos) {
-        return webDriver -> {
-            if (Boolean.TRUE.equals(postcondicion.apply(webDriver))) {
-                return true;
-            }
-            if (clicsEfectivos.get() > 0) {
-                return false;
-            }
-            WebElement elemento = ExpectedConditions.elementToBeClickable(localizador).apply(webDriver);
-            if (elemento == null) {
-                return false;
-            }
-            clicsEfectivos.incrementAndGet();
+            By localizador, ExpectedCondition<Boolean> postcondicion, ClicNativoUnico clic) {
+        return webDriver -> clic.sondear(
+                () -> Boolean.TRUE.equals(postcondicion.apply(webDriver)),
+                () -> pulsacionSiClicable(webDriver, localizador));
+    }
+
+    /** La pulsación nativa del control si está visible y habilitado; vacío si no. */
+    private static Optional<Runnable> pulsacionSiClicable(WebDriver webDriver, By localizador) {
+        WebElement elemento = ExpectedConditions.elementToBeClickable(localizador).apply(webDriver);
+        if (elemento == null) {
+            return Optional.empty();
+        }
+        return Optional.of(() -> {
             elemento.click();
-            return Boolean.TRUE.equals(postcondicion.apply(webDriver));
-        };
+        });
     }
 
     private boolean visibleAhora(WebDriver webDriver, By localizador) {
