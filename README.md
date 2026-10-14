@@ -12,7 +12,7 @@
 
 Framework de referencia para automatizar [SauceDemo](https://www.saucedemo.com) con Java 17, Selenium 4, Maven, Cucumber y JUnit 5. La solución aplica Page Object Model (POM), inyección de dependencias por escenario y una separación estricta entre especificación, orquestación, interfaz e infraestructura.
 
-Cada escenario nace de una spec aprobada (`docs/specs/`), y la suite completa —escenarios E2E de login y compra más las pruebas unitarias de la lógica propia— se ejecuta con:
+Cada escenario nace de una spec aprobada (`docs/specs/`), y la suite completa —escenarios E2E de login y compra, pruebas de contrato del transporte contra páginas locales y pruebas unitarias de la lógica propia, 224 en total— se ejecuta con:
 
 ```bash
 ./mvnw clean test
@@ -810,7 +810,13 @@ Los escenarios corren en paralelo con 2 hilos (`src/test/resources/junit-platfor
 
 El `Jenkinsfile` es un pipeline declarativo equivalente a los jobs `test`, `mutation` y `quarantine` de GitHub Actions. Firefox y el Grid solo se cubren en GitHub.
 
-**Estado: verificado en un Jenkins real.** El build `#1` terminó en **SUCCESS** en 7 min 16 s, el 2026-10-13. Corrió en Jenkins 2.541.3 (imagen `jenkins/jenkins:lts-jdk17`) sobre el commit `0a51d89`, con Google Chrome 155 en el agente.
+**Estado: verificado en un Jenkins real** (Jenkins 2.541.3, imagen `jenkins/jenkins:lts-jdk17`, Google Chrome 155 en el agente; 2026-10-13):
+
+| Build | Commit | Resultado | Notas |
+|---|---|---|---|
+| `#1` | `0a51d89` | **SUCCESS** en 7 min 16 s | Primera ejecución real del `Jenkinsfile` |
+| `#2` | `a66ea58` | **FAILURE** | Una prueba E2E falló al abrir el SUT con `net::ERR_CERT_VERIFIER_CHANGED`. El pipeline reaccionó bien: CHK-19 y CHK-20 corrieron igual, publicó JUnit y Allure y omitió la cuarentena. La causa (la consulta de hora de red de Chrome) se corrigió después en `21c81b8` (ADR-002, D8) |
+| `#3` | `a66ea58` | **SUCCESS** en 9 min 10 s | Las 10 etapas en verde, con 222 pruebas en aquel commit (la suite tiene hoy 224) |
 
 #### Qué ejecuta, en orden
 
@@ -958,7 +964,7 @@ El build está bien configurado si se cumple todo esto:
 
 - [ ] Resultado **SUCCESS**, en unos 7–8 min.
 - [ ] Las diez etapas de la tabla [Qué ejecuta, en orden](#qué-ejecuta-en-orden) en verde.
-- [ ] **Test Result:** 222 pruebas, 0 fallos, 1 omitida (AC-COMPRA-09, en cuarentena).
+- [ ] **Test Result:** 224 pruebas, 0 fallos, 1 omitida (AC-COMPRA-09, en cuarentena).
 - [ ] En la consola de `Test`: `check-no-expected-override: ok: sin esperados sobrescritos por -D y con los destinos de red esperados …` (CHK-19) y `check-contract-ran: ok: 1 clase(s) de contrato con su reporte …` (CHK-20).
 - [ ] **Allure Report** disponible en el build.
 - [ ] Artefactos: `target/cucumber-report.html`, `target/surefire-reports/`, `target/allure-results/`, `target/pit-reports/`, `pit.log` y `quarantine-reports/`.
@@ -1320,7 +1326,7 @@ El repositorio incluye un equipo de subagentes de Claude Code (`.claude/agents/`
 
 ## Contribuir y seguridad
 
-Las contribuciones siguen el flujo SDD y las comprobaciones de [CONTRIBUTING.md](CONTRIBUTING.md). En los pull requests desde un fork el CI omite los E2E, porque no reciben secrets, y un mantenedor los ejecuta antes de fusionar. Las vulnerabilidades se reportan en privado según [SECURITY.md](SECURITY.md), nunca en un issue público.
+Las contribuciones siguen el flujo SDD y las comprobaciones de [CONTRIBUTING.md](CONTRIBUTING.md). La rama `main` está protegida por el ruleset `proteger-main`: nadie sube directo a ella, tampoco el autor. Todo cambio llega por pull request, con los 5 checks de CI en verde (`test`, `e2e-firefox`, `e2e-grid`, `mutation` y `quarantine`), commits firmados y fusión con *merge commit*, que conserva los hashes que citan los ADR. En los pull requests desde un fork el CI omite los E2E, porque no reciben secrets, y un mantenedor los ejecuta antes de fusionar. Las vulnerabilidades se reportan en privado según [SECURITY.md](SECURITY.md), nunca en un issue público.
 
 ## Licencia
 

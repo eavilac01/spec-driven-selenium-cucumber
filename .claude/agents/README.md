@@ -50,7 +50,7 @@ Rúbrica (0–2 por eje): **I**mpacto, **R**azonamiento, **V**olumen (invertido)
 ## Supuestos
 1. **Mutación con SUT externo:** PIT se aplica sobre la lógica propia del framework; los escenarios E2E demuestran que fallan con el control negativo (CHK-10), comprobado.
 2. **Sin deuda de capas:** el ADR-002 dejó Selenium confinado a `transport` (`Navegador`), las páginas por composición y los steps sobre acciones; CHK-17 lo comprueba en cada ejecución del CI. Las features tienen spec aprobada (SDD).
-3. **CHK-12 en rojo al crearse:** es intencional; hace visible la deuda.
+3. **CHK-12 nació en rojo** a propósito, para hacer visible la deuda de trazabilidad; hoy está en verde en CI y en Jenkins, igual que CHK-01…20.
 
 ## Uso
 - Automático: la sesión principal delega según la `description` y `CLAUDE.md`.

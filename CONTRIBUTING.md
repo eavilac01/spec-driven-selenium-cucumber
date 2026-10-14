@@ -51,6 +51,16 @@ Cada prueba nueva debe demostrar que **falla cuando debe** (control negativo, CH
 - Nada de credenciales, tokens ni datos personales en el código, los commits, los issues o los logs adjuntos.
 - Los commits no llevan líneas de coautoría ni marcas de herramientas de IA. Se recomienda firmarlos.
 
+## Cómo llega un cambio a `main`
+
+`main` está protegida (ruleset `proteger-main`) y nadie sube directo a ella, tampoco el autor del repositorio:
+
+1. Trabaja en una rama (por ejemplo `tanda/<tema>` o la de tu fork).
+2. Abre un pull request hacia `main` con la plantilla completa (trazabilidad y CHK ejecutadas).
+3. Deben pasar los 5 checks de CI: `test`, `e2e-firefox`, `e2e-grid`, `mutation` y `quarantine`.
+4. Los commits deben estar firmados (*Require signed commits*). Un PR externo necesita además la aprobación de un mantenedor.
+5. La fusión se hace con **merge commit**, no con *squash* ni *rebase*: los ADR citan commits por su hash y deben seguir existiendo en `main`.
+
 ## Pull requests desde un fork
 
 Los pull requests que vienen de un fork **no reciben los secrets** del repositorio, así que en ellos el CI omite los jobs E2E (`test`, `e2e-firefox`, `e2e-grid` y `quarantine`) y lo indica con un aviso. Sí corren el job `mutation` (pruebas unitarias, mutación, trazabilidad, capas, cuarentena y portabilidad) sin credenciales.

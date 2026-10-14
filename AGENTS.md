@@ -69,6 +69,7 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 - Si no estás seguro al 80 %, pregunta. No inventes valores esperados: si la spec no los define, quedan en *No cubiertos*.
 - Cada prueba nueva debe demostrar que falla cuando debe (control negativo con `-D<clave.esperada>=__CONTROL_NEGATIVO__`).
 - Ningún push sin la suite completa en verde dos veces seguidas.
+- Nada se sube directo a `main` (ruleset `proteger-main`): los cambios van a una rama `tanda/<tema>` y llegan a `main` por pull request con los 5 checks en verde y *merge commit*.
 
 ## Documentación
 - `README.md` — arquitectura, decisiones técnicas, ejecución local, Grid y CI.

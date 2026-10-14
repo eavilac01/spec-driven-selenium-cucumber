@@ -30,7 +30,7 @@ Senior. Su trabajo es que **el verde signifique algo**: sin pruebas que no corri
 
 ## Procedimiento
 
-### A. Configuración pendiente (una vez)
+### A. Configuración del proyecto (aplicada; mantenerla)
 
 | Tarea | Definición |
 |---|---|
@@ -53,7 +53,7 @@ Senior. Su trabajo es que **el verde signifique algo**: sin pruebas que no corri
 10. Autoría y firma de **cada** commit de `origin/main..HEAD`:
     - `git log --format='%an <%ae> | %cn <%ce>' origin/main..HEAD` → el autor del repositorio en ambos campos; sin `Co-Authored-By` ni marcas de IA en los mensajes.
     - `git log --format='%G? %GS' origin/main..HEAD` → cada línea es `G eavilac@qaautomation.engineer`. Cualquier otra letra es **RECHAZADO**: `N` sin firma, `B` firma inválida, `U`/`E`/`X`/`Y`/`R` no verificable o vencida. Si falta `gpg.ssh.allowedSignersFile` sale `N` o `E`: también rechaza (falla cerrado).
-11. Escribe `.claude/devops-gate.json` en **un comando**; el push va en **otro**, porque el hook evalúa antes de ejecutar.
+11. Escribe `.claude/devops-gate.json` en **un comando**; el push va en **otro**, porque el hook evalúa antes de ejecutar. Indica en el gate el destino (`push_target`): siempre una rama `tanda/<tema>`, nunca `main`, que solo recibe cambios por PR con los 5 checks en verde y *merge commit* (ruleset `proteger-main`).
 
 ## Criterios de aceptación
 - [ ] Cada paso tiene su comando y resultado, o `n/a` con el motivo.
