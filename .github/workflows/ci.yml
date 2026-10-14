@@ -243,9 +243,11 @@ jobs:
       # ADR-003, R-2: el aviso de D3 (un esperado sobrescrito por -D, p. ej.
       # desde MAVEN_ARGS) hace fallar el job. Corre aunque Maven falle, en su
       # propio paso, así que no tapa el rc de Maven; sin log, falla cerrado.
+      # ADR-003, D6: este job declara su destino por -D (el -Dremote.url del
+      # paso anterior): remote.url con fuente=sistema y host localhost:4444.
       - name: Sin esperados sobrescritos por -D (ADR-003, R-2)
         if: ${{ !cancelled() && steps.maven.outcome != 'skipped' }}
-        run: bash scripts/check-no-expected-override.sh e2e-grid.log
+        run: bash scripts/check-no-expected-override.sh --destino-d remote.url=localhost:4444 e2e-grid.log
 
       - name: Upload test reports
         if: always()

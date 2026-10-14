@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Autoprueba de scripts/check-no-expected-override.sh (ADR-003, R-2).
+# Autoprueba de scripts/check-no-expected-override.sh (CHK-19; ADR-003, R-2 y D6).
 #
 # Uso: bash scripts/tests/check-no-expected-override-test.sh
 #
@@ -16,6 +16,11 @@
 #     cuyo nombre empieza por RunnerTest, y cuando grep falla (rc >= 2 sin
 #     stderr, o stderr con rc 1; shim de grep en el PATH).
 # Las casi-coincidencias (otro mensaje parecido) dan 0.
+# D6 (destinos de red): los logs en verde llevan las líneas de base.url y
+# remote.url; los casos D6-* cubren la fuente esperada con y sin
+# --destino-d, la validez de la línea sin repetir su contenido, el orden
+# (violaciones, Tests run, presencia), la búsqueda con grep -a y por grep_log,
+# y el uso de la bandera.
 #
 # Sale con 0 solo si todos los casos se comportan como se espera; con 1 si
 # alguno falla; con 2 ante un error de preparación. Imprime la tabla
@@ -48,6 +53,14 @@ fallo='[ERROR]   el acceso es rechazado: expected: <__VALOR_MANIPULADO__> but wa
 exito='[INFO] BUILD SUCCESS'
 rojo='[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.3:test (default-test) on project spec-driven-selenium-cucumber: There are test failures.'
 compila='[ERROR] COMPILATION ERROR :'
+# D6: línea de destino de red de ConfigReader (INFO de slf4j-simple).
+destino() {
+  printf "[ForkJoinPool-1-worker-1] INFO com.demo.utils.ConfigReader - Destino de red '%s': fuente=%s, host=%s\n" "$1" "$2" "$3"
+}
+base_ok="$(destino base.url archivo www.saucedemo.com)"
+remote_ok="$(destino remote.url archivo '(ninguno)')"
+remote_grid="$(destino remote.url sistema localhost:4444)"
+base_sistema="$(destino base.url sistema www.saucedemo.com)"
 
 # log <nombre> <líneas…>: escribe $tmp/<nombre>.log y deja su ruta en $f.
 f=""
@@ -100,26 +113,33 @@ record() {
   table="${table}$(printf '| %-70s | %8s | %4s | %-5s |' "$1" "$2" "$rc" "$3")"$'\n'
 }
 
-ok_line() { echo "check-no-expected-override: ok: sin esperados sobrescritos por -D en '$1' (ADR-003, R-2)"; }
+ok_line() { echo "check-no-expected-override: ok: sin esperados sobrescritos por -D y con los destinos de red esperados en '$1' (ADR-003, R-2 y D6)"; }
+uso_line="check-no-expected-override: uso: bash scripts/check-no-expected-override.sh [--destino-d <clave>=<host>]... <log de Maven>"
+# d6_line <log> <línea> <clave> <fuente> <host> <esperado>
+d6_line() { echo "$1:$2: D6: el destino de red '$3' tiene fuente=$4 y host=$5; en este job se espera $6 (ADR-003, D6)"; }
+d6_invalida() { echo "$1:$2: D6: línea de destino de red no válida (ADR-003, D6)"; }
+d6_falta() { echo "check-no-expected-override: el log '$1' no registra el destino de red '$2' (ADR-003, D6): no prueba adónde fue la suite"; }
+SIN_D="fuente=archivo o ausente"
+GRID_D="fuente=sistema y host=localhost:4444"
 r2_line() { echo "$1:$2: R-2: la clave de esperado '$3' se sobrescribió con -D (ADR-003, D3): solo es válido en el control negativo (CHK-10), nunca en CI"; }
 sin_e2e='re:^check-no-expected-override: el log .* no tiene la línea "Tests run: N, … -- in com\.demo\.runners\.RunnerTest" con N >= 1'
 
 # ------------------------------------------------------------------- casos
 # Sin aviso: 0 (el rc de Maven lo evalúa el job, no este control).
-log verde "$inicio" "$unitarias" "$e2e_ok" "$exito"
+log verde "$inicio" "$base_ok" "$remote_ok" "$unitarias" "$e2e_ok" "$exito"
 run "$f"
 expect "verde sin aviso" 0 "$(ok_line "$f")"
 
-log rojo "$inicio" "$unitarias" "$fallo" "$e2e_rojo" "$rojo"
+log rojo "$inicio" "$base_ok" "$remote_ok" "$unitarias" "$fallo" "$e2e_rojo" "$rojo"
 run "$f"
 expect "escenario en rojo sin aviso" 0 "$(ok_line "$f")"
 
 f="$tmp/verde-crlf.log"
-printf '%s\r\n' "$inicio" "$unitarias" "$e2e_ok" "$exito" > "$f"
+printf '%s\r\n' "$inicio" "$base_ok" "$remote_ok" "$unitarias" "$e2e_ok" "$exito" > "$f"
 run "$f"
 expect "verde sin aviso con CRLF" 0 "$(ok_line "$f")"
 
-log casi "$inicio" \
+log casi "$inicio" "$base_ok" "$remote_ok" \
   "[INFO] La clave de configuración 'inventory.expected.title' viene de config.properties" \
   "[INFO] La clave de esperado 'inventory.expected.title' viene de config.properties" \
   "[INFO] solo es válido en el control negativo (CHK-10)" \
@@ -206,9 +226,9 @@ run "$f"
 expect "solo el bloque Results (sin la línea por clase)" 2 "$sin_e2e"
 
 run
-expect "sin argumentos" 2 "check-no-expected-override: uso: bash scripts/check-no-expected-override.sh <log de Maven>"
+expect "sin argumentos" 2 "$uso_line"
 run "$tmp/verde.log" extra
-expect "argumentos de más" 2 "check-no-expected-override: uso: bash scripts/check-no-expected-override.sh <log de Maven>"
+expect "argumentos de más" 2 "$uso_line"
 run "$tmp/no-existe.log"
 expect "log ausente" 2 "check-no-expected-override: no existe el log '$tmp/no-existe.log'"
 mkdir -p "$tmp/dir.log"
@@ -244,6 +264,136 @@ for s in rc2 stderr; do
   expect "grep falla al leer ($s)" 2 \
     "re:^check-no-expected-override: grep terminó con [0-9]+ al leer '$tmp/verde.log'$"
 done
+
+# ---------------------------------------------- D6: destinos de red (ADR-003)
+# Permitidos: 0.
+log d6-ok-ausente "$inicio" "$base_ok" "$(destino remote.url ausente '(ninguno)')" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-ok-ausente: ausente está permitido" 0 "$(ok_line "$f")"
+
+log d6-ok-grid "$inicio" "$base_ok" "$remote_grid" "$e2e_ok" "$exito"
+run --destino-d remote.url=localhost:4444 "$f"
+expect "D6-ok-grid: la expectativa de e2e-grid" 0 "$(ok_line "$f")"
+
+log d6-ok-jenkins "$inicio" "12:01:02  $base_ok" "12:01:02  $remote_ok" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-ok-jenkins: marca sin ancla de inicio" 0 "$(ok_line "$f")"
+
+log d6-ok-dos-jvm "$inicio" "$base_ok" "$remote_ok" "$base_ok" "$remote_ok" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-ok-dos-jvm: varias líneas por clave" 0 "$(ok_line "$f")"
+
+log d6-ok-casi "$inicio" "$base_ok" "$remote_ok" \
+  "[ForkJoinPool-1-worker-1] INFO com.demo.utils.ConfigReader - Destino de red base.url: fuente=sistema, host=otro.example" \
+  "[ForkJoinPool-1-worker-1] INFO com.demo.utils.ConfigReader - destino de red 'base.url': fuente=sistema, host=otro.example" \
+  "$e2e_ok" "$exito"
+run "$f"
+expect "D6-ok-casi: la marca es exacta y distingue mayúsculas" 0 "$(ok_line "$f")"
+
+f="$tmp/d6-ok-nul.log"
+{ printf '%s\n' "$inicio"; printf 'basura\0binaria\n'; printf '%s\n' "$base_ok" "$remote_ok" "$e2e_ok" "$exito"; } > "$f"
+run "$f"
+expect "D6-ok-nul: la búsqueda nueva usa grep -a" 0 "$(ok_line "$f")"
+
+# Violaciones de fuente u host: 1, con la clave, la fuente y el host validados.
+log d6-base-sistema "$inicio" "$base_sistema" "$remote_ok" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-base-sistema: base.url por -D" 1 "$(d6_line "$f" 2 base.url sistema www.saucedemo.com "$SIN_D")"
+
+log d6-remote-sistema "$inicio" "$base_ok" "$remote_grid" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-remote-sistema: -D sin bandera" 1 "$(d6_line "$f" 3 remote.url sistema localhost:4444 "$SIN_D")"
+
+log d6-entorno "$inicio" "$base_ok" "$(destino remote.url entorno '(ninguno)')" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-entorno: entorno nunca se acepta" 1 "$(d6_line "$f" 3 remote.url entorno '(ninguno)' "$SIN_D")"
+
+log d6-grid-host "$inicio" "$base_ok" "$(destino remote.url sistema otro.example:4444)" "$e2e_ok" "$exito"
+run --destino-d remote.url=localhost:4444 "$f"
+expect "D6-grid-host: el host se compara" 1 "$(d6_line "$f" 3 remote.url sistema otro.example:4444 "$GRID_D")"
+
+log d6-grid-prefijo "$inicio" "$base_ok" "$(destino remote.url sistema localhost:44445)" "$e2e_ok" "$exito"
+run --destino-d remote.url=localhost:4444 "$f"
+expect "D6-grid-prefijo: comparación exacta, no por prefijo" 1 "$(d6_line "$f" 3 remote.url sistema localhost:44445 "$GRID_D")"
+
+log d6-grid-archivo "$inicio" "$base_ok" "$remote_ok" "$e2e_ok" "$exito"
+run --destino-d remote.url=localhost:4444 "$f"
+expect "D6-grid-archivo: e2e-grid sin Grid es rojo" 1 "$(d6_line "$f" 3 remote.url archivo '(ninguno)' "$GRID_D")"
+
+log d6-grid-base "$inicio" "$base_sistema" "$remote_grid" "$e2e_ok" "$exito"
+run --destino-d remote.url=localhost:4444 "$f"
+expect "D6-grid-base: la bandera vale solo para su clave" 1 "$(d6_line "$f" 2 base.url sistema www.saucedemo.com "$SIN_D")"
+
+log d6-mixta "$inicio" "$base_ok" "$remote_ok" "$(destino base.url sistema otro.example)" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-mixta: se evalúan todas las líneas" 1 "$(d6_line "$f" 4 base.url sistema otro.example "$SIN_D")"
+
+# Líneas no válidas: 1, sin repetir el contenido.
+log d6-no-valida-fuente "$inicio" "$base_ok" "$remote_ok" "$(destino base.url desconocida x.example)" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-no-valida-fuente: LINEA estricta" 1 "$(d6_invalida "$f" 4)"
+absent "D6-no-valida-fuente: no repite el contenido" "desconocida"
+
+log d6-no-valida-pi09 "$inicio" "$base_ok" "$remote_ok" "$(destino remote.url sistema usuario:clave@hub.example)" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-no-valida-secreto: host con usuario y clave (PI-09)" 1 "$(d6_invalida "$f" 4)"
+absent "D6-no-valida-secreto: no repite la clave" "clave"
+
+log d6-no-valida-pi04 "$inicio" "$base_ok" "$remote_ok" "$(destino 'x$(touch PWNED)' archivo x.example)" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-no-valida-inyeccion: clave con caracteres no válidos (PI-04)" 1 "$(d6_invalida "$f" 4)"
+absent "D6-no-valida-inyeccion: no repite el contenido" "PWNED"
+
+log d6-no-valida-sufijo "$inicio" "$base_ok" "$remote_ok" "$(destino base.url archivo 'www.saucedemo.com extra')" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-no-valida-sufijo: ancla final" 1 "$(d6_invalida "$f" 4)"
+
+# Orden: las violaciones van juntas y antes de la evaluabilidad.
+log d6-y-d3 "$inicio" "$(aviso inventory.expected.title)" "$base_sistema" "$remote_ok" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-y-D3: el aviso de D3" 1 "$(r2_line "$f" 2 inventory.expected.title)"
+expect "D6-y-D3: la violación de D6" 1 "$(d6_line "$f" 3 base.url sistema www.saucedemo.com "$SIN_D")"
+
+log d6-sin-tests "$inicio" "$base_sistema" "$remote_ok" "$compila"
+run "$f"
+expect "D6-sin-tests: las violaciones van antes que la evaluabilidad" 1 "$(d6_line "$f" 2 base.url sistema www.saucedemo.com "$SIN_D")"
+
+# Presencia: 2, una línea por clave que falta.
+log d6-sin-base "$inicio" "$remote_ok" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-sin-base: falta base.url" 2 "$(d6_falta "$f" base.url)"
+
+log d6-sin-remote "$inicio" "$base_ok" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-sin-remote: falta remote.url" 2 "$(d6_falta "$f" remote.url)"
+
+log d6-sin-destinos "$inicio" "$unitarias" "$e2e_ok" "$exito"
+run "$f"
+expect "D6-sin-destinos: nivel de log o salida redirigida" 2 "$(d6_falta "$f" base.url)"
+
+# La búsqueda nueva pasa por grep_log: un shim de grep que sale con 2 solo si
+# un argumento contiene la marca de D6 (si no, delega en el grep real).
+shim "$tmp/shim-d6" "for a in \"\$@\"; do case \"\$a\" in *'Destino de red'*) exit 2 ;; esac; done; exec $(printf '%q' "$real_grep") \"\$@\""
+rc=0
+out="$(PATH="$tmp/shim-d6:$PATH" bash "$script" "$tmp/verde.log" 2>&1)" || rc=$?
+expect "D6-error-grep: la búsqueda nueva pasa por grep_log" 2 \
+  "re:^check-no-expected-override: grep terminó con 2 al leer '$tmp/verde.log'$"
+
+# Uso de --destino-d: 2.
+run --destino-d
+expect "D6-uso-sin-valor" 2 "$uso_line"
+run --destino-d remote.url "$tmp/verde.log"
+expect "D6-uso-sin-igual" 2 "$uso_line"
+run --destino-d 'remote.url=localhost:4444;x' "$tmp/verde.log"
+expect "D6-uso-host" 2 "$uso_line"
+run --destino-d 'remote.url=(ninguno)' "$tmp/verde.log"
+expect "D6-uso-token" 2 "$uso_line"
+run --destino-d remote.url=localhost:4444 --destino-d remote.url=localhost:4445 "$tmp/verde.log"
+expect "D6-uso-repetida" 2 "$uso_line"
+run --otra "$tmp/verde.log"
+expect "D6-uso-otra" 2 "$uso_line"
+run "$tmp/verde.log" --destino-d remote.url=localhost:4444
+expect "D6-uso-despues" 2 "$uso_line"
 
 # ------------------------------------------------------------------- resumen
 printf '| %-70s | %8s | %4s | %-5s |\n' "Caso" "Esperado" "Real" "Resultado"
