@@ -495,7 +495,7 @@ La misma estructura, organizada en cuatro bloques, con la etiqueta del dueño de
   </a>
 </p>
 
-> Haz clic en la imagen para verla a tamaño completo (3120×2980).
+> Haz clic en la imagen para verla a tamaño completo (3120×3080).
 
 ## Decisiones de arquitectura
 
