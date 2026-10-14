@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
@@ -158,18 +159,39 @@ class BrowserErrorPageTest {
     // --- describe ---
 
     @Test
-    void messageHasTheRequestedUrlAndTheCode() {
-        assertEquals("El navegador mostró una página de error de red al abrir 'https://example.test/' "
+    void messageHasOnlyTheRequestedHostAndTheCode() {
+        assertEquals("El navegador mostró una página de error de red al abrir 'example.test' "
                         + "(net::ERR_CONNECTION_CLOSED)",
                 BrowserErrorPage.describe("https://example.test/", Optional.of("net::ERR_CONNECTION_CLOSED")));
     }
 
     @Test
     void messageSaysTheCodeIsUnavailableWhenThereIsNone() {
-        assertEquals("El navegador mostró una página de error de red al abrir 'http://127.0.0.1:9' "
+        assertEquals("El navegador mostró una página de error de red al abrir '127.0.0.1:9' "
                         + "(código no disponible)",
                 BrowserErrorPage.describe("http://127.0.0.1:9", Optional.empty()));
         assertEquals("código no disponible", BrowserErrorPage.CODE_UNAVAILABLE);
+    }
+
+    @Test
+    void messageNeverShowsCredentialsPathQueryOrFragment() {
+        String message = BrowserErrorPage.describe(
+                "https://usuario:clave@Host.Example:8443/ruta/inventory.html?token=secreto#frag",
+                Optional.of("net::ERR_CONNECTION_REFUSED"));
+
+        assertEquals("El navegador mostró una página de error de red al abrir 'host.example:8443' "
+                + "(net::ERR_CONNECTION_REFUSED)", message);
+        for (String secret : List.of("usuario", "clave", "ruta", "inventory", "token", "secreto", "frag", "https")) {
+            assertFalse(message.contains(secret), secret);
+        }
+    }
+
+    @Test
+    void messageMarksAnUnparsableOrMissingUrlWithoutRepeatingIt() {
+        assertEquals("El navegador mostró una página de error de red al abrir '(invalido)' (código no disponible)",
+                BrowserErrorPage.describe("http://usuario:clave@ho st/ruta", Optional.empty()));
+        assertEquals("El navegador mostró una página de error de red al abrir '(ninguno)' (código no disponible)",
+                BrowserErrorPage.describe(" ", Optional.empty()));
     }
 
     @Test

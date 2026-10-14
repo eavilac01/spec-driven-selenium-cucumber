@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.Test;
@@ -256,6 +257,123 @@ class ConfigResolverTest {
         environment.put("HEADLESS", "true");
 
         assertTrue(resolver.getBoolean("headless"));
+    }
+
+    // --- Destino de red: fuente y host (ADR-003, D6) ---
+
+    private static Optional<String> line(String key, String source, String host) {
+        return Optional.of("Destino de red '%s': fuente=%s, host=%s".formatted(key, source, host));
+    }
+
+    @Test
+    void n1BaseUrlOnlyInTheFileIsDescribedWithItsHost() {
+        file.setProperty("base.url", "https://www.saucedemo.com");
+
+        assertEquals(line("base.url", "archivo", "www.saucedemo.com"),
+                resolver.describeNetworkDestination("base.url"));
+    }
+
+    @Test
+    void n2EmptyRemoteUrlInTheFileHasNoHost() {
+        file.setProperty("remote.url", "");
+
+        assertEquals(line("remote.url", "archivo", "(ninguno)"),
+                resolver.describeNetworkDestination("remote.url"));
+    }
+
+    @Test
+    void n3SystemRemoteUrlWinsOverTheFile() {
+        system.put("remote.url", "http://localhost:4444");
+        file.setProperty("remote.url", "");
+
+        assertEquals(line("remote.url", "sistema", "localhost:4444"),
+                resolver.describeNetworkDestination("remote.url"));
+    }
+
+    @Test
+    void n4BlankSystemValueWinsAndHasNoHost() {
+        system.put("remote.url", " ");
+        file.setProperty("remote.url", "http://localhost:4444");
+
+        assertEquals(line("remote.url", "sistema", "(ninguno)"),
+                resolver.describeNetworkDestination("remote.url"));
+    }
+
+    @Test
+    void n5EnvironmentIsNeverTheSourceOfANetworkDestination() {
+        environment.put("REMOTE_URL", "http://localhost:9");
+        environment.put("remote.url", "http://localhost:9");
+        file.setProperty("remote.url", "");
+
+        assertEquals(line("remote.url", "archivo", "(ninguno)"),
+                resolver.describeNetworkDestination("remote.url"));
+    }
+
+    @Test
+    void n6DestinationInNoSourceIsAbsent() {
+        assertEquals(line("grid-url", "ausente", "(ninguno)"),
+                resolver.describeNetworkDestination("grid-url"));
+    }
+
+    @Test
+    void n7OnlyTheLowercaseHostAndPortAreDescribed() {
+        system.put("remote.url", "https://usuario:clave@Hub.Example.COM:443/wd/hub?token=secreto#frag");
+
+        Optional<String> description = resolver.describeNetworkDestination("remote.url");
+
+        assertEquals(line("remote.url", "sistema", "hub.example.com:443"), description);
+        for (String secret : List.of("usuario", "clave", "secreto", "wd", "frag", "https")) {
+            assertFalse(description.orElseThrow().contains(secret), secret);
+        }
+    }
+
+    @Test
+    void n8ValuesWithoutAValidHostAreInvalid() {
+        for (String value : List.of("localhost:4444", "http://[::1]:4444", "http://mi_host:4444",
+                "http://exa mple.com", "file:///tmp/x", "http://h:123456")) {
+            system.put("remote.url", value);
+
+            assertEquals(line("remote.url", "sistema", "(invalido)"),
+                    resolver.describeNetworkDestination("remote.url"), value);
+        }
+    }
+
+    @Test
+    void n9KeysThatAreNotNetworkDestinationsAreNotDescribed() {
+        file.setProperty("headless", "true");
+        file.setProperty("inventory.expected.title", "Products");
+        file.setProperty("a.url.b", "http://x.example");
+
+        assertEquals(Optional.empty(), resolver.describeNetworkDestination("headless"));
+        assertEquals(Optional.empty(), resolver.describeNetworkDestination("inventory.expected.title"));
+        assertEquals(Optional.empty(), resolver.describeNetworkDestination("a.url.b"));
+    }
+
+    @Test
+    void n10NullKeyIsRejectedWithTheUsualMessage() {
+        NullPointerException error = assertThrows(NullPointerException.class,
+                () -> resolver.describeNetworkDestination(null));
+
+        assertEquals("La clave de configuración no puede ser null", error.getMessage());
+    }
+
+    @Test
+    void n11TheKeyIsDescribedAsItArrives() {
+        file.setProperty("a.Base.URL", "http://x.example");
+
+        assertEquals(line("a.Base.URL", "archivo", "x.example"),
+                resolver.describeNetworkDestination("a.Base.URL"));
+    }
+
+    @Test
+    void n12SurroundingSpacesAreIgnoredAndTheParsedHostIsTheRealDestination() {
+        system.put("remote.url", "  http://localhost:4444  ");
+        system.put("base.url", "http://localhost:4444@otro.example");
+
+        assertEquals(line("remote.url", "sistema", "localhost:4444"),
+                resolver.describeNetworkDestination("remote.url"));
+        assertEquals(line("base.url", "sistema", "otro.example"),
+                resolver.describeNetworkDestination("base.url"));
     }
 
     @Test

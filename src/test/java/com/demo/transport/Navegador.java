@@ -18,6 +18,7 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.demo.config.BrowserErrorPage;
+import com.demo.config.ConfigResolver;
 import com.demo.utils.ConfigReader;
 
 /**
@@ -103,7 +104,9 @@ public final class Navegador {
                         exception.getClass().getName(), codigo.orElse(BrowserErrorPage.CODE_UNAVAILABLE));
                 throw errorDeNavegacion(url, codigo);
             }
-            throw exception;
+            // PI-09: el mensaje de Selenium repite la URL completa (su comando "get"); solo viajan el host y el tipo.
+            throw new IllegalStateException("La navegación a '%s' falló (%s)"
+                    .formatted(ConfigResolver.describeHost(url), exception.getClass().getSimpleName()));
         }
 
         // El script devuelve null si el documento no es una página de error; si lo es, el texto del código.
@@ -116,9 +119,20 @@ public final class Navegador {
         }
     }
 
+    /**
+     * Espera a que la URL contenga el fragmento. Al agotarse el plazo, el mensaje lleva el fragmento y solo el host
+     * de la URL actual (PI-09): la condición de Selenium repetiría la URL completa, con sus credenciales si las hay.
+     */
     public void esperarUrlContiene(String fragmentoUrl) {
         verificarIniciado();
-        wait.until(ExpectedConditions.urlContains(fragmentoUrl));
+        try {
+            wait.until(webDriver -> Boolean.TRUE.equals(ExpectedConditions.urlContains(fragmentoUrl).apply(webDriver)));
+        } catch (TimeoutException exception) {
+            throw new TimeoutException("La URL no llegó a contener '%s' en %d s (host actual: %s)"
+                    .formatted(fragmentoUrl, TIEMPO_MAXIMO_ESPERA.toSeconds(),
+                            ConfigResolver.describeHost(driver.getCurrentUrl())),
+                    exception);
+        }
     }
 
     /** Lectura inmediata, sin espera: indica si la URL actual contiene el fragmento. */

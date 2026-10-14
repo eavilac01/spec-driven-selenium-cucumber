@@ -2,6 +2,7 @@ package com.demo.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -243,17 +244,18 @@ class BrowserSettingsTest {
                 of("firefox", "http://grid:4444", true).arguments());
     }
 
+    // El tipo de error esperado sale de la misma API del JDK con la misma entrada; el mensaje y la causa nunca
+    // llevan la URL (PI-09): solo su host, como la línea de destino de red (ADR-003, D6).
+
     @Test
-    void urlWithoutSchemeIsRejectedWithExactMessageAndCause() {
+    void urlWithoutSchemeIsRejectedWithoutTheValueAndWithoutCause() {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> of("chrome", "localhost:4444", false));
 
-        assertEquals("La configuración remote.url no es una URL válida: 'localhost:4444'", error.getMessage());
-        assertEquals(MalformedURLException.class, error.getCause().getClass());
-        // El esperado sale de la misma API del JDK con la misma entrada: no depende de la versión del texto.
-        MalformedURLException delJdk = assertThrows(MalformedURLException.class,
-                () -> URI.create("localhost:4444").toURL());
-        assertEquals(delJdk.getMessage(), error.getCause().getMessage());
+        assertThrows(MalformedURLException.class, () -> URI.create("localhost:4444").toURL());
+        assertEquals("La configuración remote.url no es una URL válida (host=(invalido), error=MalformedURLException)",
+                error.getMessage());
+        assertNull(error.getCause());
     }
 
     @Test
@@ -261,12 +263,11 @@ class BrowserSettingsTest {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> of("chrome", "http://not a url", false));
 
-        assertEquals("La configuración remote.url no es una URL válida: 'http://not a url'", error.getMessage());
-        assertEquals(IllegalArgumentException.class, error.getCause().getClass());
-        // El esperado sale de la misma API del JDK con la misma entrada: no depende de la versión del texto.
-        IllegalArgumentException delJdk = assertThrows(IllegalArgumentException.class,
-                () -> URI.create("http://not a url"));
-        assertEquals(delJdk.getMessage(), error.getCause().getMessage());
+        assertThrows(IllegalArgumentException.class, () -> URI.create("http://not a url"));
+        assertEquals(
+                "La configuración remote.url no es una URL válida (host=(invalido), error=IllegalArgumentException)",
+                error.getMessage());
+        assertNull(error.getCause());
     }
 
     @Test
@@ -274,27 +275,47 @@ class BrowserSettingsTest {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> of("firefox", "/wd/hub", false));
 
-        assertEquals("La configuración remote.url no es una URL válida: '/wd/hub'", error.getMessage());
+        assertEquals(
+                "La configuración remote.url no es una URL válida (host=(invalido), error=IllegalArgumentException)",
+                error.getMessage());
     }
 
     @Test
-    void unknownProtocolIsRejectedAsInvalidWithItsCause() {
+    void unknownProtocolIsRejectedShowingOnlyItsHost() {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> of("chrome", "foo://grid:4444", false));
 
-        assertEquals("La configuración remote.url no es una URL válida: 'foo://grid:4444'", error.getMessage());
-        assertEquals(MalformedURLException.class, error.getCause().getClass());
-        MalformedURLException delJdk = assertThrows(MalformedURLException.class,
-                () -> URI.create("foo://grid:4444").toURL());
-        assertEquals(delJdk.getMessage(), error.getCause().getMessage());
+        assertThrows(MalformedURLException.class, () -> URI.create("foo://grid:4444").toURL());
+        assertEquals("La configuración remote.url no es una URL válida (host=grid:4444, error=MalformedURLException)",
+                error.getMessage());
+        assertNull(error.getCause());
     }
 
     @Test
-    void invalidUrlMessageShowsTheTrimmedValue() {
+    void invalidUrlIsDescribedAfterTrimming() {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> of("chrome", "  nope  ", false));
+                () -> of("chrome", "  foo://Grid.Example:4444  ", false));
 
-        assertEquals("La configuración remote.url no es una URL válida: 'nope'", error.getMessage());
+        assertEquals("La configuración remote.url no es una URL válida"
+                + " (host=grid.example:4444, error=MalformedURLException)", error.getMessage());
+    }
+
+    @Test
+    void invalidUrlWithCredentialsNeverShowsThem() {
+        for (String value : List.of("http://usuario:clave@ho st:4444/wd?token=secreto#frag",
+                "foo://usuario:clave@grid.example:4444/wd?token=secreto#frag")) {
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                    () -> of("chrome", value, false));
+
+            assertNull(error.getCause(), value);
+            for (String secret : List.of("usuario", "clave", "secreto", "wd", "frag", "token")) {
+                assertFalse(error.getMessage().contains(secret), secret);
+            }
+        }
+        assertEquals("La configuración remote.url no es una URL válida"
+                        + " (host=grid.example:4444, error=MalformedURLException)",
+                assertThrows(IllegalArgumentException.class, () -> of("chrome",
+                        "foo://usuario:clave@grid.example:4444/wd?token=secreto#frag", false)).getMessage());
     }
 
     // --- Inmutabilidad y nulos ---

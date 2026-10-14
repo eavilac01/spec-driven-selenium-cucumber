@@ -1,9 +1,12 @@
 package com.demo.config;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
@@ -20,6 +23,10 @@ import java.util.regex.Pattern;
  * destinos de red (el último segmento es {@code url} o termina en {@code -url}) no aceptan el
  * entorno. Su precedencia es propiedad del sistema ({@code -D}) y luego el archivo; si una clave
  * así solo está en el entorno, se trata como ausente.</p>
+ *
+ * <p>ADR-003, D6: {@link #describeNetworkDestination(String)} describe un destino de red con su fuente y solo su
+ * host (nunca el esquema, el usuario, la contraseña, la ruta, la consulta ni el fragmento; PI-09), para que
+ * quien lo registre deje en el log adónde fue la suite.</p>
  */
 public final class ConfigResolver {
 
@@ -27,6 +34,29 @@ public final class ConfigResolver {
     private static final Pattern EXPECTED_KEY = Pattern.compile("(^|\\.)expected", Pattern.CASE_INSENSITIVE);
     /** Destino de red (ADR-003, D5): el último segmento es "url" o termina en "-url". */
     private static final Pattern NETWORK_DESTINATION_KEY = Pattern.compile("(^|[.-])url$", Pattern.CASE_INSENSITIVE);
+
+    /** Host válido de una línea de destino (ADR-003, D6): el mismo patrón que comprueba CHK-19. */
+    private static final Pattern HOST = Pattern.compile("[a-z0-9.-]{1,253}(:[0-9]{1,5})?");
+    private static final String NO_HOST = "(ninguno)";
+    private static final String INVALID_HOST = "(invalido)";
+
+    /** Fuente de la que sale un valor; la etiqueta es la de la línea de destino de D6. */
+    private enum Source {
+        SYSTEM("sistema"),
+        ENVIRONMENT("entorno"),
+        FILE("archivo"),
+        ABSENT("ausente");
+
+        private final String label;
+
+        Source(String label) {
+            this.label = label;
+        }
+    }
+
+    /** Valor resuelto (puede ser null) y la fuente de la que sale. */
+    private record Resolution(String value, Source source) {
+    }
 
     private final UnaryOperator<String> systemLookup;
     private final UnaryOperator<String> environmentLookup;
@@ -106,24 +136,64 @@ public final class ConfigResolver {
         return EXPECTED_KEY.matcher(key).find() && systemLookup.apply(key) != null;
     }
 
+    /**
+     * Línea de destino de red (ADR-003, D6): {@code Destino de red '<clave>': fuente=<fuente>, host=<host>}, con la
+     * fuente de la misma precedencia que el valor. Vacío si la clave no es un destino de red. Nunca incluye el valor.
+     */
+    public Optional<String> describeNetworkDestination(String key) {
+        Objects.requireNonNull(key, "La clave de configuración no puede ser null");
+        if (!NETWORK_DESTINATION_KEY.matcher(key).find()) {
+            return Optional.empty();
+        }
+        Resolution resolution = resolveWithSource(key);
+        return Optional.of("Destino de red '%s': fuente=%s, host=%s"
+                .formatted(key, resolution.source().label, describeHost(resolution.value())));
+    }
+
+    /**
+     * Solo el host de una URL, como {@code host[:puerto]} en minúsculas (ADR-003, D6; PI-09): {@value #NO_HOST} si
+     * el valor falta o está en blanco, e {@value #INVALID_HOST} si no se puede analizar, no tiene host o el host no
+     * cumple el patrón de D6. Nunca devuelve el esquema, el usuario, la contraseña, la ruta, la consulta ni el
+     * fragmento. Es la única regla para nombrar una URL de configuración en un log o en un error (PI-09).
+     */
+    public static String describeHost(String value) {
+        if (value == null || value.isBlank()) {
+            return NO_HOST;
+        }
+        try {
+            URI uri = new URI(value.trim());
+            if (uri.getHost() == null) {
+                return INVALID_HOST;
+            }
+            String host = uri.getHost().toLowerCase(Locale.ROOT) + (uri.getPort() == -1 ? "" : ":" + uri.getPort());
+            return HOST.matcher(host).matches() ? host : INVALID_HOST;
+        } catch (URISyntaxException exception) {
+            return INVALID_HOST;
+        }
+    }
+
     private String resolve(String key) {
+        return resolveWithSource(key).value();
+    }
+
+    /** Única copia de la precedencia: el valor y su fuente. */
+    private Resolution resolveWithSource(String key) {
         Objects.requireNonNull(key, "La clave de configuración no puede ser null");
 
         String systemValue = systemLookup.apply(key);
         if (systemValue != null) {
-            return systemValue;
+            return new Resolution(systemValue, Source.SYSTEM);
         }
 
-        if (!acceptsEnvironment(key)) {
-            return fileProperties.getProperty(key);
+        if (acceptsEnvironment(key)) {
+            String environmentValue = resolveFromEnvironment(key);
+            if (environmentValue != null) {
+                return new Resolution(environmentValue, Source.ENVIRONMENT);
+            }
         }
 
-        String environmentValue = resolveFromEnvironment(key);
-        if (environmentValue != null) {
-            return environmentValue;
-        }
-
-        return fileProperties.getProperty(key);
+        String fileValue = fileProperties.getProperty(key);
+        return new Resolution(fileValue, fileValue == null ? Source.ABSENT : Source.FILE);
     }
 
     /** Única regla que decide si el entorno es fuente de una clave (ADR-003, D2). */

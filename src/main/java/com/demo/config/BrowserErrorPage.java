@@ -74,10 +74,13 @@ public final class BrowserErrorPage {
         return matcher.find() ? Optional.of(matcher.group()) : Optional.empty();
     }
 
-    /** Mensaje de la excepción: la URL solicitada y el código, o que el código no está disponible. */
+    /**
+     * Mensaje de la excepción: solo el host de la URL solicitada (ADR-003, D6; PI-09), nunca el esquema, el
+     * usuario, la contraseña, la ruta, la consulta ni el fragmento, y el código, o que no está disponible.
+     */
     public static String describe(String requestedUrl, Optional<String> code) {
         Objects.requireNonNull(code, "El código no puede ser null");
         return "El navegador mostró una página de error de red al abrir '%s' (%s)"
-                .formatted(requestedUrl, code.orElse(CODE_UNAVAILABLE));
+                .formatted(ConfigResolver.describeHost(requestedUrl), code.orElse(CODE_UNAVAILABLE));
     }
 }
