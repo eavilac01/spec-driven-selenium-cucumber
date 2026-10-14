@@ -107,9 +107,9 @@
 # base.url o remote.url (RED, A4-red); en sus páginas, ningún temporizador,
 # evento sintético, envío ni recarga automática (FIX, A4-fix); nombra solo
 # transport y ConfigReader (A4-R6 y A4-R6u), y ningún otro paquete de src la
-# nombra, tampoco el glue de runners (A4-R6in). Mientras contract no exista, sus
-# rutas no tienen coincidencias (rc=1, sin stderr); la presencia del directorio
-# (A4-D6) llega con el paso 5 del ADR-004.
+# nombra, tampoco el glue de runners (A4-R6in). contract es además un
+# directorio de capa: sin archivos versionados, "D6" (A4-D6, paso 5 del
+# ADR-004).
 #
 # Riesgo residual aceptado (D6, R-5): firmas, cabeceras y anotaciones partidas
 # en varias líneas, y texto que no sea espacio, anotación ni modificador antes
@@ -449,9 +449,9 @@ check R6 "contract nombra utils distinto de ConfigReader" \
 check R6 "un paquete distinto de contract nombra contract" \
   'com\.demo\.contract\b' -- src ":!$CT"
 
-# Directorios de capa presentes: cada uno debe listar al menos un archivo.
-#   … desde el paso 5 del ADR-004, también "$CT" (A4-D6)
-for dir in "$T/transport" "$T/pages" "$T/actions" "$T/steps"; do
+# Directorios de capa presentes: cada uno debe listar al menos un archivo
+# (contract desde el paso 5 del ADR-004: A4-D6).
+for dir in "$T/transport" "$T/pages" "$T/actions" "$T/steps" "$CT"; do
   rc=0
   listing="$(git ls-files -- "$dir")" || rc=$?
   if [ "$rc" -ne 0 ]; then

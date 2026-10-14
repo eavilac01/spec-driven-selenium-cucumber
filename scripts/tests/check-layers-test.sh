@@ -1168,6 +1168,11 @@ for layer in transport pages actions steps; do
   run_script "$dir"
   expect "D7-20 directorio $layer ausente" 1 "$T/$layer:0: D6: directorio de capa sin archivos versionados"
 done
+# A4-D6 (ADR-004, paso 5): contract también es un directorio de capa.
+new_case
+git -C "$dir" rm -r -q -- "$T/contract"
+run_script "$dir"
+expect "A4-D6 directorio contract ausente" 1 "$T/contract:0: D6: directorio de capa sin archivos versionados"
 new_case
 git -C "$dir" rm -r -q --cached -- "$T/actions"
 run_script "$dir"

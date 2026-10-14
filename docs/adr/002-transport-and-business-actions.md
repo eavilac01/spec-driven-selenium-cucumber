@@ -233,7 +233,7 @@ Enmienda 2026-10-13, parte 4 (*Clic nativo único, scripts cerrados y preferenci
 
 Enmienda 2026-10-13, parte 5 (*Escritura única*): el bloque ya incluye `ESC`, la comprobación `R5-esc` y el conteo `R5-esc-max`. Se integra en el mismo commit que el script y su autoprueba (D6), sin cambios de código; hasta ese commit, CHK-17 es lo que ejecuta el script (34 comprobaciones desde `38b3512`). *(Integrada en `fe566e3`.)*
 
-Enmienda 2026-10-13, parte 6 (*Pruebas de contrato del transporte*, ADR-004, D8): el bloque ya incluye `CT`, `FX`, `RED` y `FIX`, la exclusión de `contract` en las búsquedas generales de Selenium y de JUnit, y las seis comprobaciones `A4-*`. Se integra en el mismo commit que el script, su autoprueba y el ADR-004 (D6, paso 2 del ADR-004); hasta ese commit, CHK-17 es lo que ejecuta el script (36 comprobaciones desde `fe566e3`). La presencia del directorio `contract` (`A4-D6`) llega después, en el paso 5 del ADR-004, y se anota aquí como comentario hasta entonces.
+Enmienda 2026-10-13, parte 6 (*Pruebas de contrato del transporte*, ADR-004, D8): el bloque ya incluye `CT`, `FX`, `RED` y `FIX`, la exclusión de `contract` en las búsquedas generales de Selenium y de JUnit, y las seis comprobaciones `A4-*`. Se integra en el mismo commit que el script, su autoprueba y el ADR-004 (D6, paso 2 del ADR-004); hasta ese commit, CHK-17 es lo que ejecuta el script (36 comprobaciones desde `fe566e3`). La presencia del directorio `contract` (`A4-D6`) llega después, en el paso 5 del ADR-004, y se anota aquí como comentario hasta entonces. *(Integrada en `51e81bd`, con 516 casos. `A4-D6` entra en el bloque con el paso 5 del ADR-004: 517 casos, según devops.)*
 
 ```bash
 T=src/test/java/com/demo
@@ -319,9 +319,8 @@ git grep --untracked -nP '\b(SecretReader|CredentialsProvider)\b' -- src ":!$T/u
 git grep --untracked -nP 'com\.demo\.(pages|actions|steps|hooks|runners|config|data)\b' -- "$CT"
 git grep --untracked -nP 'com\.demo\.utils\.(?!ConfigReader\b)' -- "$CT"
 git grep --untracked -nP 'com\.demo\.contract\b' -- src ":!$CT"
-# Directorios de capa presentes (cada uno debe listar al menos un archivo)
-#   … desde el paso 5 del ADR-004, también "$CT" (A4-D6)
-git ls-files "$T/transport" "$T/pages" "$T/actions" "$T/steps"
+# Directorios de capa presentes (cada uno debe listar al menos un archivo; contract desde el paso 5 del ADR-004, A4-D6)
+git ls-files "$T/transport" "$T/pages" "$T/actions" "$T/steps" "$CT"
 # D8 (presencia, parte 4): DriverFactory aplica las preferencias de Chrome; sin la línea o sin el archivo, es violación
 PREFS='^\s*\w+\.setExperimentalOption\(\s*"prefs"\s*,\s*\w+\.chromePreferences\(\)\s*\)\s*;'
 require D8 "DriverFactory no aplica las preferencias de Chrome de BrowserSettings" "$PREFS" -- "$T/transport/DriverFactory.java"
