@@ -22,11 +22,20 @@ import java.util.function.IntSupplier;
  * <p>Chrome lleva además la preferencia de perfil que desactiva la comprobación de contraseñas filtradas:
  * tras un inicio de sesión, su aviso modal (invisible en headless) hace que el navegador descarte los clics y
  * las teclas nativos dirigidos a la página mientras está abierto.</p>
+ *
+ * <p>Chrome arranca también sin la consulta de hora de red ({@value #CHROME_DISABLE_NETWORK_TIME}). Al arrancar, Chrome
+ * pide la hora a un servicio de Google y, cuando llega la respuesta, reconstruye su verificador de certificados con esa
+ * hora y corta las peticiones HTTPS en curso con {@code net::ERR_CERT_VERIFIER_CHANGED}. Si la respuesta llega mientras
+ * la primera navegación al SUT está en vuelo, esa navegación falla. Sin la consulta, el verificador usa la hora del
+ * sistema, como cualquier cliente TLS, y no se reconstruye después del arranque.</p>
  */
 public final class BrowserSettings {
 
     /** Preferencia de perfil de Chrome que activa la comprobación de contraseñas filtradas tras un envío. */
     private static final String CHROME_LEAK_DETECTION_PREFERENCE = "profile.password_manager_leak_detection";
+
+    /** Desactiva la consulta de hora de red, cuya respuesta reconstruye el verificador de certificados en vuelo. */
+    private static final String CHROME_DISABLE_NETWORK_TIME = "--disable-features=NetworkTimeServiceQuerying";
 
     /** Navegadores soportados. */
     public enum Browser {
@@ -77,6 +86,7 @@ public final class BrowserSettings {
             arguments.add("--no-sandbox");
             arguments.add("--disable-dev-shm-usage");
             arguments.add("--disable-component-update");
+            arguments.add(CHROME_DISABLE_NETWORK_TIME);
             if (headless) {
                 arguments.add("--headless=new");
                 arguments.add("--window-size=%d,%d".formatted(width.getAsInt(), height.getAsInt()));
