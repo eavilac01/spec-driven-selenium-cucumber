@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Contrato: velado</title>
+<style>
+#velo { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: rgba(0, 0, 0, 0.2); }
+</style>
+</head>
+<body>
+<button id="accion" type="button" onclick="contar()">Accion</button>
+<p id="clics">0</p>
+<div id="velo"></div>
+<script>
+let clics = 0;
+function contar() {
+  clics = clics + 1;
+  document.getElementById('clics').textContent = String(clics);
+}
+</script>
+</body>
+</html>
