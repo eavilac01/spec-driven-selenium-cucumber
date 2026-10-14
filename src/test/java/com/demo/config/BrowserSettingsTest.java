@@ -96,7 +96,8 @@ class BrowserSettingsTest {
         BrowserSettings settings = of("chrome", "", false);
 
         assertFalse(settings.headless());
-        assertEquals(List.of("--no-sandbox", "--disable-dev-shm-usage", "--disable-component-update"),
+        assertEquals(List.of("--no-sandbox", "--disable-dev-shm-usage", "--disable-component-update",
+                "--disable-features=NetworkTimeServiceQuerying"),
                 settings.arguments());
     }
 
@@ -106,6 +107,7 @@ class BrowserSettingsTest {
 
         assertTrue(settings.headless());
         assertEquals(List.of("--no-sandbox", "--disable-dev-shm-usage", "--disable-component-update",
+                "--disable-features=NetworkTimeServiceQuerying",
                 "--headless=new", "--window-size=1920,1080"), settings.arguments());
     }
 
@@ -113,7 +115,30 @@ class BrowserSettingsTest {
     void chromeWindowSizePutsWidthBeforeHeight() {
         BrowserSettings settings = BrowserSettings.of("chrome", "", true, () -> 800, () -> 600);
 
-        assertEquals("--window-size=800,600", settings.arguments().get(4));
+        assertEquals("--window-size=800,600", settings.arguments().get(5));
+    }
+
+    /**
+     * La respuesta de la consulta de hora de red reconstruye el verificador de certificados de Chrome y corta la
+     * navegación en vuelo con net::ERR_CERT_VERIFIER_CHANGED. Se exige un único --disable-features propio, en local, en
+     * headless y en el Grid. ChromeDriver lo une con los suyos (observado en la línea de comandos real de Chrome:
+     * --disable-features=IgnoreDuplicateNavs,Prewarm,NetworkTimeServiceQuerying). Una feature nueva se añade al mismo
+     * argumento, separada por comas. Con dos argumentos propios, el resultado depende de cómo los combinen ChromeDriver
+     * y Chrome, y no está verificado; por eso esta prueba lo impide.
+     */
+    @Test
+    void chromeDisablesNetworkTimeQueryingOnceInEveryMode() {
+        for (BrowserSettings settings : List.of(of("chrome", "", true), of("chrome", "", false),
+                of("chrome", "http://grid:4444", true))) {
+            assertEquals(List.of("--disable-features=NetworkTimeServiceQuerying"),
+                    settings.arguments().stream().filter(argument -> argument.startsWith("--disable-features")).toList());
+        }
+    }
+
+    @Test
+    void firefoxDoesNotReceiveChromeFeatureSwitches() {
+        assertFalse(of("firefox", "", true).arguments().stream()
+                .anyMatch(argument -> argument.startsWith("--disable-features")));
     }
 
     // --- Argumentos de Firefox ---
@@ -206,7 +231,8 @@ class BrowserSettingsTest {
         assertEquals("La configuración 'browser.window.height' debe ser mayor que cero, pero fue '-5'",
                 heightError.getMessage());
 
-        assertEquals(List.of("--no-sandbox", "--disable-dev-shm-usage", "--disable-component-update"),
+        assertEquals(List.of("--no-sandbox", "--disable-dev-shm-usage", "--disable-component-update",
+                "--disable-features=NetworkTimeServiceQuerying"),
                 BrowserSettings.of("chrome", "", false, width, height).arguments());
     }
 
