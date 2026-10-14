@@ -1,6 +1,6 @@
 # ADR-001 — Pruebas de mutación con PIT sobre la lógica propia del framework (CHK-11)
 
-- **Estado:** Aceptado (ADR y cambios a reglas y agentes aprobados por el usuario, 2026-10-09)
+- **Estado:** Aceptado (ADR y cambios a reglas y agentes aprobados por el usuario, 2026-10-09). *(Al 2026-10-13: completamente implementado desde `90687f4`, y sin P2 abiertos (*Enmiendas*). Su alcance, todo `src/main/java`, creció con la lógica pura de los ADR-002, ADR-003 y ADR-004. PIT da 164/164 desde `aa3cda5`, según el verifier. Ningún riesgo queda abierto: R-6 (macOS) es un límite aceptado (*Riesgos*).)*
 - **Fecha:** 2026-10-09
 - **Autor:** `qa-automation-architect`
 - **Aprueba:** coordinador (Regla 01, nivel 2). Los cambios a reglas y a archivos de agentes los aprueba y aplica el usuario (P-01, PI-07).
@@ -122,7 +122,7 @@ Si termina en `BUILD SUCCESS`, el umbral no protege nada y el resultado es RECHA
   - Las fachadas de `utils` quedan sin mutar. Su riesgo residual es el cableado al entorno, que el E2E ejercita en cada escenario.
   - Se agrega un job de CI.
   - Las reglas y los archivos de agentes cambian, y solo el usuario puede aplicarlo.
-- **Comportamiento actual fijado:** las pruebas fijan el comportamiento de hoy, incluidos dos P2 abiertos (`MEMORY.md`, *Próximos pasos* 5): el entorno puede sobrescribir claves `*.expected*` y `getPositiveInt` rechaza `0`. Se deciden aparte; si cambian, primero cambian sus pruebas. *(Nota del 2026-10-13: ver la enmienda de esa fecha; el primero lo decide el ADR-003.)*
+- **Comportamiento actual fijado:** las pruebas fijan el comportamiento de hoy, incluidos dos P2 abiertos (`MEMORY.md`, *Próximos pasos* 5): el entorno puede sobrescribir claves `*.expected*` y `getPositiveInt` rechaza `0`. Se deciden aparte; si cambian, primero cambian sus pruebas. *(Nota del 2026-10-13: ver la enmienda de esa fecha; el primero lo decide el ADR-003.)* *(Los dos están cerrados al 2026-10-13: el primero lo implementa el ADR-003 (`2c33885`), y el segundo se resolvió con `getNonNegativeInt` (`146df90`).)*
 - **AppleDouble:** la limpieza de `._*` en `src` corría en `generate-test-sources`, después de `compile`, y no protegía `src/main/java`. Mitigado en el paso 1 (R-6): corre en `generate-sources` (`pom.xml:115`) y también sobre `target/classes` en `process-classes` (`pom.xml:132`).
 
 ## Cambios propuestos a reglas y agentes (aplicados el 2026-10-09)
@@ -187,7 +187,7 @@ Este ADR se escribió sin red y sin `./mvnw`. El estado refleja el paso 6: todos
 | R-3 | PIT aporta `junit-platform-launcher` | devops, paso 1: la fase de cobertura encuentra las pruebas | Se agrega desde el BOM (D4) | **Refutado:** no hace falta |
 | R-4 | Los motores `cucumber` y `junit-platform-suite` no descubren nada con un selector de una clase que no es `@Suite` | verifier, paso 5: el log | Se excluyen los motores por enmienda | **Cerrado** (verifier, paso 5): solo corrió `[engine:junit-jupiter]`, sin `RunnerTest`, Cucumber ni navegador |
 | R-5 | La composición exacta de `STRONGER` en la versión elegida | Los mutadores del reporte | Se documenta la composición real en este ADR | **Resuelto** (verifier, paso 5, `javap` sobre `StandardMutatorGroups` de 1.30.0): `STRONGER` = `DEFAULTS` + `REMOVE_SWITCH` + `REMOVE_CONDITIONALS_ORDER_IF` + `REMOVE_CONDITIONALS_EQUAL_IF`. `DEFAULTS` ya incluye las variantes `_ELSE` (*Enmiendas*) |
-| R-6 | En macOS, los `._*` romperían la compilación de `src/main` (no es reproducible en Linux) | devops, paso 1 | — | **Mitigado;** sin confirmar en macOS |
+| R-6 | En macOS, los `._*` romperían la compilación de `src/main` (no es reproducible en Linux) | devops, paso 1 | — | **Mitigado;** sin confirmar en macOS. *(Límite aceptado desde el 2026-10-13: no se puede verificar sin un equipo macOS. Lo mitiga la limpieza de `._*` del `pom.xml` (`maven-antrun-plugin`), que se ejecuta siempre: en `generate-sources`, sobre `target/classes` y sobre `target/test-classes` (paso 1). El perfil `macos-selenium-manager-isolated-path` del mismo `pom.xml` cubre otro problema de macOS, el driver de Homebrew en cuarentena, no este. Se reabre si un colaborador con macOS informa de un fallo.)* |
 | R-7 | El tiempo se mantiene dentro del presupuesto de D5 | El primer run de CI | Se investiga la E/S en las pruebas | **Cerrado en cuanto al resultado** (paso 6): el usuario confirmó el run remoto de `90687f4` en verde, sin informar el tiempo del job. En local, PIT tarda unos 3 s y Maven con PIT 5,8 s. El tiempo remoto exacto no se midió; lo acota `timeout-minutes: 10` del job `mutation` (`ci.yml:64` en `90687f4`), que haría fallar el job |
 
 ## Enmiendas
@@ -199,12 +199,14 @@ Sin cambios en D1–D6 ni en el estado. Hallazgos:
 - **R-2 resuelto:** `pitest-maven` 1.30.0 y `pitest-junit5-plugin` 1.2.3, confirmados en Maven Central con `./mvnw`; funcionan con JUnit 5.14.2 y Java 17. D4 actualizado.
 - **R-3 refutado:** `junit-platform-launcher` no hace falta; con pruebas sonda corrió `[engine:junit-jupiter]`.
 - **R-4 parcial:** los logs de PIT no mencionan `RunnerTest`, `cucumber`, `chrome` ni `webdriver`. Lo cierra el verifier en el paso 5.
-- **R-6 mitigado:** la limpieza de `._*` pasa a `generate-sources` y se agrega una ejecución sobre `target/classes` en `process-classes`. Sin confirmar en macOS.
+- **R-6 mitigado:** la limpieza de `._*` pasa a `generate-sources` y se agrega una ejecución sobre `target/classes` en `process-classes`. Sin confirmar en macOS. *(Límite aceptado desde el 2026-10-13: *Riesgos*, R-6.)*
 - **Fallo abierto de CHK-11 (corrige el paso 1):** sin `target/classes`, PIT 1.30.0 imprime `Skipping project because: Project has either no tests or no production code` y termina en `BUILD SUCCESS`, aun con `failWhenNoMutations=true` (`pom.xml:221`). Ningún parámetro lo cambia. Mitigación en el paso 6: el job `mutation` y el gate exigen `target/pit-reports/mutations.xml` y tratan `Skipping project` como rechazo cuando existe `src/main/java`. Se agrega el mismo requisito al *Criterio de verificación*.
 - **Comprobado en una copia aislada:** D6 da `BUILD FAILURE` con un puntaje de 50 % frente al umbral de 80; `-DmutationThreshold=0` no baja el umbral (D5); Surefire ejecuta las pruebas unitarias (D3).
-- Cambios a reglas y agentes aplicados, salvo los pendientes indicados en su sección. Cita corregida: el *Estado actual* de la Regla 04 está en `:66`, no en `:53`.
+- Cambios a reglas y agentes aplicados, salvo los pendientes indicados en su sección. Cita corregida: el *Estado actual* de la Regla 04 está en `:66`, no en `:53`. *(Todos aplicados al cierre del paso 6: enmienda *Paso 6 y cierre*.)*
 
 ### 2026-10-09 — Pasos 2 a 5 (commits `decb120` y `afe8618`; los pasos 4 y 5 aún sin commit)
+
+*(El paso 4 quedó en `c8486ee`; el paso 5 es la verificación y no tiene commit propio.)*
 
 Sin cambios en D1–D6 ni en el estado. Resultado del paso 5 (`qa-test-verifier`, APROBADO):
 - **`src/main` completo:** `ConfigResolver`, `DotEnvParser` y `SecretResolver` (`com.demo.config`) y `Credentials` (`com.demo.data`), con 90 pruebas unitarias. CHK-08 da 95 (5 E2E y 90 unitarias) en las dos ejecuciones.
@@ -213,7 +215,7 @@ Sin cambios en D1–D6 ni en el estado. Resultado del paso 5 (`qa-test-verifier`
 - **R-4 cerrado y R-5 resuelto** (*Riesgos*). Se corrige D5: `REMOVE_CONDITIONALS_EQUAL_ELSE` ya está en `DEFAULTS`; `STRONGER` agrega las variantes `_IF` y `REMOVE_SWITCH`. La decisión no cambia. Las variantes `_IF` aportaron 24 de los 73 mutantes (`EQUAL_IF` 21, `ORDER_IF` 3).
 - **Lo que PIT no alcanza** (`requireNonNull`, entrada vacía del parser, `trim` tras `export` y accesores del record): el coordinador lo validó con control negativo manual en copias aisladas sin `.env` (2 casos en el paso 2, 5 en el paso 3 y 3 en el paso 4), todos con rojo observado.
 - `AGENTS.md` y `README.md` describen `src/main/java` y las pruebas unitarias; el verifier comprobó que coinciden con `git ls-files`.
-- **Pendiente:** solo el paso 6 y, con él, el *Estado actual* de la Regla 04 y R-7.
+- **Pendiente:** solo el paso 6 y, con él, el *Estado actual* de la Regla 04 y R-7. *(Hecho en `90687f4` y `e4dd132`: enmienda siguiente.)*
 
 ### 2026-10-09 — Paso 6 y cierre (commit `90687f4`, `devops-engineer`)
 
@@ -231,13 +233,13 @@ Sin cambios en D1–D6 ni en el estado. Con este paso, el ADR queda **completame
 - **Jenkins:** etapa `Mutation (CHK-11)` (`Jenkinsfile:24-45` en `90687f4`), fuera de `withCredentials` y con un timeout de 10 minutos. Corre antes de `Test`, porque `clean test` borra `target/pit-reports`. Además borra el reporte y el log anteriores, porque el workspace persiste entre builds.
 - **Gate local (devops):** CHK-08 dio 95/95 en las dos ejecuciones, CHK-11 dio 73/73 y la guarda terminó en 0. La guarda se probó con 12 controles negativos, todos en rojo, incluido un log real de `Skipping project` con `BUILD SUCCESS`.
 - **Run remoto:** el usuario confirmó en la conversación que el CI de `90687f4` está en verde. Con eso se cierra R-7 (*Riesgos*).
-- **Reglas y agentes:** el usuario los aplicó, y estaban sin commit al redactar esta enmienda.
+- **Reglas y agentes:** el usuario los aplicó, y estaban sin commit al redactar esta enmienda. *(Están en `e4dd132`.)*
   - La Regla 04 agrega la guarda al criterio y al comando de CHK-11 (`:17`, `:47-49`), el comando conjunto de CHK-15/16 (`:60`) y un *Estado actual* con CHK-11, CHK-15 y CHK-16 activas (`:69`).
   - `devops-engineer.md` usa los dos scripts en su tabla (`:38`) y en el paso 7 del gate (`:50`).
   - La invocación de PIT de D5 no cambia: la Regla 04 la envuelve con la guarda.
-- **P2 abiertos (no bloquean; dueño: `devops-engineer`):**
-  - `.github/workflows/ci.yml` no declara `permissions: contents: read`, ni en el workflow ni en los jobs. El `GITHUB_TOKEN` queda con los permisos por defecto del repositorio.
-  - El `Jenkinsfile` no se validó en un Jenkins real.
+- **P2 abiertos (no bloquean; dueño: `devops-engineer`):** *(Los dos están cerrados al 2026-10-13.)*
+  - `.github/workflows/ci.yml` no declara `permissions: contents: read`, ni en el workflow ni en los jobs. El `GITHUB_TOKEN` queda con los permisos por defecto del repositorio. *(Cerrado en `6c6b95b`, 2026-10-09: permisos mínimos en el workflow.)*
+  - El `Jenkinsfile` no se validó en un Jenkins real. *(Cerrado el 2026-10-13, según el usuario: build 3 en `SUCCESS` sobre `a66ea58`, con 10 etapas, incluida `Mutation (CHK-11)`. Ver el R-4 del ADR-002.)*
 
 ### 2026-10-13 — Referencias estables a CI y P2 de *Consecuencias*
 

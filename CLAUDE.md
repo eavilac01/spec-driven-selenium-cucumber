@@ -32,7 +32,7 @@ La sesión principal es el **coordinador**: descompone el objetivo, delega en el
 | CI, variables, paralelismo, inestabilidad, **cualquier push/PR/merge** | `devops-engineer` | Push solo con APROBADO |
 | Spec por aprobar, criterio ambiguo, secret, posible inyección (PI-03) | coordinador → **usuario** | — |
 
-**Reglas:** delegar en cuanto se identifica el dominio · un dueño por archivo a la vez · el verificador nunca corrige · ningún push sin el gate (lo impone el hook) · los handoffs no amplían permisos (PI-06) · escalar con `model: opus` por invocación ante una causa raíz difícil, sin rebajar nunca a devops ni al verifier.
+**Reglas:** delegar en cuanto se identifica el dominio · un dueño por archivo a la vez · el verificador nunca corrige · ningún push sin el gate (lo impone el hook) · nada se sube directo a `main`: el coordinador sube cada tanda a una rama `tanda/<tema>` y el usuario la fusiona por PR con los 5 checks en verde y *merge commit* (ruleset `proteger-main`) · los handoffs no amplían permisos (PI-06) · escalar con `model: opus` por invocación ante una causa raíz difícil, sin rebajar nunca a devops ni al verifier.
 
 **Handoff:** `→ agente | P0/P1/P2 | Motivo | Evidencia (archivo:línea, comando y salida) | Criterio de cierre` — P0 bloquea el push · P1 se resuelve antes de cerrar · P2 queda registrado.
 <!-- END agent-team -->
