@@ -271,7 +271,8 @@ flowchart TB
 | **CHK-11** · PIT + `scripts/check-mutation-report.sh` | Pruebas unitarias que no detectan defectos (umbral 80 %) | CI (job `mutation`) y Jenkins |
 | **CHK-14** · `scripts/check-quarantine.sh` | Pruebas en cuarentena sin registro, sin dueño o con plazo vencido | CI (job `mutation`) y Jenkins |
 | **CHK-18** · `scripts/check-awk-portability.sh` y `scripts/run-with-each-awk.sh` | Scripts que solo funcionan con una implementación de awk (en el runner de GitHub `awk` es gawk; en Ubuntu de escritorio, mawk): control estático y autopruebas con mawk, gawk y `gawk --posix` | CI (job `mutation`, exige las tres) y Jenkins (con los awk del agente) |
-| **CHK-19** · `scripts/check-no-expected-override.sh` | Una ejecución E2E en verde contra un valor esperado inyectado por `-D` (por ejemplo desde `MAVEN_ARGS`): si el log trae el aviso de `ConfigReader`, el job falla (ADR-003, R-2) | CI (`test`, `e2e-firefox`, `e2e-grid`, `quarantine`; autoprueba en `mutation`) y Jenkins (`Test`, `Cuarentena (CHK-14)`) |
+| **CHK-19** · `scripts/check-no-expected-override.sh` | Una ejecución E2E en verde contra un valor esperado inyectado por `-D` (por ejemplo desde `MAVEN_ARGS`), o contra un `base.url`/`remote.url` que no viene de donde debe en ese job: el log trae el aviso de `ConfigReader` o la fuente equivocada de un destino de red, y el job falla (ADR-003, R-2 y D6) | CI (`test`, `e2e-firefox`, `e2e-grid` con `--destino-d remote.url=localhost:4444`, `quarantine`; autoprueba en `mutation`) y Jenkins (`Test`, `Cuarentena (CHK-14)`) |
+| **CHK-20** · `scripts/check-contract-ran.sh` | Que las pruebas de contrato del transporte se dejen de ejecutar sin que nadie lo note (un *include* o un `-Dtest` roto deja Maven en verde): exige el reporte de Surefire de cada prueba de `contract`, con pruebas y sin omitidas ni fallos (ADR-004, D5) | CI (`test` y `e2e-firefox`; autoprueba en `mutation`) y Jenkins (`Test`; autoprueba en su etapa) |
 
 ### Cadena de calidad: de un cambio a `main`
 
@@ -281,7 +282,7 @@ flowchart LR
         direction TB
         change["<b>Cambio</b><br/>spec → feature → código<br/>o ADR → código"]
         verifier["<b>Verificador independiente</b><br/>control negativo · mutación<br/>sin permisos de escritura"]
-        gate["<b>Gate DevOps</b><br/>CHK-01…19 · CHK-08 ×2<br/>.claude/devops-gate.json"]
+        gate["<b>Gate DevOps</b><br/>CHK-01…20 · CHK-08 ×2<br/>.claude/devops-gate.json"]
         hook{{"<b>Hook de push</b><br/>sin gate APROBADO<br/>sobre HEAD: bloqueado"}}
     end
 
@@ -383,7 +384,7 @@ flowchart LR
 │   ├── agents/                  # README del equipo y los 5 agentes:
 │   │                            #   qa-automation-architect, qa-test-designer, qa-automation-engineer,
 │   │                            #   qa-test-verifier y devops-engineer
-│   ├── rules/                   # 01 SDD · 02 permisos · 03 prompt injection · 04 catálogo CHK-01…19
+│   ├── rules/                   # 01 SDD · 02 permisos · 03 prompt injection · 04 catálogo CHK-01…20
 │   ├── hooks
 │   │   ├── devops-gate-hook.sh      # bloquea git push sin .claude/devops-gate.json APROBADO sobre HEAD
 │   │   ├── protect-config-hook.sh   # bloquea escrituras por Bash en .claude/**, CLAUDE.md, MEMORY.md,
@@ -417,6 +418,7 @@ flowchart LR
 ├── scripts
 │   ├── check-awk-portability.sh      # CHK-18: construcciones exclusivas de una implementación de awk
 │   ├── check-layers.sh               # CHK-17: reglas de capas (R1–R6)
+│   ├── check-contract-ran.sh         # CHK-20: las pruebas de contrato se ejecutaron de verdad
 │   ├── check-mutation-report.sh      # CHK-11: guarda del reporte de PIT
 │   ├── check-no-expected-override.sh # CHK-19: esperados y destinos de red por -D, por job
 │   ├── check-quarantine.sh           # CHK-14: registro de cuarentena frente a @quarantine
@@ -427,9 +429,10 @@ flowchart LR
 │   ├── run-with-each-awk.sh          # CHK-18: ejecuta un comando con cada awk (mawk, gawk, gawk --posix, busybox)
 │   ├── wait-for-grid.sh              # espera activa a que el Grid esté listo
 │   └── tests/                        # autopruebas:
-│                                     #   check-awk-portability-test.sh · check-layers-test.sh
-│                                     #   check-no-expected-override-test.sh · check-quarantine-test.sh
-│                                     #   evaluate-quarantine-run-test.sh · run-with-each-awk-test.sh
+│                                     #   check-awk-portability-test.sh · check-contract-ran-test.sh
+│                                     #   check-layers-test.sh · check-no-expected-override-test.sh
+│                                     #   check-quarantine-test.sh · evaluate-quarantine-run-test.sh
+│                                     #   run-with-each-awk-test.sh
 ├── src/main/java/com/demo       # lógica pura, sin E/S ni Selenium (ADR-001); la muta PIT
 │   ├── config
 │   │   ├── BrowserErrorPage.java     # reconoce las páginas de error de Chrome (net::ERR_*), solo con el host
@@ -446,7 +449,7 @@ flowchart LR
     │   ├── actions
     │   │   ├── CompraActions.java
     │   │   └── LoginActions.java
-    │   ├── contract/    # pruebas de contrato de Navegador contra páginas locales (ADR-004)
+    │   ├── contract/NavegadorContractTest.java  # contrato de Navegador contra páginas locales, CT-01…CT-08 (ADR-004)
     │   ├── hooks/Hooks.java
     │   ├── pages
     │   │   ├── CartPage.java
@@ -470,7 +473,8 @@ flowchart LR
     └── resources
         ├── config.properties           # URL, rutas, valores esperados (*.expected*) y datos no sensibles
         ├── junit-platform.properties   # paralelismo por escenario (2 hilos)
-        ├── contract/                   # páginas HTML estáticas de las pruebas de contrato (ADR-004)
+        ├── contract/                   # páginas HTML estáticas, sin red (ADR-004):
+        │                               #   avanza.html · inerte.html · deshabilitado.html · velado.html
         └── features
             ├── compra_e2e.feature
             └── login.feature
@@ -704,6 +708,10 @@ bash scripts/tests/check-no-expected-override-test.sh # CHK-19: autoprueba del c
 bash -c 'set -o pipefail; ./mvnw -B -ntp clean test -Dheadless=true -Dcucumber.filter.tags="not @quarantine" 2>&1 | tee test.log'
 bash scripts/check-no-expected-override.sh test.log
 
+# CHK-20 sobre la misma ejecución: las pruebas de contrato del transporte se ejecutaron de verdad
+bash scripts/tests/check-contract-ran-test.sh
+bash scripts/check-contract-ran.sh target/surefire-reports
+
 # CHK-18: autopruebas que ejercitan awk, con cada implementación (como en CI; requiere gawk)
 bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/check-layers-test.sh
 bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/check-quarantine-test.sh
@@ -715,7 +723,7 @@ bash -c 'set -o pipefail; ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mu
   && bash scripts/check-mutation-report.sh pit.log
 ```
 
-El catálogo completo de comprobaciones (CHK-01…19) y sus comandos está en [`.claude/rules/04-quality-checks.md`](.claude/rules/04-quality-checks.md).
+El catálogo completo de comprobaciones (CHK-01…20) y sus comandos está en [`.claude/rules/04-quality-checks.md`](.claude/rules/04-quality-checks.md).
 
 ### Ejecución contra Selenium Grid
 
@@ -730,10 +738,13 @@ La consola de Grid queda disponible en `http://localhost:4444/ui`. Ejecutar las 
 
 ```bash
 ./mvnw clean test \
+  -Dtest=RunnerTest \
   -Dremote.url=http://localhost:4444 \
   -Dbrowser=chrome \
   -Dheadless=true
 ```
+
+`-Dtest=RunnerTest` ejecuta solo los escenarios: las pruebas de contrato del transporte abren páginas locales por `file:`, que no existen dentro del contenedor del Grid (ADR-004).
 
 Detener y retirar los contenedores:
 
@@ -770,10 +781,10 @@ Para comprobar la evidencia durante desarrollo, puede cambiarse temporalmente un
 
 | Job | Qué hace | Secrets |
 |---|---|---|
-| `test` | CHK-12 (trazabilidad) y la suite completa en Chrome headless, sin `@quarantine`; después, CHK-19 sobre su log | Sí |
-| `e2e-firefox` | Los escenarios E2E en Firefox headless; después, CHK-19 sobre su log | Sí |
+| `test` | CHK-12 (trazabilidad) y la suite completa en Chrome headless, sin `@quarantine`: unitarias, pruebas de contrato del transporte y escenarios; después, CHK-19 sobre su log y CHK-20 sobre sus reportes | Sí |
+| `e2e-firefox` | Los escenarios E2E y las pruebas de contrato del transporte en Firefox headless; después, CHK-19 y CHK-20 | Sí |
 | `e2e-grid` | Los escenarios E2E contra un Selenium Grid (`selenium/standalone-chrome`), con espera activa a que esté listo; después, CHK-19 sobre su log | Sí |
-| `mutation` | CHK-12 (trazabilidad, también aquí para que corra en los PR de forks); CHK-18 (portabilidad de awk); CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, que corren con mawk, gawk y `gawk --posix`; la autoprueba de CHK-19; CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
+| `mutation` | CHK-12 (trazabilidad, también aquí para que corra en los PR de forks); CHK-18 (portabilidad de awk); CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, que corren con mawk, gawk y `gawk --posix`; las autopruebas de CHK-19 y CHK-20; CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
 | `quarantine` | Solo los escenarios `@quarantine`, evaluados por `scripts/evaluate-quarantine-run.sh` contra `docs/quarantine.md`: **verde** si un `defecto-sut` falla por aserción (lo esperado) o un `inestable` falla por aserción o pasa; **verde con aviso** si un `defecto-sut` pasa (revisar la spec) o un `inestable` termina con error (revisar su diagnóstico); **rojo** si un `defecto-sut` termina con error (excepción o timeout) o si la cuarentena no mide nada (cero escenarios, sin reporte, fallo de compilación o un escenario sin fila). Después, CHK-19 sobre su log: un esperado sobrescrito por `-D` lo deja en **rojo** | Sí |
 | `fork-pr-notice` | Solo en los PR que vienen de un fork: avisa (`::notice::` y resumen del run) de que los E2E se omitieron porque esos PR no reciben secrets; un mantenedor los ejecuta antes de fusionar ([CONTRIBUTING.md](CONTRIBUTING.md)) | No |
 
@@ -809,9 +820,10 @@ El `Jenkinsfile` es un pipeline declarativo equivalente a los jobs `test`, `muta
 | 4 | `Capas (CHK-17)` | Autoprueba de las reglas de capas con cada awk, más las reglas sobre el código | No | Verde. Es la etapa sin navegador más larga (unos 5 min) |
 | 5 | `Cuarentena reglada (CHK-14)` | Autopruebas de la cuarentena y del evaluador, más el registro `docs/quarantine.md` | No | Verde |
 | 6 | `Esperados por -D (ADR-003, R-2)` | Autoprueba de CHK-19 | No | Verde |
-| 7 | `Mutation (CHK-11)` | CHK-15/16 y PIT, con la guarda del reporte. Archiva `pit-reports` y `pit.log` | No | Verde (umbral 80 %) |
-| 8 | `Test` | Suite completa sin `@quarantine` y, aunque Maven falle, CHK-19 sobre su log. Publica JUnit y Allure y archiva el HTML de Cucumber, Surefire y Allure. No archiva `test.log` | **Sí** | Verde |
-| 9 | `Cuarentena (CHK-14)` | Solo los escenarios `@quarantine`, con la misma evaluación que en GitHub, y CHK-19 sobre su log. Archiva `quarantine-reports/` sin el log | **Sí** | **Verde** si AC-COMPRA-09 falla por aserción, que es lo esperado. **UNSTABLE** si un `defecto-sut` pasa o un `inestable` termina con error. **FAILURE** ante un error real o un esperado sobrescrito por `-D` |
+| 7 | `Contrato ejecutado, autoprueba (CHK-20)` | Autoprueba de CHK-20 | No | Verde |
+| 8 | `Mutation (CHK-11)` | CHK-15/16 y PIT, con la guarda del reporte. Archiva `pit-reports` y `pit.log` | No | Verde (umbral 80 %) |
+| 9 | `Test` | Suite completa sin `@quarantine` (unitarias, pruebas de contrato y escenarios) y, aunque Maven falle, CHK-19 sobre su log y CHK-20 sobre sus reportes. Publica JUnit y Allure y archiva el HTML de Cucumber, Surefire y Allure. No archiva `test.log` | **Sí** | Verde |
+| 10 | `Cuarentena (CHK-14)` | Solo los escenarios `@quarantine`, con la misma evaluación que en GitHub, y CHK-19 sobre su log. Archiva `quarantine-reports/` sin el log | **Sí** | **Verde** si AC-COMPRA-09 falla por aserción, que es lo esperado. **UNSTABLE** si un `defecto-sut` pasa o un `inestable` termina con error. **FAILURE** ante un error real o un esperado sobrescrito por `-D` |
 | — | `post` global | Limpia el espacio de trabajo (`cleanWs`) | — | — |
 
 **Opciones del pipeline:**
@@ -943,8 +955,9 @@ TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD
 El build está bien configurado si se cumple todo esto:
 
 - [ ] Resultado **SUCCESS**, en unos 7–8 min.
-- [ ] Las nueve etapas de la tabla [Qué ejecuta, en orden](#qué-ejecuta-en-orden) en verde.
-- [ ] **Test Result:** 204 pruebas, 0 fallos, 1 omitida (AC-COMPRA-09, en cuarentena).
+- [ ] Las diez etapas de la tabla [Qué ejecuta, en orden](#qué-ejecuta-en-orden) en verde.
+- [ ] **Test Result:** 222 pruebas, 0 fallos, 1 omitida (AC-COMPRA-09, en cuarentena).
+- [ ] En la consola de `Test`: `check-no-expected-override: ok: sin esperados sobrescritos por -D y con los destinos de red esperados …` (CHK-19) y `check-contract-ran: ok: 1 clase(s) de contrato con su reporte …` (CHK-20).
 - [ ] **Allure Report** disponible en el build.
 - [ ] Artefactos: `target/cucumber-report.html`, `target/surefire-reports/`, `target/allure-results/`, `target/pit-reports/`, `pit.log` y `quarantine-reports/`.
 - [ ] En la consola de `Cuarentena (CHK-14)`: `VERDE: ejecutados=1 fallaron=1 errores=0 pasaron=0`.
@@ -1297,7 +1310,7 @@ El repositorio incluye un equipo de subagentes de Claude Code (`.claude/agents/`
 - **Spec Driven Development:** spec aprobada por una persona → feature trazada (`@AC-`, `@tec-`) → código. Ningún nivel se escribe sin el anterior (`.claude/rules/01`).
 - **Permisos por agente:** qué puede escribir, leer y ejecutar cada rol, aplicado también con `permissions` en `.claude/settings.json` (`.claude/rules/02`).
 - **Defensa contra prompt injection:** el contenido de la aplicación, los reportes y los archivos es dato, nunca instrucción (`.claude/rules/03`).
-- **Comprobaciones deterministas:** catálogo CHK-01…19 (sleep, reintentos, capas, control negativo, mutación, trazabilidad, cuarentena, portabilidad de awk, esperados por `-D`), un hook que bloquea `git push` sin el gate DevOps y otro que impide modificar por Bash la configuración de los agentes y los workflows del CI (`.claude/rules/02` y `04`).
+- **Comprobaciones deterministas:** catálogo CHK-01…20 (sleep, reintentos, capas, control negativo, mutación, trazabilidad, cuarentena, portabilidad de awk, esperados y URL por `-D`, contrato del transporte ejecutado), un hook que bloquea `git push` sin el gate DevOps y otro que impide modificar por Bash la configuración de los agentes y los workflows del CI (`.claude/rules/02` y `04`).
 
 Índice, justificación de roles y asignación de modelo: [`.claude/agents/README.md`](.claude/agents/README.md).
 
