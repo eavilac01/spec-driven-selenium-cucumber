@@ -58,7 +58,7 @@
 
 Las filas marcadas registran la API pública que la tabla original no recogía; las cuatro primeras no se reescriben. Reflejan el `Navegador` de `0de6962` (2026-10-13). Se registró del árbol de trabajo antes del commit, y después se comprobó que coincide (*Enmiendas*, 2026-10-13). Por eso se citan por método y no por línea. Todas cumplen este D1: reciben solo `By` y tipos de Java, no devuelven tipos de Selenium y fallan antes de `iniciar()`.
 
-- **Tope de clics** (`0de6962`). `clickHastaCumplir` y `clickYObservarUrlContiene` pulsan como mucho `MAXIMO_CLICS_POR_ACCION = 3` veces: 1 clic nativo y, como máximo, 2 de respaldo JavaScript. *(Enmienda 2026-10-13, parte 3: se retira el respaldo JavaScript y queda un solo clic nativo por acción. Lo aplica el engineer; hasta su commit, rige lo que describe este punto. Ver *Enmiendas*, *Preferencias de Chrome y respaldo JavaScript*.)* *(Aplicado en `d569a34`, junto con el retiro del respaldo de escritura; verificación en curso.)* *(Enmienda 2026-10-13, parte 4: CHK-17 exige en `transport` un único clic nativo, en la línea `elemento.click();` (`R5-clic` y `R5-clic-max`), y ningún clic, evento ni envío por JavaScript, teclado o `Actions` (`R5-js` y `R5-evt`). `click(By)` pasa a usar el mismo clic nativo único. Ver D7, *Clic nativo único, scripts cerrados y preferencias de Chrome*.)*
+- **Tope de clics** (`0de6962`). `clickHastaCumplir` y `clickYObservarUrlContiene` pulsan como mucho `MAXIMO_CLICS_POR_ACCION = 3` veces: 1 clic nativo y, como máximo, 2 de respaldo JavaScript. *(Enmienda 2026-10-13, parte 3: se retira el respaldo JavaScript y queda un solo clic nativo por acción. Lo aplica el engineer; hasta su commit, rige lo que describe este punto. Ver *Enmiendas*, *Preferencias de Chrome y respaldo JavaScript*.)* *(Aplicado en `d569a34`, junto con el retiro del respaldo de escritura; verificación en curso.)* *(Enmienda 2026-10-13, parte 4: CHK-17 exige en `transport` un único clic nativo, en la línea `elemento.click();` (`R5-clic` y `R5-clic-max`), y ningún clic, evento ni envío por JavaScript, teclado o `Actions` (`R5-js` y `R5-evt`). `click(By)` pasa a usar el mismo clic nativo único. Ver D7, *Clic nativo único, scripts cerrados y preferencias de Chrome*.)* *(Enmienda 2026-10-13, parte 5: CHK-17 exige además en `transport` una única escritura nativa, en la línea `elemento.sendKeys(texto);` (`R5-esc` y `R5-esc-max`). Ver D7, *Escritura única*.)* *(ADR-004, D2 (enmienda 2026-10-13, parte 6): la decisión del clic único pasa a la clase pura `config/ClicNativoUnico`. El clic se cuenta solo si `click()` retorna, y una excepción del clic sale de la espera como `IllegalStateException` con la causa, sin contarse ni repetirse. Corrige el fallo abierto de `click(By)` (`Navegador.java:400-401` y `:140` en `fe566e3`; `:414-415` y `:154` en `0a51d89`). La línea de clic sigue siendo `elemento.click();`.)*
   - Con el tope agotado no pulsan más; solo esperan la postcondición dentro del plazo.
   - Si el plazo se agota, `clickHastaCumplir` lanza `TimeoutException` con el localizador, los clics efectivos y el plazo, y nunca con el texto escrito.
   - Antes, el respaldo JavaScript se repetía sin límite dentro del plazo. Un control que alterna su estado (agregar y quitar) podía revertirse con un clic de más.
@@ -69,14 +69,22 @@ Las filas marcadas registran la API pública que la tabla original no recogía; 
     1. el driver lanza una `WebDriverException` cuyo mensaje describe un fallo de navegación (`net::ERR_…`, `about:neterror` o `chrome-error://`);
     2. el documento cargado es la página `neterror` de Chrome, que detecta el script constante `SCRIPT_LEER_CODIGO_PAGINA_ERROR` (PI-05);
     3. la URL actual empieza por `chrome-error://` o `about:neterror`.
-  - Cualquier otra `WebDriverException` de la navegación se propaga sin cambios. Si el script no puede leer el documento, lo registra en DEBUG y decide la comprobación de la URL.
+  - Cualquier otra `WebDriverException` de la navegación se propaga sin cambios. Si el script no puede leer el documento, lo registra en DEBUG y decide la comprobación de la URL. *(Parte 6: ya no se propaga sin cambios; ver *Mensajes del transporte con una URL*, abajo.)*
   - **Mensaje** (`BrowserErrorPage.describe`): `El navegador mostró una página de error de red al abrir '<url>' (<código>)`.
     - `<url>` es la que recibió `abrir`, que las páginas componen desde la configuración (`LoginPage.abrir`, `InventoryPage.solicitarDirectamente`).
+    - *(Enmienda 2026-10-13, parte 6; decisión del coordinador por PI-09, aplicada en `02cf8fe`: `<url>` pasa a ser solo el host de la URL solicitada, `host[:puerto]` en minúsculas, con la misma regla que la línea de destino de red del ADR-003, D6 (`ConfigResolver.describeHost`). Nunca lleva el esquema, el usuario, la contraseña, la ruta, la consulta ni el fragmento. Una URL sin host, como `file:`, da `(invalido)`. Antes de `02cf8fe` regía el formato de arriba. Ver *Enmiendas*, *Pruebas de contrato del transporte*.)*
     - `<código>` sale solo de un patrón `net::ERR_[A-Z0-9_]+`. Si no hay uno válido, es `código no disponible`.
     - Nunca incluye texto de la página ni del driver (PI-05). Se registra en ERROR.
   - Desde `0de6962`, el caso 1 registra además un DEBUG con SLF4J que solo lleva el nombre de la clase de la excepción y el código validado. No lleva el texto del driver ni la causa (PI-05, PI-09).
   - Desde `0de6962`, el código del mensaje del driver solo se extrae si está completo. Un código seguido de otro carácter de palabra (por ejemplo `net::ERR_ABCdef`) se descarta en lugar de truncarse, y el mensaje dice `código no disponible`. Su detección como fallo de navegación no cambia.
   - No reintenta (CHK-02).
+  - **Mensajes del transporte con una URL** *(enmienda 2026-10-13, parte 6; decisión del coordinador por PI-09; aplicada en `02cf8fe`: `Navegador.java:108` y `:131`, y `DriverFactory.java:72`, en `0a51d89`)*. Ningún mensaje ni causa del transporte lleva una URL completa: solo su host, calculado con `ConfigResolver.describeHost`, la regla única del ADR-003, D6 (`host[:puerto]` en minúsculas, `(ninguno)` o `(invalido)`):
+    - `abrir`, con una `WebDriverException` que no es un fallo de navegación: `IllegalStateException("La navegación a '<host>' falló (<tipo>)")`, **sin causa**. `<tipo>` es el nombre simple de la clase de la excepción;
+    - `esperarUrlContiene`: `TimeoutException("La URL no llegó a contener '<fragmento>' en N s (host actual: <host>)")`. Lleva la causa, que ya no incluye la URL;
+    - `DriverFactory`, si no puede crear la sesión remota: `IllegalStateException("No se pudo crear la sesión en el Grid '<host>' (<tipo>)")`, **sin causa**;
+    - `BrowserErrorPage.describe`: solo el host (nota en *Mensaje*, arriba). Fuera del transporte, `BrowserSettings.toUrl` (D8) aplica la misma regla a una `remote.url` inválida.
+    - **Motivo:** el engineer demostró con un arnés que Selenium repetía la URL completa, con usuario, clave y token, en 5 casos (según el coordinador; no se ejecutó aquí, B-01). Una URL de Grid en la nube puede llevar su clave de acceso (PI-09).
+    - **Coste aceptado:** en `abrir` y en el Grid se pierde el detalle del mensaje original de Selenium; queda el tipo de la excepción. El código `net::ERR_…` validado de los casos 1 y 2 no cambia.
   - **Dónde vive la lógica.** Clasificar el mensaje y la URL, validar el código y componer el mensaje es lógica pura. Vive en `src/main/java/com/demo/config/BrowserErrorPage.java`, con pruebas unitarias y PIT. Cumple el criterio D1 del ADR-001, porque un defecto en sus guardas pasaría inadvertido para la suite. La arista `transport` → `config` ya la permite D4.
   - El mismo commit agrega `--disable-component-update` a los argumentos de Chrome en `BrowserSettings` (D8).
 - **`ResultadoClic`** es un tipo de Java del transporte, no de Selenium, así que cumple R1. Solo lo usan las páginas, dentro de su código: `CartPage.iniciarCheckout`, su método privado `pulsarTramitar` y `CartPage.intentarIniciarCheckout`.
@@ -143,8 +151,10 @@ Cada paquete solo puede nombrar los paquetes `com.demo.*` de su fila. El grafo e
 | 4 | `config`, `data` (`src/main`) | Entre sí | No (lo impone Maven; CHK-15) | No |
 | 5 | `hooks` | `transport`, `utils` | No | Solo Cucumber |
 | 5 | `runners` | Ninguno (el glue se declara como texto, `RunnerTest.java:15`) | No | Sí |
+| 5 | `contract` *(ADR-004, D1; enmienda 2026-10-13, parte 6)* | `transport`, `utils` (solo `ConfigReader`) | Solo `import org.openqa.selenium.By;` | Solo JUnit |
 
 Notas:
+- *(Parte 6, ADR-004.)* `contract` son las pruebas de contrato del transporte: JUnit contra páginas locales, con la API pública de `Navegador`. Ningún otro paquete nombra `contract`, ni siquiera como texto en el glue de `runners` (`A4-R6in`, D7).
 - `SecretReader` y `CredentialsProvider` solo se nombran en `utils` y `steps`. Las unitarias quedan fuera de esta regla porque CHK-16 ya les prohíbe `com.demo.utils` (D6).
 - Las pruebas unitarias de `config` y `data` siguen bajo CHK-16.
 - **Cambios en la columna *Depende de* de `qa-automation-architect.md:28-34`:**
@@ -193,7 +203,7 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
   - exit 1 con cada directorio de capa ausente;
   - exit 2 con cada error de evaluación de la *Nota de ejecución* de D7.
 
-  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`; 184 desde el commit de la enmienda sobre `ResultadoClic` (según devops); 280 desde `df87ada` (enmienda *Firmas expuestas*), con `ok` en 4 implementaciones de awk: mawk, gawk, `gawk --posix` y busybox (según devops). Desde `7d9477f` (enmienda *Selenium en el transporte y herencia*) son 340, con `ok` en las mismas 4 implementaciones de awk (según devops). Con la enmienda *Clic nativo único, scripts cerrados y preferencias de Chrome* (parte 4) serán 414 (previstos).
+  Así, una expresión regular rota no deja pasar todo en silencio. En `f7f7a13` tiene 81 casos (80 como root, donde el del archivo ilegible no aplica); 162 desde `a66e8ce`; 184 desde el commit de la enmienda sobre `ResultadoClic` (según devops); 280 desde `df87ada` (enmienda *Firmas expuestas*), con `ok` en 4 implementaciones de awk: mawk, gawk, `gawk --posix` y busybox (según devops). Desde `7d9477f` (enmienda *Selenium en el transporte y herencia*) son 340, con `ok` en las mismas 4 implementaciones de awk (según devops). Con la enmienda *Clic nativo único, scripts cerrados y preferencias de Chrome* (parte 4) serán 414 (previstos). *(Son 414 desde `38b3512`, con `ok` en las mismas 4 implementaciones de awk, según el mensaje del commit. Con la enmienda *Escritura única* (parte 5) serán 432, previstos.)* *(Son 432 desde `fe566e3`, con `ok` en las 4 implementaciones de awk, según el mensaje del commit. Con la parte 6 (ADR-004, D8) serán 516, previstos, y 517 desde su paso 5 (`A4-D6`).)*
 - **Dónde corren el script y la autoprueba:**
   - GitHub Actions: job `mutation`, pasos *Capas, autoprueba (CHK-17)* y *Capas (CHK-17)*, en paralelo a la suite y sin secrets (`ci.yml:66-84` en `f7f7a13`);
   - Jenkins: etapa `Capas (CHK-17)`, antes de la suite y fuera de `withCredentials` (`Jenkinsfile:22-29` en `f7f7a13`);
@@ -205,12 +215,12 @@ Cierra el pendiente heredado del ADR-001. `ConfigReader`, `SecretReader`, `Crede
 
 | Regla | Rechaza | Equivalente ArchUnit (esbozo de referencia; no se implementa) |
 |---|---|---|
-| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;`; tipos de Selenium (salvo `By`) en firmas públicas del transporte; `By` en firmas públicas de páginas; interfaces, anotaciones o records expuestos en `transport` o `pages`. "Pública" incluye `protected` (*Firmas expuestas*, enmienda 2026-10-13). En `transport` (*Selenium en el transporte y herencia*, enmienda 2026-10-13, parte 2): cualquier tipo de Selenium importado o calificado en una firma expuesta, incluido el `throws`; `By`, solo como parámetro; heredar o implementar un tipo de Selenium; imports de Selenium con comodín | `noClasses().that().resideOutsideOfPackages("..transport..", "..pages..").should().dependOnClassesThat().resideInAPackage("org.openqa..")`; para `..pages..`, lo mismo con `.and(not(equivalentTo(By.class)))`. Firmas: métodos, campos y constructores con `PUBLIC` o `PROTECTED`. Tipos: `noClasses().that().resideInAnyPackage("..transport..", "..pages..").and(modifier(PUBLIC).or(modifier(PROTECTED))).should().beInterfaces().orShould().beRecords()` (una anotación es una interfaz). Transporte: miembros públicos o protegidos sin tipos de `org.openqa..` en el retorno, los parámetros (salvo `By`), el campo o el `throws`, y `noClasses().that().resideInAPackage("..transport..").should().beAssignableTo(resideInAPackage("org.openqa.."))` |
+| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;`; tipos de Selenium (salvo `By`) en firmas públicas del transporte; `By` en firmas públicas de páginas; interfaces, anotaciones o records expuestos en `transport` o `pages`. "Pública" incluye `protected` (*Firmas expuestas*, enmienda 2026-10-13). En `transport` (*Selenium en el transporte y herencia*, enmienda 2026-10-13, parte 2): cualquier tipo de Selenium importado o calificado en una firma expuesta, incluido el `throws`; `By`, solo como parámetro; heredar o implementar un tipo de Selenium; imports de Selenium con comodín. En `contract` (ADR-004, D8; enmienda 2026-10-13, parte 6): todo lo que no sea `import org.openqa.selenium.By;`, como en `pages` | `noClasses().that().resideOutsideOfPackages("..transport..", "..pages..").should().dependOnClassesThat().resideInAPackage("org.openqa..")`; para `..pages..`, lo mismo con `.and(not(equivalentTo(By.class)))`. Firmas: métodos, campos y constructores con `PUBLIC` o `PROTECTED`. Tipos: `noClasses().that().resideInAnyPackage("..transport..", "..pages..").and(modifier(PUBLIC).or(modifier(PROTECTED))).should().beInterfaces().orShould().beRecords()` (una anotación es una interfaz). Transporte: miembros públicos o protegidos sin tipos de `org.openqa..` en el retorno, los parámetros (salvo `By`), el campo o el `throws`, y `noClasses().that().resideInAPackage("..transport..").should().beAssignableTo(resideInAPackage("org.openqa.."))`. Parte 6: `..contract..` se trata como `..pages..` en la primera regla |
 | R2 | Selenium en `steps` o `actions` (incluida en R1; CHK-03 es su subconjunto rápido) | `noClasses().that().resideInAnyPackage("..steps..", "..actions..").should().dependOnClassesThat().resideInAPackage("org.openqa..")` |
 | R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas públicas, como tipo de retorno o como parámetro (los constructores sí las reciben, D3); interfaces, anotaciones o records expuestos en `actions`. "Pública" incluye `protected` (*Firmas expuestas*) | `noClasses().that().resideInAPackage("..steps..").should().dependOnClassesThat().resideInAnyPackage("..pages..", "..transport..")`. Tipos: lo mismo que en R1, para `..actions..` |
-| R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions` | `noClasses().that().resideInAnyPackage("..transport..", "..pages..", "..actions..").should().dependOnClassesThat().resideInAnyPackage("org.junit..", "io.cucumber..")` |
-| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase; clases de `transport`, `actions` o `utils` que extienden otra (*Selenium en el transporte y herencia*, enmienda 2026-10-13, parte 2). En `transport` (*Clic nativo único, scripts cerrados y preferencias de Chrome*, enmienda 2026-10-13, parte 4): `executeScript` con un primer argumento fuera de la lista cerrada `JS_LISTA`; `executeAsyncScript`; un clic en una línea distinta de `elemento.click();` o más de una línea de clic; eventos sintéticos y otras vías de entrada (teclado, envío de formularios, `Actions`, CDP y BiDi) | `noClasses().that().resideOutsideOfPackage("..transport..").should().callMethodWhere(target(owner(assignableTo(SearchContext.class).or(assignableTo(JavascriptExecutor.class)))))`. Herencia: `classes().that().resideInAnyPackage("..transport..", "..pages..", "..actions..", "..utils..")` con una condición propia: `getRawSuperclass()` es `Object` (o `Enum` y `Record` en esos tipos). Parte 4, solo en parte: `noClasses().should().callMethod(JavascriptExecutor.class, "executeAsyncScript", String.class, Object[].class)`; `noClasses().that().resideInAPackage("..transport..").should().dependOnClassesThat().resideInAnyPackage("org.openqa.selenium.interactions..", "org.openqa.selenium.devtools..", "org.openqa.selenium.bidi..")` o `.belongToAnyOf(Keys.class)`; un solo llamador de `WebElement.click()`, el lambda de `clicNativoUnicoHastaCumplir`. ArchUnit no lee el texto de los scripts ni los argumentos, así que la lista cerrada y el vocabulario de JavaScript no tienen equivalente |
-| R6 | Nombrar un paquete fuera de su fila de D4; secretos fuera de `utils` y `steps` (las unitarias, por CHK-16); `ResultadoClic` en un miembro público de una página (restricción de D1, enmienda del 2026-10-13). "Público" incluye `protected` (*Firmas expuestas*) | `layeredArchitecture().consideringOnlyDependenciesInLayers()` con las filas de D4 (`whereLayer(…).mayOnlyBeAccessedByLayers(…)`) y `slices().matching("com.demo.(*)..").should().beFreeOfCycles()`. Para `ResultadoClic`: métodos y campos públicos o protegidos de `..pages..` sin `Navegador.ResultadoClic` como tipo de retorno, de parámetro o de campo |
+| R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions`. Parte 6 (ADR-004, D8): JUnit también en `contract`; destinos de red (`://`), `base.url` y `remote.url` en `contract` o en sus páginas locales | `noClasses().that().resideInAnyPackage("..transport..", "..pages..", "..actions..").should().dependOnClassesThat().resideInAnyPackage("org.junit..", "io.cucumber..")`. Parte 6: `..contract..` sin `io.cucumber..`; los destinos de red son texto (en las páginas, HTML) y no tienen equivalente |
+| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; páginas que extienden una clase; clases de `transport`, `actions` o `utils` que extienden otra (*Selenium en el transporte y herencia*, enmienda 2026-10-13, parte 2). En `transport` (*Clic nativo único, scripts cerrados y preferencias de Chrome*, enmienda 2026-10-13, parte 4): `executeScript` con un primer argumento fuera de la lista cerrada `JS_LISTA`; `executeAsyncScript`; un clic en una línea distinta de `elemento.click();` o más de una línea de clic; eventos sintéticos y otras vías de entrada (teclado, envío de formularios, `Actions`, CDP y BiDi). En `transport` (*Escritura única*, enmienda 2026-10-13, parte 5): una escritura en una línea distinta de `elemento.sendKeys(texto);` o más de una línea de escritura. En las páginas locales de `contract` (ADR-004, D8; parte 6): temporizadores, eventos sintéticos, envíos y recargas automáticas | `noClasses().that().resideOutsideOfPackage("..transport..").should().callMethodWhere(target(owner(assignableTo(SearchContext.class).or(assignableTo(JavascriptExecutor.class)))))`. Herencia: `classes().that().resideInAnyPackage("..transport..", "..pages..", "..actions..", "..utils..")` con una condición propia: `getRawSuperclass()` es `Object` (o `Enum` y `Record` en esos tipos). Parte 4, solo en parte: `noClasses().should().callMethod(JavascriptExecutor.class, "executeAsyncScript", String.class, Object[].class)`; `noClasses().that().resideInAPackage("..transport..").should().dependOnClassesThat().resideInAnyPackage("org.openqa.selenium.interactions..", "org.openqa.selenium.devtools..", "org.openqa.selenium.bidi..")` o `.belongToAnyOf(Keys.class)`; un solo llamador de `WebElement.click()`, el lambda de `clicNativoUnicoHastaCumplir`. ArchUnit no lee el texto de los scripts ni los argumentos, así que la lista cerrada y el vocabulario de JavaScript no tienen equivalente. Parte 5, solo en parte: un solo llamador de `WebElement.sendKeys`, `Navegador.escribir`; el argumento no tiene equivalente. Parte 6: las páginas locales son HTML y no tienen equivalente |
+| R6 | Nombrar un paquete fuera de su fila de D4; secretos fuera de `utils` y `steps` (las unitarias, por CHK-16); `ResultadoClic` en un miembro público de una página (restricción de D1, enmienda del 2026-10-13). "Público" incluye `protected` (*Firmas expuestas*). Parte 6 (ADR-004, D8): `contract` fuera de su fila de D4, y cualquier otro paquete que nombre `contract` | `layeredArchitecture().consideringOnlyDependenciesInLayers()` con las filas de D4 (`whereLayer(…).mayOnlyBeAccessedByLayers(…)`) y `slices().matching("com.demo.(*)..").should().beFreeOfCycles()`. Para `ResultadoClic`: métodos y campos públicos o protegidos de `..pages..` sin `Navegador.ResultadoClic` como tipo de retorno, de parámetro o de campo. Parte 6: `noClasses().that().resideOutsideOfPackage("..contract..").should().dependOnClassesThat().resideInAPackage("..contract..")` (el glue como texto no tiene equivalente) |
 | R7 | Vocabulario de interfaz en las features | No aplica (Gherkin): CHK-04, sin cambios |
 
 Comandos de CHK-17, transcritos de `scripts/check-layers.sh` (la implementación normativa, D6). Cada uno pasa **sin salida** y usa `-P`, como CHK-01.
@@ -219,7 +229,11 @@ Enmienda 2026-10-13 (*Firmas expuestas*): el bloque ya incluye `MOD`, `EXP` y `T
 
 Enmienda 2026-10-13, parte 2 (*Selenium en el transporte y herencia*): el bloque ya incluye `IMP`, `HER`, `R1-wild`, `R1-by`, las dos uniones por imports (`R1-imp` y `R1-her`) y `R5-ext`. `union_imports` no es un comando de git: es la función del script que define *Unión por imports*. Se integra en el mismo commit que el script y su autoprueba (D6); hasta ese commit, CHK-17 es lo que ejecuta el script (24 comprobaciones en `df87ada`). *(Integrada en `7d9477f`.)*
 
-Enmienda 2026-10-13, parte 4 (*Clic nativo único, scripts cerrados y preferencias de Chrome*): el bloque ya incluye `JS_LISTA`, `JS`, `EVT`, `CLIC` y `PREFS`, las tres comprobaciones nuevas de R5 en `transport`, el conteo `R5-clic-max` y la presencia `D8-prefs`. `check_max` y `require` no son comandos de git: son las funciones del script que define *Conteo y presencia*. Se integra en el mismo commit que el script y su autoprueba (D6), **después** del cambio de `Navegador` del paso 1 de su *Migración*; hasta ese commit, CHK-17 es lo que ejecuta el script (29 comprobaciones en `7d9477f`).
+Enmienda 2026-10-13, parte 4 (*Clic nativo único, scripts cerrados y preferencias de Chrome*): el bloque ya incluye `JS_LISTA`, `JS`, `EVT`, `CLIC` y `PREFS`, las tres comprobaciones nuevas de R5 en `transport`, el conteo `R5-clic-max` y la presencia `D8-prefs`. `check_max` y `require` no son comandos de git: son las funciones del script que define *Conteo y presencia*. Se integra en el mismo commit que el script y su autoprueba (D6), **después** del cambio de `Navegador` del paso 1 de su *Migración*; hasta ese commit, CHK-17 es lo que ejecuta el script (29 comprobaciones en `7d9477f`). *(Integrada en `38b3512`.)*
+
+Enmienda 2026-10-13, parte 5 (*Escritura única*): el bloque ya incluye `ESC`, la comprobación `R5-esc` y el conteo `R5-esc-max`. Se integra en el mismo commit que el script y su autoprueba (D6), sin cambios de código; hasta ese commit, CHK-17 es lo que ejecuta el script (34 comprobaciones desde `38b3512`). *(Integrada en `fe566e3`.)*
+
+Enmienda 2026-10-13, parte 6 (*Pruebas de contrato del transporte*, ADR-004, D8): el bloque ya incluye `CT`, `FX`, `RED` y `FIX`, la exclusión de `contract` en las búsquedas generales de Selenium y de JUnit, y las seis comprobaciones `A4-*`. Se integra en el mismo commit que el script, su autoprueba y el ADR-004 (D6, paso 2 del ADR-004); hasta ese commit, CHK-17 es lo que ejecuta el script (36 comprobaciones desde `fe566e3`). La presencia del directorio `contract` (`A4-D6`) llega después, en el paso 5 del ADR-004, y se anota aquí como comentario hasta entonces. *(Integrada en `51e81bd`, con 516 casos. `A4-D6` entra en el bloque con el paso 5 del ADR-004: 517 casos, según devops.)*
 
 ```bash
 T=src/test/java/com/demo
@@ -227,9 +241,15 @@ T=src/test/java/com/demo
 MOD='(?:@[\w.]+(?:\(.*\))?|non-sealed|[a-z]+)\s+'
 EXP='^\s*(?:'"$MOD"')*(?:public|protected)\b'
 TIPO="$EXP"'.*\b(?:interface|record)\s+\w'
-# R1: Selenium solo en transport; en pages, solo el import de By
-git grep --untracked -nP 'org\.openqa' -- src ":!$T/transport" ":!$T/pages"
+# Pruebas de contrato del transporte y sus páginas locales (parte 6, ADR-004, D8)
+CT="$T/contract"
+FX=src/test/resources/contract
+RED='://|\b(?:base|remote)\.url\b'
+FIX='\b(?:setTimeout|setInterval|requestAnimationFrame|requestIdleCallback|queueMicrotask|dispatchEvent|createEvent)\b|\bnew\s+\w*Event\s*\(|\.(?:click|submit|requestSubmit)\b|(?i:http-equiv\s*=\s*[\x22\x27]?refresh)'
+# R1: Selenium solo en transport; en pages y contract, solo el import de By (contract: parte 6)
+git grep --untracked -nP 'org\.openqa' -- src ":!$T/transport" ":!$T/pages" ":!$CT"
 git grep --untracked -nP 'org\.openqa(?!\.selenium\.By;$)' -- "$T/pages"
+git grep --untracked -nP 'org\.openqa(?!\.selenium\.By;$)' -- "$CT"
 # R1: firmas públicas (expuestas)
 git grep --untracked -nP "$EXP"'.*\b(Web[A-Z]\w*|SearchContext|JavascriptExecutor|TakesScreenshot|Capabilities|\w+Options)\b' -- "$T/transport"
 git grep --untracked -nP "$EXP"'.*\bBy\b' -- "$T/pages"
@@ -253,10 +273,12 @@ git grep --untracked -nP "$EXP"'[^(]*\b\w+Page\b[^(]*\(' -- "$T/actions"
 git grep --untracked -nP "$EXP"'(?!\s+\w+\s*\()[^(]*\(.*\b[A-Z]\w*Page\b' -- "$T/actions"
 #   … sin interfaces, anotaciones ni records expuestos
 git grep --untracked -nP "$TIPO" -- "$T/actions"
-# R4: JUnit, Cucumber y esperados en su sitio
-git grep --untracked -nP 'org\.junit' -- src ":!$T/steps" ":!$T/runners" ":!$T/config" ":!$T/data"
+# R4: JUnit, Cucumber y esperados en su sitio (JUnit también en contract: parte 6)
+git grep --untracked -nP 'org\.junit' -- src ":!$T/steps" ":!$T/runners" ":!$T/config" ":!$T/data" ":!$CT"
 git grep --untracked -nP 'io\.cucumber' -- src ":!$T/steps" ":!$T/hooks" ":!$T/runners"
 git grep --untracked -nP '\.expected' -- "$T/transport" "$T/pages" "$T/actions"
+#   … sin destinos de red ni URL del SUT en contract ni en sus páginas locales (parte 6)
+git grep --untracked -nP "$RED" -- "$CT" "$FX"
 # R5: localización y scripts solo en transport; páginas por composición
 git grep --untracked -nP '\bfindElements?\s*\(|\bexecute(Async)?Script\b' -- src ":!$T/transport"
 git grep --untracked -nP '\bextends\b' -- "$T/pages"
@@ -267,6 +289,7 @@ JS_LISTA='SCRIPT_DESPLAZAR_AL_CENTRO|SCRIPT_LEER_CODIGO_PAGINA_ERROR'
 JS='\bexecuteAsyncScript\b|\bexecuteScript\b(?!\((?:'"$JS_LISTA"')[,)])'
 EVT='\bKeys\b|dispatch\w*Event|executeCdpCommand|(?:\.|::)(?:requestSubmit|submit)\b|org\.openqa\.selenium\.(?:interactions|devtools|bidi)'
 CLIC='(?:\.|::)click\b'
+ESC='(?:\.|::)sendKeys\b'
 #   … executeScript solo con un script de la lista cerrada; executeAsyncScript nunca
 git grep --untracked -nP "$JS" -- "$T/transport"
 #   … sin eventos sintéticos ni otras vías de entrada (teclado, envío, Actions, CDP, BiDi)
@@ -275,6 +298,12 @@ git grep --untracked -nP "$EVT" -- "$T/transport"
 git grep --untracked -nP '^(?!\s*elemento\.click\(\);\s*$).*'"$CLIC" -- "$T/transport"
 #   … y hay una como mucho (conteo de líneas distintas de las dos pasadas)
 check_max R5 "más de un clic nativo en transport" 1 "$CLIC" -- "$T/transport"
+#   … toda línea de escritura es exactamente elemento.sendKeys(texto); (Escritura única, parte 5)
+git grep --untracked -nP '^(?!\s*elemento\.sendKeys\(texto\);\s*$).*'"$ESC" -- "$T/transport"
+#   … y hay una como mucho
+check_max R5 "más de una escritura nativa en transport" 1 "$ESC" -- "$T/transport"
+# R5 en las páginas locales de contract: sin temporizadores, eventos sintéticos, envíos ni recargas automáticas (parte 6)
+git grep --untracked -nP "$FIX" -- "$FX"
 # R6: una línea por fila de D4 (runners excluido; src/main lo garantiza Maven)
 git grep --untracked -nP 'com\.demo\.(pages|actions|steps|hooks|runners|data)\b' -- "$T/transport"
 git grep --untracked -nP 'com\.demo\.utils\.(?!ConfigReader\b)' -- "$T/transport" "$T/pages"
@@ -286,8 +315,12 @@ git grep --untracked -nP 'com\.demo\.(hooks|runners|config)\b' -- "$T/steps"
 git grep --untracked -nP 'com\.demo\.(transport|pages|actions|steps|hooks|runners)\b' -- "$T/utils"
 git grep --untracked -nP 'com\.demo\.(pages|actions|steps|runners|config|data)\b' -- "$T/hooks"
 git grep --untracked -nP '\b(SecretReader|CredentialsProvider)\b' -- src ":!$T/utils" ":!$T/steps" ":!$T/config" ":!$T/data"
-# Directorios de capa presentes (cada uno debe listar al menos un archivo)
-git ls-files "$T/transport" "$T/pages" "$T/actions" "$T/steps"
+# R6 de contract (parte 6): su fila de D4, y nadie más la nombra (tampoco el glue de runners)
+git grep --untracked -nP 'com\.demo\.(pages|actions|steps|hooks|runners|config|data)\b' -- "$CT"
+git grep --untracked -nP 'com\.demo\.utils\.(?!ConfigReader\b)' -- "$CT"
+git grep --untracked -nP 'com\.demo\.contract\b' -- src ":!$CT"
+# Directorios de capa presentes (cada uno debe listar al menos un archivo; contract desde el paso 5 del ADR-004, A4-D6)
+git ls-files "$T/transport" "$T/pages" "$T/actions" "$T/steps" "$CT"
 # D8 (presencia, parte 4): DriverFactory aplica las preferencias de Chrome; sin la línea o sin el archivo, es violación
 PREFS='^\s*\w+\.setExperimentalOption\(\s*"prefs"\s*,\s*\w+\.chromePreferences\(\)\s*\)\s*;'
 require D8 "DriverFactory no aplica las preferencias de Chrome de BrowserSettings" "$PREFS" -- "$T/transport/DriverFactory.java"
@@ -810,7 +843,7 @@ Cambiar la avidez de un cuantificador es equivalente, igual que en *Firmas expue
 | C. Una sola línea de clic nativo (`R5-clic-max`), con una forma exacta (`R5-clic`) | **Elegida** | El conteo sin la forma no distingue un clic JavaScript que sustituye al nativo: sigue habiendo uno. La forma sin el conteo no impide un segundo `elemento.click();`. Juntas exigen exactamente una línea, y que sea la nativa. Una línea con dos clics no tiene la forma exacta |
 | D. Exigir que el clic esté dentro de `clicNativoUnicoHastaCumplir` | Descartada | `git grep` no sabe en qué método está una línea, y un awk que siga las llaves es frágil ante cadenas, bloques de texto y lambdas. C da lo mismo: si la única línea de clic estuviera en otro método, los clics con postcondición dejarían de pulsar y la suite fallaría. ArchUnit sí lo vería (un solo llamador de `WebElement.click()`), pero D6 lo descarta y su disparador no se activa |
 | E. Contar hasta 2 y aceptar la línea de `click(By)` como está | Descartada | Congela la forma de hoy, no la invariante. Además, `click(By)` es el único clic sin el fallo uniforme de D1 (clics efectivos y pista de D8) |
-| F. Llevar la decisión del clic único a `src/main`, como lógica pura con pruebas y PIT | Descartada hoy | Mataría por mutación una regresión de la guarda (ver *Riesgo residual*), pero el cableado en `Navegador` seguiría sin prueba: el hueco se mueve, no se cierra. Es una clase nueva para tres líneas. **Disparador:** una regresión real de la guarda |
+| F. Llevar la decisión del clic único a `src/main`, como lógica pura con pruebas y PIT | Descartada hoy | Mataría por mutación una regresión de la guarda (ver *Riesgo residual*), pero el cableado en `Navegador` seguiría sin prueba: el hueco se mueve, no se cierra. Es una clase nueva para tres líneas. **Disparador:** una regresión real de la guarda. *(Parte 6: disparador cumplido por el P2 del verifier sobre `click(By)` (`0a3b6fb`), y la objeción del cableado la cierran las pruebas de contrato. La adopta el ADR-004, D2.)* |
 
 - **Vías de entrada de `EVT`.** Son las formas realistas de volver a pulsar sin una segunda línea `.click`:
   - eventos sintéticos de JavaScript (`dispatchEvent`) y los `Input.dispatch…Event` del protocolo de Chrome;
@@ -819,7 +852,7 @@ Cambiar la avidez de un cuantificador es equivalente, igual que en *Firmas expue
   - `Keys`, porque un `ENTER` o un `SPACE` activan un botón;
   - `submit` y `requestSubmit`, nativos o de JavaScript, que envían un formulario sin pulsar el botón.
 - **Coste.** El código cambia antes que la regla (paso 1 de *Migración*): una constante para `desplazarA`, el script de la página de error sin parámetro y `click(By)` sobre el mismo clic nativo único. Hoy no hay ningún uso de `EVT` en `transport`. Si una spec necesitara una tecla (por ejemplo, `Keys.CONTROL` para vaciar un campo), se reabre por enmienda; la regla nunca se relaja.
-- **La escritura** queda protegida solo en parte: `EVT` rechaza el `dispatchEvent` del antiguo script de escritura, y `JS`, cualquier script nuevo. Una segunda `sendKeys` nativa no la ve ninguna regla (*Fuera de alcance*).
+- **La escritura** queda protegida solo en parte: `EVT` rechaza el `dispatchEvent` del antiguo script de escritura, y `JS`, cualquier script nuevo. Una segunda `sendKeys` nativa no la ve ninguna regla (*Fuera de alcance*). *(Cerrado por la parte 5: `R5-esc` y `R5-esc-max`, *Escritura única*.)*
 
 *Decisión 2: CHK-17 exige que `DriverFactory` aplique las preferencias de Chrome (`D8-prefs`, regla de presencia).*
 
@@ -1057,9 +1090,9 @@ opciones.setExperimentalOption( "prefs" , ajustes.chromePreferences() ) ;
 Cambiar la avidez de un cuantificador es equivalente, igual que en *Firmas expuestas*.
 
 *Riesgo residual aceptado (D6, R-5):*
-- **Una regresión de la guarda** de `clicNativoUnicoHastaCumplir` (`if (clicsEfectivos.get() > 0)`). Sin ella, la espera vuelve a pulsar en cada sondeo sin ninguna línea nueva. Ningún comando la ve, y la suite tampoco, porque la postcondición suele cumplirse tras el primer clic. La protegen la revisión y el mensaje del fallo, que cuenta los clics efectivos. Es el disparador de la opción F.
+- **Una regresión de la guarda** de `clicNativoUnicoHastaCumplir` (`if (clicsEfectivos.get() > 0)`). Sin ella, la espera vuelve a pulsar en cada sondeo sin ninguna línea nueva. Ningún comando la ve, y la suite tampoco, porque la postcondición suele cumplirse tras el primer clic. La protegen la revisión y el mensaje del fallo, que cuenta los clics efectivos. Es el disparador de la opción F. *(Parte 6: lo cierran el ADR-004, D2 (PIT sobre `ClicNativoUnico.sondear`) y D4 (CT-04 cuenta los clics en la página), cuando se implementen sus pasos 3 y 4.)*
 - Formato poco común: `elemento . click()`, o `/* … */` alrededor de la línea de `PREFS`, que la evade porque la línea sigue coincidiendo.
-- Vías de JavaScript o de entrada que `EVT` no enumera (una URL `javascript:` en `abrir`, reflexión, una API futura de Selenium) y un salto de línea en el texto de `escribir`, que envía el formulario.
+- Vías de JavaScript o de entrada que `EVT` no enumera (una URL `javascript:` en `abrir`, reflexión, una API futura de Selenium) y un salto de línea en el texto de `escribir`, que envía el formulario. *(Parte 5: `R5-esc` rechaza el salto de línea agregado en el código, como `texto + "\n"`. El que venga en el dato sigue siendo riesgo residual.)*
 - Un script de la lista que cambie su contenido sin usar `.click`, `EVT` ni `elemento` (por ejemplo, `focus()`): no pulsa, pero ninguna regla lo ve.
 - La línea de `PREFS` en código muerto, o aplicada a otras opciones que no crean el driver.
 
@@ -1069,7 +1102,126 @@ Cambiar la avidez de un cuantificador es equivalente, igual que en *Firmas expue
 - una tecla que no activa nada (`Keys.CONTROL` para vaciar un campo) o un envío que pida una spec: se reabre por enmienda;
 - una llamada a `executeScript` partida en dos líneas, o con un espacio antes del `(`.
 
-*Fuera de alcance (P2, si el usuario lo pide):* la escritura única. Ninguna regla ve una segunda `sendKeys` nativa en `transport`. Se cerraría con `check_max R5 "más de una escritura nativa en transport" 1 '\bsendKeys\b' -- "$T/transport"`, con sus casos.
+*Fuera de alcance (P2, si el usuario lo pide):* la escritura única. Ninguna regla ve una segunda `sendKeys` nativa en `transport`. Se cerraría con `check_max R5 "más de una escritura nativa en transport" 1 '\bsendKeys\b' -- "$T/transport"`, con sus casos. *(Cerrado por la parte 5, *Escritura única*, con la forma exacta además del conteo y con el prefijo de `CLIC` en lugar de `\b`.)*
+
+**Escritura única** (R5; enmienda 2026-10-13, parte 5). Lleva a CHK-17 la invariante de escritura de la parte 3 (`d569a34`), que la parte 4 dejó *Fuera de alcance*.
+
+*Hueco* (en `4b91990`):
+- `Navegador.escribir` hace una sola escritura nativa, `elemento.clear();` y `elemento.sendKeys(texto);` (`Navegador.java:223-224`), y después espera el valor estable sin volver a escribir.
+- Ninguna regla impide volver a agregar la reescritura nativa que retiró `d569a34`. En `d569a34^`, `esperarValorEstable` repetía `elemento.clear();` y `elemento.sendKeys(textoEsperado);` dentro de la espera (`Navegador.java:441-442` en `d569a34^`).
+- `JS` y `EVT` ya rechazan el respaldo JavaScript de entonces (un script fuera de la lista y su `dispatchEvent`), pero no una segunda `sendKeys`.
+
+*Lo que ya cubre `EVT`, y lo que no:*
+- **`Keys`, sí.** `\bKeys\b` rechaza en `transport` cualquier tecla especial, con o sin `sendKeys`, y su import (`R5-evt-d`: `elemento.sendKeys(Keys.ENTER);`).
+- **`sendKeys`, no.** El `\b` de `Keys` deja pasar `sendKeys` a propósito (`ok-36`).
+- **`clear()`, no.** Ninguna expresión de D7 lo nombra, y esta enmienda decide no hacerlo (opción C).
+- **Un salto de línea en el texto, tampoco.** `texto + "\n"` o el carácter U+E007 (la tecla ENTER de WebDriver, escrito como escape Unicode en el código) envían el formulario sin `Keys` ni `submit`.
+
+*Decisión: una sola línea de escritura nativa, con su forma exacta (`R5-esc` y `R5-esc-max`).*
+
+| Opción | Veredicto | Motivo |
+|---|---|---|
+| A. Solo el conteo (`check_max` de una línea), como proponía la parte 4 | Descartada sola | No ve dos escrituras en una línea, ni una escritura única con otro argumento: `elemento.sendKeys(texto + "\n")` envía el formulario y sigue siendo una línea |
+| B. El conteo y la forma exacta `elemento.sendKeys(texto);`, como el clic (`R5-clic` y `R5-clic-max`) | **Elegida** | Juntas exigen exactamente una línea, y que escriba el parámetro `texto` de `escribir` sin añadirle nada. La forma cierra el salto de línea y la tecla ENTER agregados en el código, que `EVT` no ve; el conteo cierra una segunda línea con la forma exacta. Hoy se cumple sin cambiar código |
+| C. Incluir `clear()`, con su forma y su conteo | Descartada | `clear()` no introduce texto. Un borrado de más deja el campo vacío y `esperarValorEstable` falla en rojo (o el campo ya estaba vacío, si el texto es `""`), así que no puede dar el verde falso que se busca evitar. La reescritura realista, la de `d569a34^`, siempre lleva otra `sendKeys`, que B rechaza. Y `.clear()` es también el método de las colecciones de Java (`Set`, `List`, `Map`): daría falsos positivos sin ninguna protección a cambio. **Disparador:** una spec que pida vaciar un campo, o una regresión real con `clear()` |
+| D. Exigir que la escritura esté dentro de `escribir` | Descartada | `git grep` no sabe en qué método está una línea (parte 4, decisión 1, opción D) |
+| E. Llevar la escritura a `src/main`, con pruebas y PIT | Descartada | El mismo motivo que la opción F de la parte 4: el cableado en `Navegador` seguiría sin prueba |
+
+*Expresiones.* `ESC` se define una sola vez, junto a `CLIC`:
+
+```text
+ESC       = (?:\.|::)sendKeys\b
+FORMA_ESC = ^(?!\s*elemento\.sendKeys\(texto\);\s*$).*ESC
+```
+
+Con estas dos son 36 comprobaciones (*Nota de ejecución*):
+
+| ID (autoprueba) | Regla | Ámbito | Expresión | Motivo impreso |
+|---|---|---|---|---|
+| `R5-esc` (nueva) | R5 | `transport` | `FORMA_ESC` | escritura distinta de la línea de escritura nativa del transporte |
+| `R5-esc-max` (nueva) | R5 | `transport` | `ESC`, con `check_max` y máximo 1 | más de una escritura nativa en transport |
+
+- `ESC` acepta `.` o `::` delante, como `CLIC`, así que ve `WebElement::sendKeys` y `new Actions(driver).sendKeys(…)`. Su `\b` final deja fuera `sendKeysYEsperar`, y un identificador `sendKeys` sin `.` ni `::` delante no coincide.
+- `FORMA_ESC` admite sangría y espacios finales alrededor de `elemento.sendKeys(texto);`. Una línea con un comentario, con dos escrituras o con otro argumento no tiene la forma exacta.
+- Fija el receptor `elemento` y el argumento `texto`, que son hoy los nombres de `escribir`. Renombrarlos es un falso positivo, que falla cerrado y se enmienda.
+- `check_max` es la función de la parte 4, sin cambios (*Conteo y presencia*). No hace falta otro caso de error: `error-max` ya prueba que pasa por el ejecutor con guardas.
+
+*Migración:* un solo paso. `devops-engineer` integra el script, la autoprueba y esta enmienda en el mismo commit (D6). `Navegador` no cambia: sobre `4b91990`, `ESC` da una sola línea y `FORMA_ESC` ninguna (*Enmiendas*).
+
+*Casos de autoprueba.* Usan los ayudantes vigentes (`violation`, `allowed` y `allowed_rewrite`), en sus dos modos.
+
+**El árbol base cambia**, para que `valido` tenga la escritura única. `transport/Navegador.java` suma estas líneas después de `click`:
+
+```java
+    public void escribir(By locator, String texto) {
+        elemento.clear();
+        elemento.sendKeys(texto);
+    }
+```
+
+Ninguna expresión vigente encuentra esas líneas (*Enmiendas*). `elemento.clear();` queda a propósito en el árbol válido: es la opción C.
+
+**Cambia un caso vigente, `ok-36`.** Su línea (`elemento.sendKeys(texto); // Keystroke nativo`, en `Otro.java`) sería ahora la segunda escritura, y además no tiene la forma exacta. Conserva su ID y su propósito (`V3`, los `\b` de `Keys`) con otra línea, que no escribe. Es el único caso vigente que cambia. `R5-evt-d` (`elemento.sendKeys(Keys.ENTER);`, en `Bad.java`) imprimirá además las líneas de `R5-esc` y `R5-esc-max`, pero `expect` solo exige el exit 1 y su línea de `EVT`, así que no cambia.
+
+Son 7 casos negativos y 2 permitidos nuevos, es decir, 18 ejecuciones: 432 casos en total.
+
+```java
+// ===== Deben fallar (violation) =====
+// R5-esc · R5 · transport/Bad.java · la reescritura retirada en d569a34 (otro argumento)
+                elemento.sendKeys(textoEsperado);
+// R5-esc-b · R5 · transport/Bad.java · salto de línea que envía el formulario
+        elemento.sendKeys(texto + "\n");
+// R5-esc-c · R5 · transport/Bad.java · Actions sin su import
+        new Actions(driver).sendKeys(elemento, texto).perform();
+// R5-esc-d · R5 · transport/Bad.java · referencia a método
+        java.util.Optional.of(elemento).ifPresent(WebElement::sendKeys);
+// R5-esc-e · R5 · transport/Bad.java · dos escrituras en una línea
+            elemento.sendKeys(texto); elemento.sendKeys(texto);
+// R5-esc-f · R5 · transport/Bad.java · otro receptor
+            campo.sendKeys(texto);
+// R5-esc-max · R5 · transport/Bad.java · forma exacta, pero es la segunda línea de escritura (la otra está en el Navegador.java del árbol base)
+            elemento.sendKeys(texto);
+
+// ===== Deben pasar (allowed) =====
+// ok-36 (cambia) · transport/Otro.java · sendKeys sin prefijo y Keystroke no son el token Keys ni una escritura
+        boolean sendKeys = Keystroke;
+// ok-41 · transport/Otro.java · método que empieza por sendKeys
+        this.sendKeysYEsperar(localizador, texto);
+// ok-42 · transport/Navegador.java del árbol base, con su línea de escritura en la columna 0
+elemento.sendKeys(texto);
+```
+
+*Mutantes que deben morir* (sabotaje de devops; los de `git grep` se comprobaron sobre este ADR, *Enmiendas*). Llevan la letra S porque E ya la usa *Firmas expuestas*:
+
+| Mutante | Casos que lo matan |
+|---|---|
+| S1. Sin `R5-esc` | `R5-esc` a `-f` |
+| S2. `FORMA_ESC` sin el `^` | `valido` |
+| S3. `^(?!\s*` pasa a `^(?!` | `valido` |
+| S4. `^(?!\s*` pasa a `^(?!\s+` | `ok-42` |
+| S5. `elemento` pasa a `\w+` | `R5-esc-f` |
+| S6. `texto` pasa a `\w+` | `R5-esc` |
+| S7. Sin el `\s*$` final de `FORMA_ESC` | `R5-esc-e` |
+| S8. `ESC` solo con `.` (sin `::`) | `R5-esc-d` |
+| S9. `ESC` sin su prefijo (`.` o `::`) | `ok-36` |
+| S10. `ESC` sin el `\b` final | `ok-41` |
+| S11. Sin `R5-esc-max` | `R5-esc-max` |
+| S12. Máximo 2 | `R5-esc-max` |
+| S13. Máximo 0 | `valido` |
+| S14. `R5-esc-max` cuenta `CLIC` en lugar de `ESC` | `R5-esc-max` |
+
+Con el árbol base nuevo, `valido` también mata V3 sin el `\b` inicial de `Keys`, porque contiene `elemento.sendKeys(texto);`. `ok-36` sigue matando las dos variantes de V3.
+
+*Riesgo residual aceptado (D6, R-5):*
+- Una escritura repetida sin una línea nueva: la única línea dentro de un bucle, o movida dentro de la espera de `esperarValorEstable`. Ningún comando la ve, igual que la guarda del clic (parte 4). La protege la revisión.
+- El salto de línea que venga en el dato (`texto`), como en la parte 4.
+- Un script de la lista que cambie su contenido para escribir (`value`, `setRangeText`, `execCommand`) sin `dispatchEvent`: el mismo riesgo de la parte 4 para los scripts.
+- Un formato poco común, como `elemento . sendKeys(texto)`.
+
+*Falsos positivos, que fallan cerrado:*
+- renombrar `elemento` o `texto` en `escribir`;
+- un comentario de `transport` que nombre `.sendKeys` (D6: los comentarios cuentan como texto);
+- una segunda escritura que pida una spec (por ejemplo, un campo que se escribe en dos partes): se reabre por enmienda.
 
 **Nota de ejecución** (`scripts/check-layers.sh:11-39`, `:103-128`; eran `:10-38` y `:93-118` antes de la enmienda sobre `ResultadoClic`):
 - **Dos pasadas por comando.** Cada `git grep` corre con `--untracked` (lo no versionado, respetando `.gitignore`) y sin él (los archivos del índice), y los resultados se unen sin duplicados. Motivo: con git 2.53, `--untracked` recorre el árbol de trabajo sin leer el índice y omite los archivos versionados que coinciden con `.gitignore`.
@@ -1090,7 +1242,9 @@ Cambiar la avidez de un cuantificador es equivalente, igual que en *Firmas expue
 - **34 comprobaciones** desde la enmienda *Clic nativo único, scripts cerrados y preferencias de Chrome* (parte 4): las 29 anteriores, `R5-js`, `R5-evt`, `R5-clic`, `R5-clic-max` y `D8-prefs`.
   - `R5-clic-max` cuenta líneas (`check_max`) y `D8-prefs` exige presencia (`require`); las dos usan el ejecutor con guardas (*Conteo y presencia*).
   - Una línea de presencia que falta se imprime como `archivo:0: D8: motivo`, igual que un directorio de capa: es una violación, no un error de la herramienta.
-- **Límite de PCRE.** Si una expresión agota el límite de backtracking de PCRE, `git grep` escribe `match limit exceeded` en stderr, y CHK-17 da 2: falla cerrado, nunca abierto. Las siete expresiones de *Firmas expuestas* recorren todos los archivos versionados sin agotarlo (enmienda *Firmas expuestas*), las cinco nuevas de *Selenium en el transporte y herencia* también (su enmienda), y las cinco de la parte 4 también (su enmienda).
+- **36 comprobaciones** desde la enmienda *Escritura única* (parte 5): las 34 anteriores, `R5-esc` y `R5-esc-max`. `R5-esc-max` usa `check_max`, como `R5-clic-max`.
+- **42 comprobaciones** desde la enmienda *Pruebas de contrato del transporte* (parte 6, ADR-004, D8): las 36 anteriores y las seis `A4-*` (`A4-R1`, `A4-red`, `A4-fix`, `A4-R6`, `A4-R6u` y `A4-R6in`). `D7-01` y `D7-07` excluyen `contract` y cambian su motivo impreso. Desde el paso 5 del ADR-004, la de directorios (`D7-20`) también exige `contract` (`A4-D6`) sin sumar comprobaciones.
+- **Límite de PCRE.** Si una expresión agota el límite de backtracking de PCRE, `git grep` escribe `match limit exceeded` en stderr, y CHK-17 da 2: falla cerrado, nunca abierto. Las siete expresiones de *Firmas expuestas* recorren todos los archivos versionados sin agotarlo (enmienda *Firmas expuestas*), las cinco nuevas de *Selenium en el transporte y herencia* también (su enmienda), las cinco de la parte 4 también (su enmienda), las dos de la parte 5 también (su enmienda), y `RED` y `FIX` de la parte 6 también (ADR-004, D8, *Control positivo*).
 
 ### D8. Configuración pura del navegador en `src/main` (paso independiente)
 
@@ -1115,6 +1269,10 @@ Cierra el otro pendiente heredado del ADR-001.
     - **Evidencia** (engineer; no se ejecutó aquí, B-01). Según el coordinador, los clics con respaldo pasaron de 36 de 153 a 0 de 156 en Chrome local, con carga y sin ella, y en el Grid. Según el mensaje de `3bab4b2`: un A/B intercalado dio 0 de 6 clics con respaldo con la preferencia, frente a 3 de 6 sin ella; CHK-08 ×2 con `Tests run: 189, Failures: 0, Errors: 0, Skipped: 1`; PIT 132/132.
     - **Pruebas:** tres pruebas unitarias nuevas en `BrowserSettingsTest` (`chromeDisablesPasswordLeakDetectionInEveryMode`, `firefoxHasNoChromePreferences` y `chromePreferencesAreImmutable`), dentro de PIT (CHK-11).
     - **Límite:** las pruebas unitarias fijan el nombre y el valor de la preferencia, pero no pueden probar que Chrome la respete. Chrome ignora en silencio una preferencia que no reconoce. Si una versión futura la renombra, solo lo detecta la E2E, y solo si nada tapa el síntoma: por eso se retira el respaldo JavaScript del clic (*Enmiendas*, *Preferencias de Chrome y respaldo JavaScript*).
+- **Aviso conocido, aceptado** *(2026-10-13, según el coordinador)*. Con Selenium 4.45 y Chrome 155, cada sesión registra `WARNING: Unable to find CDP implementation matching 155`.
+  - Es inocuo: el framework no usa CDP. R5 lo prohíbe en `transport`: `EVT` rechaza `executeCdpCommand` y los paquetes `devtools` y `bidi` (D7, *Clic nativo único, scripts cerrados y preferencias de Chrome*). Ninguna otra capa puede importar Selenium (R1).
+  - No se silencia: desaparece al subir `selenium.version` a una versión que traiga la implementación de CDP para el Chrome en curso. La versión de Chrome queda en el log de cada job (pasos *Chrome version*).
+  - Si un día el aviso viniera con un fallo, no es este caso: se diagnostica, como cualquier rojo.
 
 ## Alternativas consideradas
 
@@ -1734,5 +1892,97 @@ Las decisiones de fondo y el estado no cambian: D7 se alinea con el script, que 
     ```
 
 - **Fuera de alcance (P2):**
-  - la escritura única (*Fuera de alcance* de la subsección), si el usuario la pide;
+  - la escritura única (*Fuera de alcance* de la subsección), si el usuario la pide; *(la propone la parte 5, enmienda siguiente)*
   - el *Criterio de verificación* sigue pidiendo comprobar a mano que "el primer argumento de `executeScript` es una constante". Desde el commit 2 lo comprueba `R5-js`; la línea no se reescribe (registro histórico).
+- *(Integrada en `38b3512` (script, autoprueba y enmienda) después de `0a3b6fb` (paso 1), los dos firmados. Según el mensaje de `38b3512`: 414 casos en las 4 implementaciones de awk y 66 variantes de mutantes, ninguna viva. Los textos de *Reglas y agentes* se aplicaron en `2b03d42`.)*
+
+### 2026-10-13 — Escritura única en CHK-17 (R5, parte 5)
+
+**Propuesta** del `qa-automation-architect` el 2026-10-13, a petición del coordinador (P1: el usuario pide cerrar todos los pendientes; era el P2 *Fuera de alcance* de la parte 4). La aprueba el coordinador (Regla 01, nivel 2). Las decisiones de fondo no cambian: CHK-17 pasa a comprobar la escritura única de la parte 3 (`d569a34`), que hasta hoy solo protegía la revisión.
+
+- **Qué cambia:**
+  - **D7:** la fila R5 de la tabla, con su equivalente ArchUnit parcial; el bloque de comandos (`ESC` y las dos comprobaciones); la subsección *Escritura única* (hueco, qué cubre `EVT`, decisión con sus opciones, expresiones, migración, 7 casos negativos y 2 permitidos, el cambio de `ok-36`, 14 mutantes, riesgo residual y falsos positivos), y la *Nota de ejecución* (36 comprobaciones).
+  - **Fuera de D7:** notas en D1 (*Tope de clics*) y en D6 (casos previstos), y en la subsección de la parte 4 (*La escritura*, *Riesgo residual* y *Fuera de alcance*).
+- **Integración (D6):** un solo commit de `devops-engineer`, con el script, la autoprueba y esta enmienda. No hace falta cambiar código. Hasta ese commit, CHK-17 es lo que ejecuta el script: 34 comprobaciones desde `38b3512`. Si la implementación se aparta de D7 en una expresión, un motivo o un caso, se corrige el ADR antes del commit; la regla nunca se relaja.
+- **Comprobación sobre `HEAD`** (`4b91990`, 2026-10-13; solo `git grep`, B-01). Al comprobar, `src` y `scripts` no tenían cambios sin commit (`git status --short`). Cada búsqueda se hizo con `HEAD`, con `--untracked` y con `--cached`, con el mismo resultado:
+  - `ESC` sobre `transport`: rc=0, con una línea, `Navegador.java:224` (`elemento.sendKeys(texto);`). Con el máximo de 1, `R5-esc-max` no da violación.
+  - `FORMA_ESC` sobre `transport`: rc=1, sin salida.
+  - `ESC` sobre todo `src`: la misma línea, y ninguna más.
+  - Por tanto, **tras la enmienda no hay violaciones**.
+  - **Regresión de control:** sobre `d569a34^`, `ESC` da `Navegador.java:229` y `:442`, y `FORMA_ESC` da `:442` (`elemento.sendKeys(textoEsperado);`). Las dos reglas habrían rechazado la reescritura que retiró la parte 3.
+  - `EVT` sobre `transport`: rc=1. `(?:\.|::)clear\b` sobre `src`: solo `Navegador.java:223` (sobre `d569a34^`, `:228` y `:441`).
+  - **Límite de PCRE:** `ESC` y `FORMA_ESC` recorren con `git grep -lP` los archivos versionados de `src`, `scripts`, `docs` y `.github` sin texto en stderr.
+- **Control positivo de los casos,** sobre este ADR (árbol base en `:1130-1133` y bloque de casos en `:1143-1165` al redactar):
+  - `ESC` encuentra la línea del árbol base (`:1132`), los 7 casos negativos y `ok-42`, y no encuentra `ok-36` ni `ok-41`.
+  - `FORMA_ESC` encuentra los 6 casos `R5-esc` a `-f`, y no encuentra la línea del árbol base, `R5-esc-max` ni `ok-42`.
+  - Ninguna de las 14 expresiones de `git grep` vigentes que aplican a `transport` (`EXP` con tipos de Selenium, `R1-by`, `TIPO`, `R1-wild`, `HER`, `extends`, `.expected`, `JS`, `EVT`, `CLIC`, `FORMA`, las dos de R6 para `transport`, `org.openqa` y `findElement`) encuentra las líneas del árbol base nuevo, `ok-36`, `ok-41` ni `ok-42`. `union_imports` no se puede ejecutar aquí (B-01): por inspección, la única línea expuesta nueva (`public void escribir(By locator, String texto) {`) no lleva `openqa` ni otro nombre importado de Selenium que `By`.
+- **Control de los mutantes de `git grep`,** sobre el mismo bloque: S2 suma la línea del árbol base (`valido`), `R5-esc-max` y `ok-42`; S3 suma la línea del árbol base y `R5-esc-max`; S4 suma `ok-42`; S5 pierde `R5-esc-f`; S6 pierde `R5-esc`; S7 pierde `R5-esc-e`; S8 pierde `R5-esc-d`; S9 suma `ok-36`; S10 suma `ok-41`. V3 (sin el `\b` inicial de `Keys`) encuentra la línea del árbol base y `ok-36`; V3 (sin el final), `ok-36`. Los mutantes de cableado y de conteo (S1 y S11 a S14) los ejecuta devops: B-01 no permite correr el script.
+- **Criterio de cierre:**
+  - **`devops-engineer`:**
+    1. `scripts/check-layers.sh` define `ESC` y `FORMA_ESC` una sola vez, con el texto exacto de D7, junto a `CLIC` y `FORMA`. Suma `R5-esc` y `R5-esc-max` después de `R5-clic-max`, con los motivos de la tabla, y actualiza el comentario de cabecera.
+    2. El árbol base y `ok-36` cambian como dice *Casos de autoprueba*. La autoprueba suma los 7 casos negativos y los 2 permitidos en sus dos modos: 432 casos, con exit 0 en la matriz de CHK-18 (mawk, gawk, `gawk --posix` y busybox). `bash scripts/check-awk-portability.sh` da 0.
+    3. Sabotaje: cada mutante S1 a S14 hace fallar al menos un caso. Se adjunta la tabla mutante → casos en rojo, y ninguno sobrevive.
+    4. `bash scripts/check-layers.sh` da 0 sobre el HEAD del commit.
+    5. La CI no cambia: CHK-17 sigue en el job `mutation` y en la etapa `Capas (CHK-17)` del `Jenkinsfile`.
+  - **`qa-test-verifier`:** CHK-17 y su autoprueba en 0, y la tabla del sabotaje revisada. Una violación sembrada en un temporal fuera del repositorio (la línea de `R5-esc-max`) da 1.
+- **Reglas y agentes** (usuario, P-01). D7 es la definición normativa, así que el texto actual no es falso, pero queda incompleto. Textos para pegar, que sustituyen a los de la parte 4:
+  - `.claude/agents/qa-automation-architect.md`, fila R5:
+
+    ```markdown
+    | R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; en `transport`, `executeScript` fuera de la lista cerrada de scripts, `executeAsyncScript`, un clic distinto de `elemento.click();` o más de uno, una escritura distinta de `elemento.sendKeys(texto);` o más de una, y eventos sintéticos u otras vías de entrada (teclado, envío de formularios, `Actions`, CDP y BiDi) (ADR-002, D7, *Clic nativo único, scripts cerrados y preferencias de Chrome* y *Escritura única*); clases de `transport`, `pages`, `actions` o `utils` que extienden otra |
+    ```
+
+  - `.claude/rules/04-quality-checks.md`, fila CHK-17: el mismo texto de la parte 4, con dos cambios:
+    - "un único clic nativo (`elemento.click();`) y ningún evento sintético ni otra vía de entrada" pasa a "un único clic nativo (`elemento.click();`), una única escritura nativa (`elemento.sendKeys(texto);`) y ningún evento sintético ni otra vía de entrada";
+    - "(D7, *Clic nativo único, scripts cerrados y preferencias de Chrome*)" pasa a "(D7, *Clic nativo único, scripts cerrados y preferencias de Chrome* y *Escritura única*)".
+- *(Integrada en `fe566e3` (script, autoprueba y enmienda): 36 comprobaciones y 432 casos, según el mensaje del commit. La fila R5 de arriba es anterior a `d5b18ef`, que ya aplicó el fragmento de `contract` del ADR-004. Los textos combinados están en la parte 6, *Reglas y agentes*.)*
+
+### 2026-10-13 — Pruebas de contrato del transporte: `contract` en D4 y D7 (parte 6, ADR-004)
+
+**Propuesta** del `qa-automation-architect` el 2026-10-13. Es el paso 1 del ADR-004 (Aceptado por el coordinador el mismo día). La aprueba el coordinador (Regla 01, nivel 2). El ADR-004 es la definición de fondo: D1 (paquete `contract`), D2 (`ClicNativoUnico`) y D8 (reglas de CHK-17, casos y mutantes). Esta enmienda lo transcribe aquí, porque D6 exige que D7 cambie en el mismo commit que el script. Las citas son de `fe566e3`.
+
+- **Qué cambia:**
+  - **D4:** la fila de `contract` (capa 5) y una nota: ningún otro paquete la nombra, tampoco el glue de `runners`.
+  - **D7:** las filas R1, R4, R5 y R6 de la tabla, con su equivalente ArchUnit parcial. En el bloque de comandos: `CT`, `FX`, `RED` y `FIX`, la exclusión de `contract` en `D7-01` y `D7-07`, y las seis comprobaciones `A4-*`. La presencia del directorio (`A4-D6`) queda como comentario hasta el paso 5 del ADR-004. La *Nota de ejecución* pasa a 42 comprobaciones.
+  - **Motivos impresos que cambian:** `D7-01` pasa a "Selenium fuera de transport, pages y contract", y `D7-07`, a "JUnit fuera de steps, runners, contract y las pruebas unitarias". Los nuevos son los de la tabla de D8 del ADR-004.
+  - **Fuera de D7:**
+    - notas en D1: *Tope de clics* (ADR-004, D2), el mensaje de `abrir` y *Mensajes del transporte con una URL* (PI-09, decisión del coordinador, punto siguiente);
+    - D6: casos previstos;
+    - en la subsección de la parte 4: la fila F de la decisión 1 (disparador cumplido) y el *Riesgo residual* de la guarda;
+    - y la marca de integración de la parte 5.
+- **Mensajes con URL (PI-09).** No es una regla de CHK-17. Se registra en D1 porque cambia el contrato de `abrir` y de los mensajes del transporte. La regla de host es la del ADR-003, D6 (`ConfigResolver.describeHost`, `public static`). El cambio está en `02cf8fe` (engineer, ADR-003, D6, paso 1), y no forma parte del commit de devops del paso 2.
+- **Integración (D6):** un solo commit de `devops-engineer` (paso 2 del ADR-004), con el script, la autoprueba, el ADR-004 y esta enmienda.
+  - Hasta ese commit, CHK-17 es lo que ejecuta el script: 36 comprobaciones desde `fe566e3`.
+  - `A4-D6` llega en otro commit (paso 5 del ADR-004), cuando `contract` exista en HEAD. Ese commit también actualiza el comentario del bloque y la línea de directorios.
+  - Orden en el script: el del bloque de D7 de arriba, agrupado por regla.
+  - Si la implementación se aparta de D7 en una expresión, un motivo o un caso, se corrige el ADR antes del commit. La regla nunca se relaja.
+- **Comprobación sobre `HEAD`** (`fe566e3`; solo `git grep`, B-01). Entre `4b91990` y `fe566e3`, `src` y `pom.xml` no cambian (`git diff --stat 4b91990 fe566e3 -- src pom.xml` no da salida).
+  - `D7-01` y `D7-07` con la exclusión nueva, y `A4-R6in`, dan rc=1 sin salida con `HEAD`, y también con `--untracked` sobre `src`. Esa última pasada incluía el cambio del engineer, aún sin commit. Repetidos sobre `0a51d89`, que ya lo incluye (`02cf8fe`), siguen en rc=1.
+  - `RED`, `FIX`, `A4-R1`, `A4-R6` y `A4-R6u` recorren rutas que aún no existen: rc=1 sin stderr.
+  - Por tanto, el script del paso 2 da 0 sobre HEAD.
+  - El control positivo de los casos y de los mutantes de expresión está en el ADR-004, D8 (*Control positivo*), sobre las mismas expresiones.
+- **Totales:**
+  - **42 comprobaciones** (36 + 6).
+  - **516 casos** en el paso 2: 432 + 84, de los que 72 son ejecuciones de 36 casos negativos y 12 de 6 permitidos, en sus dos modos.
+  - **517** en el paso 5, porque `A4-D6` suma `contract` al lazo de `D7-20`.
+  - Mutantes: N1 a N23 en el paso 2 y N24 en el paso 5 (ADR-004, D8). La letra N no la usa ningún otro ADR.
+  - Los IDs de autoprueba llevan el prefijo `A4-`, porque `ok-41` y `ok-42` son de la parte 5.
+- **Criterio de cierre:**
+  - **`devops-engineer`, paso 2:**
+    1. el script con el bloque de arriba, los motivos de la tabla de D8 del ADR-004 y el comentario de cabecera actualizado;
+    2. la autoprueba con el árbol base y los casos del ADR-004, D8: 516 casos, con exit 0 en la matriz de CHK-18 (mawk, gawk, `gawk --posix` y busybox);
+    3. sabotaje N1 a N23 sin sobrevivientes;
+    4. `bash scripts/check-layers.sh` en 0 sobre el HEAD del commit;
+    5. en `pom.xml`, el include de Surefire `com/demo/contract/**/*Test.java` y `com.demo.contract.*` en `excludedTestClasses`;
+    6. CHK-08 ×2 con el mismo `Tests run`.
+  - **`devops-engineer`, paso 5:** `A4-D6` y su caso (517), N24, y este bloque sin el comentario provisional.
+  - **`qa-test-verifier`:** CHK-17 y su autoprueba en 0, y la tabla del sabotaje revisada.
+- **Reglas y agentes** (usuario, P-01).
+  - El grupo A del ADR-004 está aplicado en `d5b18ef`. Incluye las filas R1, R4, R5 y R6 del arquitecto.
+  - La fila R5 de `d5b18ef` no lleva la escritura única de la parte 5, y la de la parte 5 no lleva `contract`. **Texto combinado para pegar**, que sustituye a los dos:
+
+    ```markdown
+    | R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; en `transport`, `executeScript` fuera de la lista cerrada de scripts, `executeAsyncScript`, un clic distinto de `elemento.click();` o más de uno, una escritura distinta de `elemento.sendKeys(texto);` o más de una, y eventos sintéticos u otras vías de entrada (teclado, envío de formularios, `Actions`, CDP y BiDi) (ADR-002, D7, *Clic nativo único, scripts cerrados y preferencias de Chrome* y *Escritura única*); clases de `transport`, `pages`, `actions` o `utils` que extienden otra; temporizadores, eventos sintéticos, envíos o recargas automáticas en las páginas locales de `contract` (ADR-004) |
+    ```
+
+  - La fila CHK-17 de la Regla 04 (grupo B del ADR-004, con su paso 5) ya combina la parte 5 y el ADR-004. Ver ADR-004, *Cambios propuestos*, grupo B.

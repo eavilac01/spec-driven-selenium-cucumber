@@ -40,7 +40,7 @@ pipeline {
         // Checkout explícito en su propia etapa: queda visible y medible.
         skipDefaultCheckout(true)
         timestamps()
-        // Suma de las etapas (CHK-12/14/17 ~1 min, mutación 10, suite 20,
+        // Suma de las etapas (CHK-12/14/17/20 ~1 min, mutación 10, suite 20,
         // cuarentena 20) con margen.
         timeout(time: 60, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '10'))
@@ -64,8 +64,6 @@ pipeline {
             }
         }
 
-        // CHK-17 (ADR-002, D6): fuera de withCredentials, sin secrets ni navegador.
-        // La autoprueba crea su repositorio en un temporal fuera del workspace.
         // Portabilidad de awk: la estática no necesita gawk. Las autopruebas que
         // usan awk corren con cada implementación instalada en el agente (sin
         // --require: GitHub Actions exige mawk, gawk y gawk --posix).
@@ -77,6 +75,8 @@ pipeline {
             }
         }
 
+        // CHK-17 (ADR-002, D6): fuera de withCredentials, sin secrets ni navegador.
+        // La autoprueba crea su repositorio en un temporal fuera del workspace.
         stage('Capas (CHK-17)') {
             steps {
                 sh 'bash scripts/run-with-each-awk.sh -- bash scripts/tests/check-layers-test.sh'
@@ -103,6 +103,15 @@ bash scripts/check-layers.sh
         stage('Esperados por -D (ADR-003, R-2)') {
             steps {
                 sh 'bash scripts/tests/check-no-expected-override-test.sh'
+            }
+        }
+
+        // ADR-004, D5: autoprueba del control de la etapa 'Test' (CHK-20), con
+        // reportes sintéticos en un repositorio temporal fuera del workspace
+        // (sin awk ni secrets).
+        stage('Contrato ejecutado, autoprueba (CHK-20)') {
+            steps {
+                sh 'bash scripts/tests/check-contract-ran-test.sh'
             }
         }
 
@@ -135,10 +144,12 @@ rm -rf target/pit-reports pit.log
 
         // CHK-08: misma suite y mismo filtro que el job `test` de GitHub Actions.
         // ADR-003, R-2: después de Maven, aunque falle, el log no puede tener el
-        // aviso de D3 (un esperado sobrescrito por -D). El rc de Maven no se
+        // aviso de D3 (un esperado sobrescrito por -D). CHK-20 (ADR-004, D5):
+        // también aunque Maven falle, las pruebas de contrato tienen su reporte
+        // con tests > 0 y sin omitidas, fallos ni errores. El rc de Maven no se
         // tapa: si Maven falla, la etapa sale con su rc; si no, con el del
-        // control. test.log no se archiva: los artefactos no pasan por el
-        // enmascarado de credenciales de la consola.
+        // primer control que falle. test.log no se archiva: los artefactos no
+        // pasan por el enmascarado de credenciales de la consola.
         stage('Test') {
             options {
                 timeout(time: 20, unit: 'MINUTES')
@@ -168,6 +179,8 @@ set -e
 mvn_rc="${st[0]}"
 override_rc=0
 bash scripts/check-no-expected-override.sh test.log || override_rc=$?
+contract_rc=0
+bash scripts/check-contract-ran.sh target/surefire-reports || contract_rc=$?
 if [ "${st[1]}" -ne 0 ]; then
   echo "tee terminó con ${st[1]}: el log de Maven está incompleto" >&2
   exit 1
@@ -175,7 +188,10 @@ fi
 if [ "$mvn_rc" -ne 0 ]; then
   exit "$mvn_rc"
 fi
-exit "$override_rc"
+if [ "$override_rc" -ne 0 ]; then
+  exit "$override_rc"
+fi
+exit "$contract_rc"
 '''
                 }
             }

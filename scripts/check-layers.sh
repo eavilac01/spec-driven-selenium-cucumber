@@ -87,7 +87,9 @@
 # lista cerrada JS_LISTA y nunca executeAsyncScript (R5-js); ningún evento
 # sintético ni otra vía de entrada: teclado, envío de formularios, Actions, CDP
 # y BiDi (EVT, R5-evt); toda línea de clic es exactamente "elemento.click();"
-# (FORMA, R5-clic) y hay una como mucho (check_max, R5-clic-max). Además,
+# (FORMA, R5-clic) y hay una como mucho (check_max, R5-clic-max); lo mismo
+# para la escritura, "elemento.sendKeys(texto);" (FORMA_ESC, R5-esc, y ESC con
+# check_max, R5-esc-max; Escritura única, parte 5). Además,
 # DriverFactory.java aplica las preferencias de Chrome de BrowserSettings
 # (PREFS, regla de presencia D8-prefs, con require). Los comentarios cuentan
 # como texto (D6).
@@ -96,6 +98,18 @@
 # sus guardas (grep2), sin awk. check_max cuenta las líneas distintas
 # (archivo:línea) de las dos pasadas; require falla si ninguna pasada encuentra
 # la línea, y sin el archivo también (no hay coincidencias: falla cerrado).
+#
+# Pruebas de contrato del transporte (D7, enmienda 2026-10-13, parte 6; ADR-004,
+# D8). contract (CT) son pruebas JUnit de Navegador contra páginas locales (FX).
+# Las búsquedas generales de Selenium (D7-01) y de JUnit (D7-07) la excluyen, y
+# sus reglas propias son: solo "import org.openqa.selenium.By;" de Selenium
+# (A4-R1); ni en su código ni en sus páginas, destinos de red ("://") ni
+# base.url o remote.url (RED, A4-red); en sus páginas, ningún temporizador,
+# evento sintético, envío ni recarga automática (FIX, A4-fix); nombra solo
+# transport y ConfigReader (A4-R6 y A4-R6u), y ningún otro paquete de src la
+# nombra, tampoco el glue de runners (A4-R6in). contract es además un
+# directorio de capa: sin archivos versionados, "D6" (A4-D6, paso 5 del
+# ADR-004).
 #
 # Riesgo residual aceptado (D6, R-5): firmas, cabeceras y anotaciones partidas
 # en varias líneas, y texto que no sea espacio, anotación ni modificador antes
@@ -142,6 +156,15 @@ JS='\bexecuteAsyncScript\b|\bexecuteScript\b(?!\((?:'"$JS_LISTA"')[,)])'
 EVT='\bKeys\b|dispatch\w*Event|executeCdpCommand|(?:\.|::)(?:requestSubmit|submit)\b|org\.openqa\.selenium\.(?:interactions|devtools|bidi)'
 CLIC='(?:\.|::)click\b'
 FORMA='^(?!\s*elemento\.click\(\);\s*$).*'"$CLIC"
+# Escritura única (D7, parte 5): la línea de escritura nativa y su forma exacta.
+ESC='(?:\.|::)sendKeys\b'
+FORMA_ESC='^(?!\s*elemento\.sendKeys\(texto\);\s*$).*'"$ESC"
+# Pruebas de contrato del transporte y sus páginas locales (D7, parte 6;
+# ADR-004, D8): rutas, destinos de red y automatismos de las páginas.
+CT="$T/contract"
+FX=src/test/resources/contract
+RED='://|\b(?:base|remote)\.url\b'
+FIX='\b(?:setTimeout|setInterval|requestAnimationFrame|requestIdleCallback|queueMicrotask|dispatchEvent|createEvent)\b|\bnew\s+\w*Event\s*\(|\.(?:click|submit|requestSubmit)\b|(?i:http-equiv\s*=\s*[\x22\x27]?refresh)'
 status=0
 
 errf="$(mktemp)"
@@ -317,11 +340,13 @@ union_imports() {
   fi
 }
 
-# R1: Selenium solo en transport; en pages, solo el import de By
-check R1 "Selenium fuera de transport y pages" \
-  'org\.openqa' -- src ":!$T/transport" ":!$T/pages"
+# R1: Selenium solo en transport; en pages y contract, solo el import de By (contract: parte 6)
+check R1 "Selenium fuera de transport, pages y contract" \
+  'org\.openqa' -- src ":!$T/transport" ":!$T/pages" ":!$CT"
 check R1 "en pages solo se permite 'import org.openqa.selenium.By;'" \
   'org\.openqa(?!\.selenium\.By;$)' -- "$T/pages"
+check R1 "en contract solo se permite 'import org.openqa.selenium.By;'" \
+  'org\.openqa(?!\.selenium\.By;$)' -- "$CT"
 # R1: firmas públicas (expuestas)
 check R1 "tipo de Selenium en una firma pública del transporte" \
   "$EXP"'.*\b(Web[A-Z]\w*|SearchContext|JavascriptExecutor|TakesScreenshot|Capabilities|\w+Options)\b' -- "$T/transport"
@@ -356,13 +381,16 @@ check R3 "página como parámetro de un método público de actions" \
 #   … sin interfaces, anotaciones ni records expuestos
 check R3 "interfaz, anotación o record expuesto en actions" \
   "$TIPO" -- "$T/actions"
-# R4: JUnit, Cucumber y esperados en su sitio
-check R4 "JUnit fuera de steps, runners y las pruebas unitarias" \
-  'org\.junit' -- src ":!$T/steps" ":!$T/runners" ":!$T/config" ":!$T/data"
+# R4: JUnit, Cucumber y esperados en su sitio (JUnit también en contract: parte 6)
+check R4 "JUnit fuera de steps, runners, contract y las pruebas unitarias" \
+  'org\.junit' -- src ":!$T/steps" ":!$T/runners" ":!$T/config" ":!$T/data" ":!$CT"
 check R4 "Cucumber fuera de steps, hooks y runners" \
   'io\.cucumber' -- src ":!$T/steps" ":!$T/hooks" ":!$T/runners"
 check R4 "clave *.expected* en transport, pages o actions" \
   '\.expected' -- "$T/transport" "$T/pages" "$T/actions"
+#   … sin destinos de red ni URL del SUT en contract ni en sus páginas locales (parte 6)
+check R4 "destino de red o URL del SUT en contract o en sus páginas locales" \
+  "$RED" -- "$CT" "$FX"
 # R5: localización y scripts solo en transport; páginas por composición
 check R5 "findElement(s) o executeScript fuera de transport" \
   '\bfindElements?\s*\(|\bexecute(Async)?Script\b' -- src ":!$T/transport"
@@ -384,6 +412,15 @@ check R5 "clic distinto de la línea de clic nativo del transporte" \
 #   … y hay una como mucho (líneas distintas de las dos pasadas)
 check_max R5 "más de un clic nativo en transport" 1 \
   "$CLIC" -- "$T/transport"
+#   … toda línea de escritura es exactamente elemento.sendKeys(texto); (Escritura única, parte 5)
+check R5 "escritura distinta de la línea de escritura nativa del transporte" \
+  "$FORMA_ESC" -- "$T/transport"
+#   … y hay una como mucho
+check_max R5 "más de una escritura nativa en transport" 1 \
+  "$ESC" -- "$T/transport"
+# R5 en las páginas locales de contract: sin temporizadores, eventos sintéticos, envíos ni recargas automáticas (parte 6)
+check R5 "temporizador, evento sintético o navegación automática en una página local de contract" \
+  "$FIX" -- "$FX"
 # R6: una línea por fila de D4 (runners excluido; src/main lo garantiza Maven)
 check R6 "transport nombra un paquete fuera de su fila de D4" \
   'com\.demo\.(pages|actions|steps|hooks|runners|data)\b' -- "$T/transport"
@@ -404,9 +441,17 @@ check R6 "hooks nombra un paquete fuera de su fila de D4" \
   'com\.demo\.(pages|actions|steps|runners|config|data)\b' -- "$T/hooks"
 check R6 "SecretReader o CredentialsProvider fuera de utils y steps" \
   '\b(SecretReader|CredentialsProvider)\b' -- src ":!$T/utils" ":!$T/steps" ":!$T/config" ":!$T/data"
+# R6 de contract (parte 6): su fila de D4, y nadie más la nombra (tampoco el glue de runners)
+check R6 "contract nombra un paquete fuera de su fila de D4" \
+  'com\.demo\.(pages|actions|steps|hooks|runners|config|data)\b' -- "$CT"
+check R6 "contract nombra utils distinto de ConfigReader" \
+  'com\.demo\.utils\.(?!ConfigReader\b)' -- "$CT"
+check R6 "un paquete distinto de contract nombra contract" \
+  'com\.demo\.contract\b' -- src ":!$CT"
 
-# Directorios de capa presentes: cada uno debe listar al menos un archivo.
-for dir in "$T/transport" "$T/pages" "$T/actions" "$T/steps"; do
+# Directorios de capa presentes: cada uno debe listar al menos un archivo
+# (contract desde el paso 5 del ADR-004: A4-D6).
+for dir in "$T/transport" "$T/pages" "$T/actions" "$T/steps" "$CT"; do
   rc=0
   listing="$(git ls-files -- "$dir")" || rc=$?
   if [ "$rc" -ne 0 ]; then

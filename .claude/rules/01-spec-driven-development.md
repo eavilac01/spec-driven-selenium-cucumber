@@ -19,7 +19,7 @@ Las dependencias entre paquetes las fija el ADR-002 (D4, comprobadas por CHK-17)
 | ID | Regla |
 |---|---|
 | SDD-01 | Sin una spec en estado `aprobada` no se escribe la feature. |
-| SDD-02 | Sin feature no hay step; sin step no hay acción ni página nueva. No se escribe código especulativo. Las pruebas unitarias del framework no requieren spec: las origina un ADR, y un ADR puede originarse en una CHK. |
+| SDD-02 | Sin feature no hay step; sin step no hay acción ni página nueva. No se escribe código especulativo. Las pruebas del framework (unitarias, y de contrato del transporte contra páginas locales, ADR-004) no requieren spec: las origina un ADR, y un ADR puede originarse en una CHK. |
 | SDD-03 | Un cambio de comportamiento empieza por la spec: spec → feature → código. Nunca se ajusta una feature o una aserción para que "coincida" con la aplicación sin cambiar antes la spec. |
 | SDD-04 | Cada AC tiene un ID estable `AC-<DOMINIO>-<NN>`. Un ID no se reutiliza; un AC eliminado queda marcado como `retirado`. |
 | SDD-05 | Cada escenario apunta a uno o más AC. Cada AC apunta a uno o más escenarios, o figura en *No cubiertos* con su motivo. |

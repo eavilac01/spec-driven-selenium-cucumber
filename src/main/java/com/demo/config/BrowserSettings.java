@@ -121,12 +121,17 @@ public final class BrowserSettings {
         return chromePreferences;
     }
 
+    /**
+     * El error nunca lleva la URL ni la excepción original, cuyo mensaje la repite: una URL de Grid puede llevar su
+     * clave en el usuario o en la consulta (PI-09). Solo nombra el host, como la línea de destino de red
+     * (ADR-003, D6), y el tipo de error del JDK.
+     */
     private static URL toUrl(String remoteUrl) {
         try {
             return URI.create(remoteUrl).toURL();
         } catch (IllegalArgumentException | MalformedURLException exception) {
-            throw new IllegalArgumentException(
-                    "La configuración remote.url no es una URL válida: '%s'".formatted(remoteUrl), exception);
+            throw new IllegalArgumentException("La configuración remote.url no es una URL válida (host=%s, error=%s)"
+                    .formatted(ConfigResolver.describeHost(remoteUrl), exception.getClass().getSimpleName()));
         }
     }
 }

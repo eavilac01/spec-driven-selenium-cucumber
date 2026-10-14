@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+# Selenium Manager no envía telemetría (también fijado en Surefire, pom.xml).
+env:
+  SE_AVOID_STATS: true
+
 # Un push nuevo a un PR cancela el run en curso de ese PR. En main (push y
 # workflow_dispatch comparten grupo) no se cancela el run en curso; GitHub sí
 # descarta un run pendiente si llega otro detrás (queda el del último commit).
@@ -57,7 +61,7 @@ jobs:
     steps:
       # Sin el token en .git/config: ningún paso usa git contra el remoto.
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -65,7 +69,7 @@ jobs:
         run: bash scripts/check-traceability.sh
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '17'
@@ -96,9 +100,17 @@ jobs:
         if: ${{ !cancelled() && steps.maven.outcome != 'skipped' }}
         run: bash scripts/check-no-expected-override.sh test.log
 
+      # CHK-20 (ADR-004, D5): las pruebas de contrato del transporte corrieron
+      # (su reporte de Surefire con tests > 0 y sin omitidas, fallos ni
+      # errores). Corre aunque Maven falle, en su propio paso, así que no tapa
+      # el rc de Maven; sin reporte, falla cerrado.
+      - name: Pruebas de contrato ejecutadas (CHK-20)
+        if: ${{ !cancelled() && steps.maven.outcome != 'skipped' }}
+        run: bash scripts/check-contract-ran.sh target/surefire-reports
+
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-reports
           path: |
@@ -108,10 +120,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # ADR-002, R-6: ejercita la rama de Firefox de DriverFactory. Solo la suite
-  # E2E (RunnerTest): las unitarias ya corren en `test`. Sin
-  # -Dsurefire.failIfNoSpecifiedTests=false a propósito: si RunnerTest
-  # desaparece, el job falla en vez de quedar en verde sin pruebas.
+  # ADR-002, R-6: ejercita la rama de Firefox de DriverFactory. La suite E2E
+  # (RunnerTest) y las pruebas de contrato del transporte (com.demo.contract,
+  # ADR-004, D5): las unitarias ya corren en `test`. Sin
+  # -Dsurefire.failIfNoSpecifiedTests=false a propósito: si ningún patrón de
+  # -Dtest encuentra pruebas, el job falla. Si solo falta uno, Surefire no
+  # falla (ADR-004, R-8): lo detectan CHK-19 (la línea "Tests run" de
+  # RunnerTest) y CHK-20 (el reporte del contrato).
   e2e-firefox:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
@@ -127,12 +142,12 @@ jobs:
     steps:
       # Sin el token en .git/config: ningún paso usa git contra el remoto.
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '17'
@@ -151,7 +166,7 @@ jobs:
         run: |
           set -o pipefail
           ./mvnw -B -ntp clean test \
-            -Dtest=RunnerTest \
+            -Dtest='RunnerTest,com/demo/contract/**/*Test' \
             -Dbrowser=firefox -Dheadless=true \
             -Dcucumber.filter.tags="not @quarantine" 2>&1 | tee e2e-firefox.log
 
@@ -162,9 +177,15 @@ jobs:
         if: ${{ !cancelled() && steps.maven.outcome != 'skipped' }}
         run: bash scripts/check-no-expected-override.sh e2e-firefox.log
 
+      # CHK-20 (ADR-004, D5): el contrato corrió en Firefox. Como el anterior,
+      # aunque Maven falle y sin tapar su rc.
+      - name: Pruebas de contrato ejecutadas (CHK-20)
+        if: ${{ !cancelled() && steps.maven.outcome != 'skipped' }}
+        run: bash scripts/check-contract-ran.sh target/surefire-reports
+
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-reports-firefox
           path: |
@@ -190,7 +211,7 @@ jobs:
       TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD: ${{ secrets.TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD }}
     services:
       selenium:
-        image: selenium/standalone-chrome:4.45.0
+        image: selenium/standalone-chrome@sha256:90fbfd0cec921daba37e87f92e0edbd2c1b6e03b14d3972dba6338dec3884b70 # 4.45.0
         ports:
           - 4444:4444
         options: --shm-size=2g
@@ -201,12 +222,12 @@ jobs:
     steps:
       # Sin el token en .git/config: ningún paso usa git contra el remoto.
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '17'
@@ -239,13 +260,15 @@ jobs:
       # ADR-003, R-2: el aviso de D3 (un esperado sobrescrito por -D, p. ej.
       # desde MAVEN_ARGS) hace fallar el job. Corre aunque Maven falle, en su
       # propio paso, así que no tapa el rc de Maven; sin log, falla cerrado.
+      # ADR-003, D6: este job declara su destino por -D (el -Dremote.url del
+      # paso anterior): remote.url con fuente=sistema y host localhost:4444.
       - name: Sin esperados sobrescritos por -D (ADR-003, R-2)
         if: ${{ !cancelled() && steps.maven.outcome != 'skipped' }}
-        run: bash scripts/check-no-expected-override.sh e2e-grid.log
+        run: bash scripts/check-no-expected-override.sh --destino-d remote.url=localhost:4444 e2e-grid.log
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-reports-grid
           path: |
@@ -255,8 +278,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # CHK-11 (ADR-001, D5), CHK-14 (cuarentena) y CHK-17 (ADR-002, D6): en
-  # paralelo a `test`, sin secrets ni navegador. CHK-14 y CHK-17 van aquí y no
+  # CHK-11 (ADR-001, D5), CHK-14 (cuarentena) y CHK-17 (ADR-002, D6), más las
+  # autopruebas de CHK-19 y CHK-20: en paralelo a `test`, sin secrets ni
+  # navegador. CHK-14 y CHK-17 van aquí y no
   # junto a CHK-12 porque `test` expone los secrets TEST_* a todos sus pasos
   # (env a nivel de job), y ni las autopruebas ni los scripts los necesitan.
   #
@@ -271,7 +295,7 @@ jobs:
     steps:
       # Sin el token en .git/config: ningún paso usa git contra el remoto.
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -309,8 +333,13 @@ jobs:
       - name: Esperados sobrescritos por -D, autoprueba (ADR-003, R-2)
         run: bash scripts/tests/check-no-expected-override-test.sh
 
+      # ADR-004, D5: el control de los jobs `test` y `e2e-firefox`, con
+      # reportes sintéticos en un repositorio temporal (sin awk ni secrets).
+      - name: Pruebas de contrato ejecutadas, autoprueba (CHK-20)
+        run: bash scripts/tests/check-contract-ran-test.sh
+
       - name: Set up JDK 17
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '17'
@@ -330,7 +359,7 @@ jobs:
 
       - name: Upload mutation report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mutation-report
           path: target/pit-reports/
@@ -364,7 +393,7 @@ jobs:
     steps:
       # Sin el token en .git/config: ningún paso usa git contra el remoto.
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -387,7 +416,7 @@ jobs:
 
       - name: Set up JDK 17
         if: steps.detect.outputs.present == 'true'
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '17'
@@ -440,7 +469,7 @@ jobs:
       # enmascarado, en la salida del paso.
       - name: Upload quarantine reports
         if: always() && steps.detect.outputs.present == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: quarantine-reports
           path: |

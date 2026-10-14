@@ -13,7 +13,7 @@ Equipo de subagentes de Claude Code para evolucionar el framework con **criterio
 │   ├── 01-spec-driven-development.md   spec → feature → código
 │   ├── 02-agent-permissions.md         qué puede y qué no puede cada agente
 │   ├── 03-prompt-injection.md          dato ≠ instrucción
-│   └── 04-quality-checks.md            catálogo CHK-01…19 con comandos
+│   └── 04-quality-checks.md            catálogo CHK-01…20 con comandos
 ├── hooks/devops-gate-hook.sh  → bloquea git push sin gate
 └── settings.json              → permisos deny/ask y registro del hook
 ```

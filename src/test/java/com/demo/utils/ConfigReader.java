@@ -18,6 +18,7 @@ public final class ConfigReader {
     private static final String CONFIG_RESOURCE = "config.properties";
     private static final Logger LOGGER = LoggerFactory.getLogger(ConfigReader.class);
     private static final Set<String> ESPERADOS_AVISADOS = ConcurrentHashMap.newKeySet();
+    private static final Set<String> DESTINOS_REGISTRADOS = ConcurrentHashMap.newKeySet();
     private static final Properties PROPERTIES = loadProperties();
     private static final ConfigResolver RESOLVER =
             new ConfigResolver(System::getProperty, System::getenv, PROPERTIES);
@@ -27,31 +28,37 @@ public final class ConfigReader {
 
     public static String getRequired(String key) {
         avisarSiSobrescribeEsperado(key);
+        registrarDestinoDeRed(key);
         return RESOLVER.getRequired(key);
     }
 
     public static String getOptional(String key) {
         avisarSiSobrescribeEsperado(key);
+        registrarDestinoDeRed(key);
         return RESOLVER.getOptional(key);
     }
 
     public static boolean getBoolean(String key) {
         avisarSiSobrescribeEsperado(key);
+        registrarDestinoDeRed(key);
         return RESOLVER.getBoolean(key);
     }
 
     public static int getPositiveInt(String key) {
         avisarSiSobrescribeEsperado(key);
+        registrarDestinoDeRed(key);
         return RESOLVER.getPositiveInt(key);
     }
 
     public static int getNonNegativeInt(String key) {
         avisarSiSobrescribeEsperado(key);
+        registrarDestinoDeRed(key);
         return RESOLVER.getNonNegativeInt(key);
     }
 
     public static List<String> getList(String key) {
         avisarSiSobrescribeEsperado(key);
+        registrarDestinoDeRed(key);
         return RESOLVER.getList(key);
     }
 
@@ -64,6 +71,16 @@ public final class ConfigReader {
             LOGGER.warn("La clave de esperado '{}' viene de una propiedad del sistema (-D): "
                     + "solo es válido en el control negativo (CHK-10)", key);
         }
+    }
+
+    /**
+     * ADR-003, D6: deja en INFO, una vez por clave y por JVM, la fuente y el host de cada destino de red. La línea
+     * la compone ConfigResolver y nunca lleva el valor; va como argumento, no como formato.
+     */
+    private static void registrarDestinoDeRed(String key) {
+        RESOLVER.describeNetworkDestination(key)
+                .filter(linea -> DESTINOS_REGISTRADOS.add(key))
+                .ifPresent(linea -> LOGGER.info("{}", linea));
     }
 
     private static Properties loadProperties() {

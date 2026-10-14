@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Contrato: avanza</title>
+</head>
+<body>
+<button id="accion" type="button" onclick="avanzar()">Accion</button>
+<p id="clics">0</p>
+<script>
+let clics = 0;
+function contar() {
+  clics = clics + 1;
+  document.getElementById('clics').textContent = String(clics);
+}
+function avanzar() {
+  contar();
+  location.hash = 'paso-siguiente';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Contrato: inerte</title>
+</head>
+<body>
+<button id="accion" type="button" onclick="contar()">Accion</button>
+<p id="clics">0</p>
+<script>
+let clics = 0;
+function contar() {
+  clics = clics + 1;
+  document.getElementById('clics').textContent = String(clics);
+}
+</script>
+</body>
+</html>

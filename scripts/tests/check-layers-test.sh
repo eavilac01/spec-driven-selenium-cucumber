@@ -19,9 +19,13 @@
 #     herencia, D7) tienen casos de una línea y de dos (import en la 2 y
 #     declaración en la 3); R5-js, R5-evt, R5-clic y R5-clic-max (Clic nativo
 #     único, scripts cerrados y preferencias de Chrome, D7, parte 4) tienen un
-#     caso por alternativa, y D8-prefs reescribe la línea de preferencias del
+#     caso por alternativa, como R5-esc y R5-esc-max (Escritura única, parte
+#     5), y D8-prefs reescribe la línea de preferencias del
 #     DriverFactory.java del árbol base (o borra el archivo) y espera
-#     "archivo:0: D8: …";
+#     "archivo:0: D8: …"; las reglas de contract y de sus páginas locales
+#     (A4-*, Pruebas de contrato del transporte, D7, parte 6; ADR-004, D8)
+#     tienen un caso por alternativa de RED, FIX y de la fila de D4 de
+#     contract, y casi-violaciones permitidas (A4-ok-*);
 #   - exit 1 con una violación en un archivo versionado que coincide con
 #     .gitignore, y exit 0 si ese archivo no está versionado;
 #   - exit 1 ("directorio:0: D6: …") por cada directorio de capa ausente o
@@ -139,6 +143,10 @@ mkdir -p "$base"
     '    }' \
     '    public void click(By locator) {' \
     '        elemento.click();' \
+    '    }' \
+    '    public void escribir(By locator, String texto) {' \
+    '        elemento.clear();' \
+    '        elemento.sendKeys(texto);' \
     '    }' \
     '    public void desplazarA(By locator) {' \
     '        ((JavascriptExecutor) driver).executeScript(SCRIPT_DESPLAZAR_AL_CENTRO, driver.findElement(locator));' \
@@ -323,6 +331,31 @@ mkdir -p "$base"
     '@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "com.demo.steps,com.demo.hooks")' \
     'public class RunnerTest {' \
     '}'
+
+  # Pruebas de contrato del transporte (D7, parte 6; ADR-004, D8): Selenium (By)
+  # y JUnit en contract, y una página local con un contador de clics, para que
+  # el árbol válido dé 0 con las reglas A4-* y 1 si se quita una exclusión.
+  put "$T/contract/NavegadorContractTest.java" \
+    'package com.demo.contract;' \
+    '' \
+    'import org.openqa.selenium.By;' \
+    'import org.junit.jupiter.api.Test;' \
+    'import com.demo.transport.Navegador;' \
+    'import com.demo.utils.ConfigReader;' \
+    '' \
+    'class NavegadorContractTest {' \
+    '    private static final By ACCION = By.id("accion");' \
+    '    private final Navegador navegador = new Navegador();' \
+    '    @Test' \
+    '    void pulsaUnaVez() {' \
+    '        navegador.click(ACCION);' \
+    '    }' \
+    '}'
+  put src/test/resources/contract/inerte.html \
+    '<!DOCTYPE html>' \
+    '<button id="accion" onclick="contar()">Accion</button>' \
+    '<p id="clics">0</p>' \
+    "<script>let clics = 0; function contar() { document.getElementById('clics').textContent = String(++clics); }</script>"
 
   put "$T/config/ConfigResolverTest.java" \
     'package com.demo.config;' \
@@ -624,11 +657,11 @@ allowed2 "ok-34 identificadores con implements y extends, y un nombre importado"
 
 # Un caso negativo por comando de D7 (D7-01…D7-19 son los git grep; D7-20 es
 # la presencia de directorios) y por la ampliación de R3 (R3-param).
-violation "D7-01" R1 "Selenium fuera de transport y pages" \
+violation "D7-01" R1 "Selenium fuera de transport, pages y contract" \
   "$T/steps/Bad.java" 'import static org.openqa.selenium.Keys.ENTER;'
-violation "D7-01b" R1 "Selenium fuera de transport y pages" \
+violation "D7-01b" R1 "Selenium fuera de transport, pages y contract" \
   "$T/utils/Bad.java" '    private org.openqa.selenium.WebDriver driver;'
-violation "D7-01c" R1 "Selenium fuera de transport y pages" \
+violation "D7-01c" R1 "Selenium fuera de transport, pages y contract" \
   "src/main/java/com/demo/config/Bad.java" 'import org.openqa.selenium.By;'
 violation "D7-02" R1 "en pages solo se permite 'import org.openqa.selenium.By;'" \
   "$T/pages/BadPage.java" 'import org.openqa.selenium.WebElement;'
@@ -661,7 +694,7 @@ violation "R3-param-b" R3 "página como parámetro de un método público de act
   "$T/actions/Bad.java" '    public static void usarTodas(java.util.List<com.demo.pages.CartPage> paginas) {'
 violation "R3-param-c" R3 "página como parámetro de un método público de actions" \
   "$T/actions/Bad.java" '    public void usar(@Deprecated(since = "1") InventoryPage pagina) {'
-violation "D7-07" R4 "JUnit fuera de steps, runners y las pruebas unitarias" \
+violation "D7-07" R4 "JUnit fuera de steps, runners, contract y las pruebas unitarias" \
   "$T/actions/Bad.java" 'import org.junit.jupiter.api.Assertions;'
 violation "D7-08" R4 "Cucumber fuera de steps, hooks y runners" \
   "$T/pages/BadPage.java" 'import io.cucumber.java.en.Given;'
@@ -969,8 +1002,10 @@ done
 # Casi-coincidencias permitidas de la parte 4.
 allowed "ok-35 identificadores que contienen los nombres de JS" "$T/transport/Otro.java" \
   '        boolean noexecuteScript = executeScriptado && noexecuteAsyncScript || executeAsyncScriptado;'
+# ok-36 (parte 5): sendKeys sin prefijo y Keystroke no son el token Keys ni una
+# escritura (antes era una escritura, que ahora sería la segunda).
 allowed "ok-36 sendKeys y Keystroke no son el token Keys" "$T/transport/Otro.java" \
-  '        elemento.sendKeys(texto); // Keystroke nativo'
+  '        boolean sendKeys = Keystroke;'
 allowed "ok-37 submit sin punto, y submitted" "$T/transport/Otro.java" \
   '        boolean submit = formulario.submitted;'
 allowed "ok-38 método que empieza por click" "$T/transport/Otro.java" \
@@ -994,6 +1029,119 @@ allowed_rewrite "ok-39 línea de clic del árbol base en la columna 0" "$T/trans
 allowed_rewrite "ok-40 otros nombres y espacios, en la columna 0" "$D8_FILE" \
   "$D8_LINE" 'opciones.setExperimentalOption( "prefs" , ajustes.chromePreferences() ) ;'
 
+# Escritura única (D7, enmienda 2026-10-13, parte 5). R5-esc: toda línea de
+# escritura es exactamente "elemento.sendKeys(texto);".
+R5ESC="escritura distinta de la línea de escritura nativa del transporte"
+violation "R5-esc" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '                elemento.sendKeys(textoEsperado);'
+violation "R5-esc-b" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '        elemento.sendKeys(texto + "\n");'
+violation "R5-esc-c" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '        new Actions(driver).sendKeys(elemento, texto).perform();'
+violation "R5-esc-d" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '        java.util.Optional.of(elemento).ifPresent(WebElement::sendKeys);'
+violation "R5-esc-e" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '            elemento.sendKeys(texto); elemento.sendKeys(texto);'
+violation "R5-esc-f" R5 "$R5ESC" "$T/transport/Bad.java" \
+  '            campo.sendKeys(texto);'
+# R5-esc-max: forma exacta, pero es la segunda línea de escritura (la otra está
+# en el Navegador.java del árbol base).
+violation "R5-esc-max" R5 "más de una escritura nativa en transport" "$T/transport/Bad.java" \
+  '            elemento.sendKeys(texto);'
+allowed "ok-41 método que empieza por sendKeys" "$T/transport/Otro.java" \
+  '        this.sendKeysYEsperar(localizador, texto);'
+allowed_rewrite "ok-42 línea de escritura del árbol base en la columna 0" "$T/transport/Navegador.java" \
+  '        elemento.sendKeys(texto);' 'elemento.sendKeys(texto);'
+
+# Pruebas de contrato del transporte (D7, enmienda 2026-10-13, parte 6;
+# ADR-004, D8). Cada línea va en la línea 2 del archivo, en sus dos modos.
+FXT=src/test/resources/contract
+# A4-R1: en contract, Selenium solo como "import org.openqa.selenium.By;".
+A4R1="en contract solo se permite 'import org.openqa.selenium.By;'"
+violation "A4-R1" R1 "$A4R1" "$T/contract/Bad.java" \
+  'import org.openqa.selenium.WebDriver;'
+violation "A4-R1-b" R1 "$A4R1" "$T/contract/Bad.java" \
+  'import org.openqa.selenium.By; import java.util.List;'
+violation "A4-R1-c" R1 "$A4R1" "$T/contract/Bad.java" \
+  '        org.openqa.selenium.TimeoutException error = null;'
+violation "A4-R1-d" R1 "$A4R1" "$T/contract/Bad.java" \
+  'import static org.openqa.selenium.By.id;'
+# A4-red: destinos de red y URL del SUT en contract y en sus páginas locales.
+A4RED="destino de red o URL del SUT en contract o en sus páginas locales"
+violation "A4-red" R4 "$A4RED" "$T/contract/Bad.java" \
+  '        navegador.abrir("https://ejemplo.invalid/");'
+violation "A4-red-b" R4 "$A4RED" "$T/contract/Bad.java" \
+  '        navegador.abrir(ConfigReader.getRequired("base.url"));'
+violation "A4-red-c" R4 "$A4RED" "$T/contract/Bad.java" \
+  '        String grid = ConfigReader.getOptional("remote.url");'
+violation "A4-red-d" R4 "$A4RED" "$FXT/bad.html" \
+  '<img src="http://ejemplo.invalid/x.png" alt="">'
+violation "A4-red-e" R4 "$A4RED" "$FXT/bad.html" \
+  '<script>new WebSocket("ws://127.0.0.1:9");</script>'
+# A4-fix: temporizadores, eventos sintéticos, envíos y recargas automáticas en
+# las páginas locales; un caso por alternativa de FIX.
+A4FIX="temporizador, evento sintético o navegación automática en una página local de contract"
+violation "A4-fix" R5 "$A4FIX" "$FXT/bad.html" \
+  '<script>setTimeout(contar, 1000);</script>'
+violation "A4-fix-b" R5 "$A4FIX" "$FXT/bad.html" \
+  '<script>setInterval(contar, 500);</script>'
+violation "A4-fix-c" R5 "$A4FIX" "$FXT/bad.html" \
+  '<script>requestAnimationFrame(contar);</script>'
+violation "A4-fix-d" R5 "$A4FIX" "$FXT/bad.html" \
+  '<script>boton.dispatchEvent(evento);</script>'
+violation "A4-fix-e" R5 "$A4FIX" "$FXT/bad.html" \
+  "<script>const evento = new Event('click');</script>"
+violation "A4-fix-f" R5 "$A4FIX" "$FXT/bad.html" \
+  "<body onload=\"document.getElementById('accion').click()\">"
+violation "A4-fix-g" R5 "$A4FIX" "$FXT/bad.html" \
+  '<script>document.forms[0].submit();</script>'
+violation "A4-fix-h" R5 "$A4FIX" "$FXT/bad.html" \
+  '<meta http-equiv="refresh" content="1">'
+violation "A4-fix-i" R5 "$A4FIX" "$FXT/bad.html" \
+  '<META HTTP-EQUIV=Refresh CONTENT=1>'
+violation "A4-fix-j" R5 "$A4FIX" "$FXT/bad.html" \
+  '<script>requestIdleCallback(contar);</script>'
+violation "A4-fix-k" R5 "$A4FIX" "$FXT/bad.html" \
+  '<script>queueMicrotask(contar);</script>'
+violation "A4-fix-l" R5 "$A4FIX" "$FXT/bad.html" \
+  "<script>const evento = document.createEvent('MouseEvents');</script>"
+violation "A4-fix-m" R5 "$A4FIX" "$FXT/bad.html" \
+  '<script>formulario.requestSubmit();</script>'
+violation "A4-fix-n" R5 "$A4FIX" "$FXT/bad.html" \
+  '<script>HTMLElement.prototype.click.call(boton);</script>'
+# A4-R6: un caso por paquete fuera de la fila de D4 de contract.
+r6 "A4-R6" "contract nombra un paquete fuera de su fila de D4" \
+  "$T/contract/Bad.java" pages actions steps hooks runners config data
+# A4-R6u: utils distinto de ConfigReader.
+A4R6U="contract nombra utils distinto de ConfigReader"
+violation "A4-R6u" R6 "$A4R6U" "$T/contract/Bad.java" \
+  'import com.demo.utils.TestContext;'
+violation "A4-R6u-b" R6 "$A4R6U" "$T/contract/Bad.java" \
+  'import com.demo.utils.ConfigReaderX;'
+# A4-R6in: ningún paquete distinto de contract la nombra (tampoco el glue).
+A4R6IN="un paquete distinto de contract nombra contract"
+violation "A4-R6in" R6 "$A4R6IN" "$T/transport/Bad.java" \
+  'import com.demo.contract.X;'
+violation "A4-R6in-b" R6 "$A4R6IN" "$T/pages/BadPage.java" \
+  'import com.demo.contract.X;'
+violation "A4-R6in-c" R6 "$A4R6IN" "$T/runners/Bad.java" \
+  '@ConfigurationParameter(key = GLUE_PROPERTY_NAME, value = "com.demo.steps,com.demo.contract")'
+violation "A4-R6in-d" R6 "$A4R6IN" "src/main/java/com/demo/config/Bad.java" \
+  '// Nombra com.demo.contract en un comentario (D6).'
+# Casi-violaciones permitidas de la parte 6.
+allowed "A4-ok-1 onclick no es una llamada a click" "$FXT/ok.html" \
+  '<button id="accion" onclick="contar()">Accion</button>'
+allowed "A4-ok-2 el \\b final de FIX" "$FXT/ok.html" \
+  "<script>const nombre = 'setTimeoutX';</script>"
+allowed "A4-ok-3 cambiar el fragmento no es navegación automática" "$FXT/ok.html" \
+  "<script>function avanzar() { location.hash = 'paso-siguiente'; }</script>"
+allowed "A4-ok-4 las claves .expected se permiten en contract" "$T/contract/Otro.java" \
+  '        private static final String PISTA = "contract.expected.pista";'
+allowed "A4-ok-5 el \\b inicial de RED" "$T/contract/Otro.java" \
+  '        String clave = "contract.database.url";'
+allowed "A4-ok-6 el \\b de A4-R6in" "$T/steps/Otro.java" \
+  'import com.demo.contractual.X;'
+
 # Archivos que coinciden con .gitignore: --untracked omite incluso los
 # versionados (git 2.53), así que el script hace también una pasada sobre el
 # índice. Uno versionado e ignorado se detecta; uno sin versionar e ignorado
@@ -1004,7 +1152,7 @@ put "$dir/$T/steps/IgnoradoBad.java" 'package com.demo.prueba;' 'import org.open
 git -C "$dir" add -f -- .gitignore "$T/steps/IgnoradoBad.java"
 run_script "$dir"
 expect "D7-01 steps/IgnoradoBad.java (versionada e ignorada)" 1 \
-  "$T/steps/IgnoradoBad.java:2: R1: Selenium fuera de transport y pages"
+  "$T/steps/IgnoradoBad.java:2: R1: Selenium fuera de transport, pages y contract"
 new_case
 put "$dir/.gitignore" 'Ignorado*.java'
 put "$dir/$T/steps/IgnoradoBad.java" 'package com.demo.prueba;' 'import org.openqa.selenium.WebDriver;'
@@ -1020,6 +1168,11 @@ for layer in transport pages actions steps; do
   run_script "$dir"
   expect "D7-20 directorio $layer ausente" 1 "$T/$layer:0: D6: directorio de capa sin archivos versionados"
 done
+# A4-D6 (ADR-004, paso 5): contract también es un directorio de capa.
+new_case
+git -C "$dir" rm -r -q -- "$T/contract"
+run_script "$dir"
+expect "A4-D6 directorio contract ausente" 1 "$T/contract:0: D6: directorio de capa sin archivos versionados"
 new_case
 git -C "$dir" rm -r -q --cached -- "$T/actions"
 run_script "$dir"

@@ -35,8 +35,8 @@ Senior. Escribe código de pruebas determinista, legible y sin atajos de sincron
 4. **Sincronización:** solo esperas explícitas por condición con tiempo máximo; cada acción espera su postcondición observable.
 5. **Steps:** llaman acciones de negocio; las aserciones JUnit viven solo aquí; el **esperado** sale de la spec, de `config.properties` o de la fábrica, **nunca** del SUT.
 6. **Datos:** cada escenario crea los suyos con una fábrica; `Clock` y la semilla aleatoria se inyectan vía `TestContext`; la semilla se registra en el reporte.
-7. **Pruebas unitarias** para la lógica propia (`ConfigReader`, `SecretReader`, fábricas), con valores concretos y fronteras. Son la base de CHK-11.
-8. Autoverificación: CHK-01, CHK-03, CHK-07, CHK-08, CHK-09 de cada escenario nuevo y CHK-17 (`bash scripts/check-layers.sh`).
+7. **Pruebas unitarias** para la lógica propia (`ConfigReader`, `SecretReader`, fábricas, `ClicNativoUnico`), con valores concretos y fronteras. Son la base de CHK-11. Las **pruebas de contrato del transporte** (`com.demo.contract`, ADR-004) usan solo la API pública de `Navegador`, páginas locales estáticas de `src/test/resources/contract/` y esperados `contract.expected.*`.
+8. Autoverificación: CHK-01, CHK-03, CHK-07, CHK-08, CHK-09 de cada escenario nuevo y CHK-17 (`bash scripts/check-layers.sh`). Si tocas `transport`, `ClicNativoUnico` o `src/test/resources/contract/`: las pruebas de contrato en Chrome y en Firefox (`-Dbrowser=firefox`) y CHK-20 sobre los reportes de CHK-08.
 
 ## Criterios de aceptación
 - [ ] Las CHK del paso 8 están en verde, con su salida en el reporte.

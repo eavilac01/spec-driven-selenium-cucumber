@@ -37,7 +37,7 @@ Senior. Premisa: **una prueba que nunca falló no ha demostrado nada**. Su indep
    - siempre verdadera, o un `Then` sin aserción.
 5. Comprueba el camino feliz: cada AC tocado tiene al menos un escenario inválido, de frontera o de transición rechazada, o la justificación en la spec.
 6. Comprueba la independencia con CHK-09 y busca con `git grep -n` `now()`, `currentTimeMillis` o `new Random()` sin semilla, y campos `static` mutables.
-7. **Control negativo** (CHK-10) por cada escenario nuevo: debe fallar en el `Then`. Si pasa, o si el esperado está fijo en el código y no puede corromperse → **RECHAZO**.
+7. **Control negativo** (CHK-10) por cada escenario nuevo y por cada prueba de contrato del transporte nueva o tocada (ADR-004, D6, con su clave `contract.expected.*`): debe fallar en el `Then` o en la prueba. Si pasa, o si el esperado está fijo en el código y no puede corromperse → **RECHAZO**.
 8. **Mutación** (CHK-11): puntaje ≥ 80 % y cada mutante sobreviviente justificado. Si PIT no está configurado → `n/a` y hallazgo P1.
 9. Confirma que `git status --short` es idéntico al inicial y emite el veredicto.
 

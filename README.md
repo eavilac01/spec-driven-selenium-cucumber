@@ -104,34 +104,114 @@ Las versiones de Cucumber y JUnit se administran con sus respectivos BOM en `dep
 
 ## Arquitectura por capas
 
-Cada flecha del diagrama es una **dependencia autorizada** por el [ADR-002](docs/adr/002-transport-and-business-actions.md). Cualquier otra —un step que importe una página, Selenium fuera de `transport`— la rechaza **CHK-17** en cada ejecución del CI.
+La arquitectura se describe en tres vistas, de lo general a lo particular:
+
+1. **Contexto:** con qué sistemas externos habla el framework.
+2. **Capas:** cómo se organiza el código y qué dependencias están autorizadas.
+3. **Cadena de calidad:** qué controles recorre un cambio hasta llegar a `main`.
+
+Las decisiones que las sostienen están en los ADR de [`docs/adr/`](docs/adr/).
+
+### Vista de contexto
+
+```mermaid
+flowchart LR
+    qa(["<b>Equipo QA</b><br/>y contribuidores"])
+    agents["<b>Equipo de agentes QE</b><br/>Claude Code · .claude/<br/>reglas, permisos y hooks"]
+
+    subgraph REPO["Repositorio · GitHub"]
+        direction TB
+        fw["<b>spec-driven-selenium-cucumber</b><br/>Java 17 · Selenium 4 · Cucumber 7 · JUnit 5"]
+        docs["<b>docs/</b><br/>specs aprobadas · ADR · cuarentena"]
+    end
+
+    subgraph CI["Integración continua"]
+        direction TB
+        gha["<b>GitHub Actions</b><br/>6 jobs · checks requeridos en main"]
+        jenkins["<b>Jenkins</b><br/>Jenkinsfile equivalente"]
+    end
+
+    subgraph EXT["Servicios externos"]
+        direction TB
+        sut[("<b>SauceDemo</b><br/>sistema bajo prueba")]
+        grid[("<b>Selenium Grid</b><br/>Docker, imagen por digest")]
+        central[("<b>Maven Central</b><br/>Maven 3.9.9 con checksum<br/>y dependencias")]
+    end
+
+    reports[["<b>Evidencia</b><br/>Cucumber HTML · Allure<br/>Surefire · PIT"]]
+
+    qa -->|spec, PR y revisión| REPO
+    agents -->|delegación con gate y control negativo| REPO
+    docs -.->|rige| fw
+    REPO -->|push / pull request| gha
+    REPO -->|pipeline| jenkins
+    fw ==>|HTTPS · navegador real| sut
+    fw -.->|remote.url| grid
+    grid ==> sut
+    gha & jenkins -.->|./mvnw| central
+    gha & jenkins -->|publican| reports
+
+    classDef actor fill:#FFFFFF,stroke:#0F172A,stroke-width:1.5px,color:#0F172A
+    classDef core fill:#FFFFFF,stroke:#1D4ED8,stroke-width:3px,color:#0F172A
+    classDef neutral fill:#FFFFFF,stroke:#94A3B8,stroke-width:1px,color:#0F172A
+    classDef external fill:#0F172A,stroke:#0F172A,color:#FFFFFF
+    class qa,agents actor
+    class fw core
+    class docs,gha,jenkins,reports neutral
+    class sut,grid,central external
+    style REPO fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+    style CI fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+    style EXT fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+```
+
+**Sin salidas de red no autorizadas:**
+- La única URL del SUT es `base.url` (PI-08).
+- Selenium Manager no envía telemetría (`SE_AVOID_STATS=true`).
+- Chrome no consulta el servicio de contraseñas filtradas (ADR-002, D8).
+- Las pruebas de contrato del transporte usan páginas locales `file:`, sin red (ADR-004).
+
+### Vista de capas
+
+Cada flecha del diagrama es una **dependencia autorizada** por el [ADR-002](docs/adr/002-transport-and-business-actions.md) (D4) y el [ADR-004](docs/adr/004-transport-contract-tests.md). Cualquier otra la rechaza **CHK-17** en cada ejecución del CI, por ejemplo:
+- un step que importe una página;
+- Selenium fuera de `transport`;
+- un segundo clic nativo;
+- una clase que nombre `contract`.
 
 ```mermaid
 flowchart TB
-    subgraph SDD["Especificación · SDD"]
+    subgraph SDD["Especificación · SDD (Regla 01)"]
         direction TB
         spec["<b>Spec aprobada</b><br/>criterios AC con su ID<br/>docs/specs"]
         feat["<b>features</b><br/>Gherkin con @AC- y @tec-<br/>src/test/resources/features"]
     end
 
-    runner["<b>runners · RunnerTest</b><br/>JUnit Platform Suite + Cucumber"]
+    subgraph ORQ["Orquestación y contrato · capa 5"]
+        direction TB
+        runner["<b>runners · RunnerTest</b><br/>JUnit Platform Suite + Cucumber"]
+        hooks["<b>hooks</b><br/>inician, capturan y cierran"]
+        contract["<b>contract</b> · ADR-004<br/>pruebas JUnit de Navegador<br/>contra páginas locales"]
+    end
 
     subgraph CAPAS["Capas de ejecución · verificadas por CHK-17"]
         direction TB
         steps["<b>steps</b><br/>aserciones contra valores esperados"]
         actions["<b>actions</b><br/>flujos de negocio, sin aserciones"]
         pages["<b>pages</b><br/>estado y localizadores · solo By"]
-        transport["<b>transport · Navegador</b><br/>único dueño del WebDriver y de las esperas"]
+        transport["<b>transport · Navegador</b><br/>único dueño del WebDriver y de las esperas<br/>un clic y una escritura nativos por acción<br/><b>DriverFactory</b>: Chrome, Firefox o Grid"]
     end
 
     selenium[("<b>Selenium WebDriver</b><br/>Chrome · Firefox · Grid")]
 
-    subgraph SOPORTE["Soporte"]
+    subgraph SOPORTE["Soporte · datos y configuración (capa 4)"]
         direction TB
-        utils["<b>utils · fachadas</b><br/>leen entorno, .env y config"]
-        pure["<b>src/main · lógica pura</b><br/>sin E/S ni Selenium · PIT 89/89"]
-        hooks["<b>hooks</b><br/>inician, capturan y cierran"]
+        utils["<b>utils · fachadas</b><br/>ConfigReader · SecretReader<br/>CredentialsProvider · TestContext<br/>leen entorno, .env y config"]
+        pure["<b>src/main · lógica pura</b><br/>config: ConfigResolver · BrowserSettings<br/>BrowserErrorPage · ClicNativoUnico<br/>data: Credentials<br/>sin E/S ni Selenium · mutada por PIT"]
+        props[/"<b>config.properties</b> · URL, rutas y *.expected*<br/><b>.env</b> o Secrets · credenciales"/]
     end
+
+    sut[("<b>SauceDemo</b><br/>base.url")]
+    localpages[/"<b>Páginas locales</b><br/>src/test/resources/contract · file:"/]
 
     spec -->|deriva| feat
     feat ==>|enlaza| steps
@@ -140,9 +220,15 @@ flowchart TB
     actions ==>|orquesta| pages
     pages ==>|solo vía Navegador| transport
     transport ==>|controla| selenium
+    selenium ==>|HTTPS| sut
     steps -.->|configura| utils
     utils -.->|delega| pure
+    utils -.->|lee| props
+    pages -.->|rutas y textos| utils
+    transport -.->|configuración, describeHost<br/>y ClicNativoUnico| pure
     hooks -.->|ciclo de vida| transport
+    contract ==>|API pública| transport
+    contract -.->|abre| localpages
 
     classDef layer fill:#FFFFFF,stroke:#1D4ED8,stroke-width:1.5px,color:#0F172A
     classDef owner fill:#FFFFFF,stroke:#1D4ED8,stroke-width:3px,color:#0F172A
@@ -150,14 +236,15 @@ flowchart TB
     classDef driver fill:#0F172A,stroke:#0F172A,color:#FFFFFF
     class steps,actions,pages layer
     class transport owner
-    class spec,feat,runner,utils,pure,hooks neutral
-    class selenium driver
+    class spec,feat,runner,utils,pure,hooks,contract,props,localpages neutral
+    class selenium,sut driver
     style CAPAS fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
     style SDD fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+    style ORQ fill:#F5F6F8,stroke:#D5DAE1,color:#334155
     style SOPORTE fill:#F5F6F8,stroke:#D5DAE1,color:#334155
 ```
 
-> Flechas gruesas: cadena de ejecución de un escenario. Flechas punteadas: soporte (descubrimiento, configuración y ciclo de vida).
+> Flechas gruesas: cadena de ejecución de un escenario y de una prueba de contrato. Flechas punteadas: soporte (descubrimiento, configuración, datos y ciclo de vida). Ningún paquete nombra `contract`, y `contract` solo nombra `transport` y `ConfigReader`.
 
 ### Responsabilidad de cada capa
 
@@ -167,10 +254,12 @@ flowchart TB
 | Steps | `com.demo.steps` | Aserciones JUnit 5 contra valores esperados de configuración | `actions`, `utils`, `data` | Importar páginas, `transport` ni Selenium |
 | Acciones | `com.demo.actions` | Flujos de negocio entre páginas; devuelven lo observado | `pages`, `data` | Aserciones, lectura de valores esperados, páginas en sus firmas públicas, herencia |
 | Páginas | `com.demo.pages` | Estado y localizadores de cada vista, por composición | `transport`, `ConfigReader` | Selenium distinto de `By`, aserciones, herencia |
-| Transporte | `com.demo.transport` | `Navegador`: único dueño del `WebDriver`, esperas explícitas y postcondiciones | `utils`, `config` | Lógica de negocio, tipos de Selenium en sus firmas públicas (`By` solo como parámetro), imports de Selenium con comodín, herencia |
+| Transporte | `com.demo.transport` | `Navegador`: único dueño del `WebDriver`, esperas explícitas y postcondiciones, con un solo clic y una sola escritura nativos por acción. `DriverFactory`: Chrome, Firefox o Grid, con las preferencias de D8 | `utils` (solo `ConfigReader`), `config` | Lógica de negocio, tipos de Selenium en sus firmas públicas (`By` solo como parámetro), imports de Selenium con comodín, herencia |
 | Fachadas | `com.demo.utils` | Leen entorno, `.env` y `config.properties`; delegan en `src/main` | `config`, `data` | Depender de capas superiores, herencia |
-| Lógica pura | `com.demo.config`, `com.demo.data` (`src/main`) | Resolución de configuración, secretos, credenciales y navegador | Solo entre sí | E/S, Selenium, Cucumber, JUnit |
+| Lógica pura | `com.demo.config`, `com.demo.data` (`src/main`) | Resolución de configuración y de su fuente, secretos, credenciales, opciones y preferencias del navegador (D8), páginas de error de Chrome, el clic nativo único (`ClicNativoUnico`, ADR-004) y `describeHost`, la única regla para nombrar una URL en un log (PI-09) | Solo entre sí | E/S, Selenium, Cucumber, JUnit |
 | Hooks | `com.demo.hooks` | Inician el navegador, adjuntan la captura si falla y lo cierran | `transport`, `utils` | Reglas de negocio |
+| Runners | `com.demo.runners` | `RunnerTest`: JUnit Platform Suite que ejecuta Cucumber con su glue y sus plugins | Ninguno: el glue se declara como texto | Lógica de prueba |
+| Contrato del transporte | `com.demo.contract` (ADR-004) | Pruebas JUnit de la API pública de `Navegador` contra páginas locales estáticas (`src/test/resources/contract`, por `file:`): clic único, pista de D8 y fallo cerrado | `transport`, `ConfigReader` | Selenium distinto de `By`, red, `base.url`/`remote.url`, temporizadores o eventos sintéticos en sus páginas; ningún otro paquete la nombra |
 
 ### Garantías automáticas
 
@@ -182,65 +271,177 @@ flowchart TB
 | **CHK-11** · PIT + `scripts/check-mutation-report.sh` | Pruebas unitarias que no detectan defectos (umbral 80 %) | CI (job `mutation`) y Jenkins |
 | **CHK-14** · `scripts/check-quarantine.sh` | Pruebas en cuarentena sin registro, sin dueño o con plazo vencido | CI (job `mutation`) y Jenkins |
 | **CHK-18** · `scripts/check-awk-portability.sh` y `scripts/run-with-each-awk.sh` | Scripts que solo funcionan con una implementación de awk (en el runner de GitHub `awk` es gawk; en Ubuntu de escritorio, mawk): control estático y autopruebas con mawk, gawk y `gawk --posix` | CI (job `mutation`, exige las tres) y Jenkins (con los awk del agente) |
-| **CHK-19** · `scripts/check-no-expected-override.sh` | Una ejecución E2E en verde contra un valor esperado inyectado por `-D` (por ejemplo desde `MAVEN_ARGS`): si el log trae el aviso de `ConfigReader`, el job falla (ADR-003, R-2) | CI (`test`, `e2e-firefox`, `e2e-grid`, `quarantine`; autoprueba en `mutation`) y Jenkins (`Test`, `Cuarentena (CHK-14)`) |
+| **CHK-19** · `scripts/check-no-expected-override.sh` | Una ejecución E2E en verde contra un valor esperado inyectado por `-D` (por ejemplo desde `MAVEN_ARGS`), o contra un `base.url`/`remote.url` que no viene de donde debe en ese job: el log trae el aviso de `ConfigReader` o la fuente equivocada de un destino de red, y el job falla (ADR-003, R-2 y D6) | CI (`test`, `e2e-firefox`, `e2e-grid` con `--destino-d remote.url=localhost:4444`, `quarantine`; autoprueba en `mutation`) y Jenkins (`Test`, `Cuarentena (CHK-14)`) |
+| **CHK-20** · `scripts/check-contract-ran.sh` | Que las pruebas de contrato del transporte se dejen de ejecutar sin que nadie lo note (un *include* o un `-Dtest` roto deja Maven en verde): exige el reporte de Surefire de cada prueba de `contract`, con pruebas y sin omitidas ni fallos (ADR-004, D5) | CI (`test` y `e2e-firefox`; autoprueba en `mutation`) y Jenkins (`Test`; autoprueba en su etapa) |
+
+### Cadena de calidad: de un cambio a `main`
+
+```mermaid
+flowchart LR
+    subgraph LOCAL["Local · equipo de agentes"]
+        direction TB
+        change["<b>Cambio</b><br/>spec → feature → código<br/>o ADR → código"]
+        verifier["<b>Verificador independiente</b><br/>control negativo · mutación<br/>sin permisos de escritura"]
+        gate["<b>Gate DevOps</b><br/>CHK-01…20 · CHK-08 ×2<br/>.claude/devops-gate.json"]
+        hook{{"<b>Hook de push</b><br/>sin gate APROBADO<br/>sobre HEAD: bloqueado"}}
+    end
+
+    subgraph GH["GitHub"]
+        direction TB
+        branch["<b>Rama</b><br/>commits firmados"]
+        pr["<b>Pull request</b><br/>plantilla con trazabilidad y CHK"]
+        actions["<b>GitHub Actions</b><br/>test · e2e-firefox · e2e-grid<br/>mutation · quarantine"]
+        ruleset{{"<b>Ruleset proteger-main</b><br/>5 checks en verde · firmas<br/>sin force push ni push directo"}}
+        main[("<b>main</b>")]
+    end
+
+    change --> verifier --> gate --> hook
+    hook -->|git push| branch --> pr --> actions --> ruleset -->|merge commit| main
+
+    classDef step fill:#FFFFFF,stroke:#94A3B8,stroke-width:1px,color:#0F172A
+    classDef control fill:#FFFFFF,stroke:#1D4ED8,stroke-width:3px,color:#0F172A
+    classDef target fill:#0F172A,stroke:#0F172A,color:#FFFFFF
+    class change,branch,pr,actions step
+    class verifier,gate,hook,ruleset control
+    class main target
+    style LOCAL fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+    style GH fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+```
+
+> En los pull requests de forks, los E2E se omiten porque no reciben secrets (`fork-pr-notice`), y un mantenedor los ejecuta antes de aprobar. Jenkins reproduce los jobs `test`, `mutation` y `quarantine` (ver [Jenkins](#jenkins)).
 
 Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-002](docs/adr/002-transport-and-business-actions.md); la decisión de mutar solo la lógica pura, en el [ADR-001](docs/adr/001-mutation-testing-pit.md); y las fuentes permitidas para los valores esperados y las URL, en el [ADR-003](docs/adr/003-expected-values-config-sources.md).
 
 ## Estructura del proyecto
 
+### Mapa del repositorio y sus dueños
+
+Cada parte del repositorio tiene **un dueño** que puede escribirla. Los demás solo la leen y le devuelven el trabajo por handoff ([Regla 02](.claude/rules/02-agent-permissions.md)). Las flechas indican qué artefacto origina a cuál.
+
+```mermaid
+flowchart LR
+    subgraph USR["Usuario (autor del repositorio)"]
+        direction TB
+        cfg[".claude/ · CLAUDE.md · AGENTS.md<br/>reglas, agentes, hooks y permisos"]
+        approve["Aprobación de specs<br/>y de PR"]
+    end
+
+    subgraph ARQ["qa-automation-architect"]
+        adr["docs/adr/<br/>ADR-001 … ADR-004"]
+    end
+
+    subgraph DIS["qa-test-designer"]
+        specs["docs/specs/<br/>login · compra"]
+        features["src/test/resources/features/"]
+    end
+
+    subgraph ENG["qa-automation-engineer"]
+        direction TB
+        main["src/main/java<br/>lógica pura"]
+        test["src/test/java<br/>capas, unitarias y contrato"]
+        res["config.properties · contract/<br/>.env.example"]
+    end
+
+    subgraph OPS["devops-engineer"]
+        direction TB
+        ci[".github/ · Jenkinsfile<br/>docker-compose.yml"]
+        build["pom.xml (plugins) · .mvn/wrapper/<br/>junit-platform.properties"]
+        scripts["scripts/ · docs/quarantine.md<br/>.claude/devops-gate.json"]
+    end
+
+    subgraph VER["qa-test-verifier"]
+        ver["Solo lee y ejecuta<br/>veredicto independiente"]
+    end
+
+    coord["<b>Coordinador</b><br/>MEMORY.md · README.md<br/>CONTRIBUTING.md · SECURITY.md"]
+
+    approve -->|aprueba| specs
+    specs -->|deriva| features
+    features -->|SDD-02| test
+    adr -->|aplica| test
+    adr -->|aplica| scripts
+    test -.->|revisa| ver
+    ver -.->|APROBADO| scripts
+    coord -.->|delega| ARQ & DIS & ENG & OPS & VER
+
+    classDef box fill:#FFFFFF,stroke:#94A3B8,stroke-width:1px,color:#0F172A
+    classDef lead fill:#FFFFFF,stroke:#1D4ED8,stroke-width:3px,color:#0F172A
+    class cfg,approve,adr,specs,features,main,test,res,ci,build,scripts,ver box
+    class coord lead
+    style USR fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+    style ARQ fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+    style DIS fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+    style ENG fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+    style OPS fill:#E8EEFB,stroke:#B9C7EE,color:#1E3A8A
+    style VER fill:#F5F6F8,stroke:#D5DAE1,color:#334155
+```
+
+### Árbol de archivos
+
 ```text
 .
-├── .claude
-│   ├── agents/          # equipo de agentes QE (ver README interno)
-│   ├── rules/           # SDD, permisos, prompt injection, CHK
-│   ├── hooks/           # gate DevOps y protección de .claude/**, CLAUDE.md, MEMORY.md, AGENTS.md y .github/** frente a escrituras por Bash (+ pruebas)
-│   └── settings.json
-├── .env.example
+├── .claude                      # configuración del equipo de agentes (la cambia solo el usuario)
+│   ├── agents/                  # README del equipo y los 5 agentes:
+│   │                            #   qa-automation-architect, qa-test-designer, qa-automation-engineer,
+│   │                            #   qa-test-verifier y devops-engineer
+│   ├── rules/                   # 01 SDD · 02 permisos · 03 prompt injection · 04 catálogo CHK-01…20
+│   ├── hooks
+│   │   ├── devops-gate-hook.sh      # bloquea git push sin .claude/devops-gate.json APROBADO sobre HEAD
+│   │   ├── protect-config-hook.sh   # bloquea escrituras por Bash en .claude/**, CLAUDE.md, MEMORY.md,
+│   │   │                            # AGENTS.md y .github/** (solo Edit/Write, con confirmación)
+│   │   └── tests/                   # batería del hook de protección
+│   └── settings.json            # permisos (deny/ask) y registro de los hooks
 ├── .github
-│   ├── workflows/ci.yml
-│   ├── ISSUE_TEMPLATE/   # defecto del framework y divergencia sistema/spec
-│   └── PULL_REQUEST_TEMPLATE.md
-├── CONTRIBUTING.md      # flujo SDD, comprobaciones locales y PR de forks
-├── SECURITY.md          # reporte privado de vulnerabilidades y alcance
-├── .mvn/wrapper/maven-wrapper.properties
-├── AGENTS.md
-├── CLAUDE.md
-├── MEMORY.md
-├── Jenkinsfile
-├── LICENSE
-├── README.md
-├── .gitignore
-├── docker-compose.yml
+│   ├── workflows/ci.yml         # 6 jobs; acciones fijadas por SHA e imagen del Grid por digest
+│   ├── ISSUE_TEMPLATE/          # defecto del framework · divergencia sistema/spec · enlace al reporte privado
+│   └── PULL_REQUEST_TEMPLATE.md # trazabilidad (spec, AC, ADR) y CHK ejecutadas
+├── .mvn/wrapper/maven-wrapper.properties   # Maven 3.9.9 con distributionSha256Sum
+├── .env.example                 # nombres de las 6 variables de credenciales, sin valores
+├── .gitattributes · .gitignore
+├── AGENTS.md                    # guía para cualquier agente de código
+├── CLAUDE.md                    # coordinación del equipo y reglas obligatorias
+├── MEMORY.md                    # estado, decisiones y próximos pasos entre sesiones
+├── CONTRIBUTING.md              # flujo SDD, comprobaciones locales y PR de forks
+├── SECURITY.md                  # reporte privado de vulnerabilidades y alcance
+├── README.md · LICENSE (MIT)
+├── Jenkinsfile                  # pipeline equivalente a test, mutation y quarantine (verificado en Jenkins real)
+├── docker-compose.yml           # Selenium Grid local: hub + nodo Chrome, por digest
+├── mvnw / mvnw.cmd · pom.xml    # Maven Wrapper y build (Surefire, PIT, SE_AVOID_STATS)
 ├── docs
 │   ├── adr
-│   │   ├── 001-mutation-testing-pit.md
-│   │   ├── 002-transport-and-business-actions.md
-│   │   └── 003-expected-values-config-sources.md
-│   ├── quarantine.md    # registro de la cuarentena reglada (CHK-14)
-│   └── specs/           # _plantilla.md, login.md, compra.md
-├── mvnw / mvnw.cmd
-├── pom.xml
+│   │   ├── 001-mutation-testing-pit.md                 # PIT solo sobre la lógica pura
+│   │   ├── 002-transport-and-business-actions.md       # capas, transporte y reglas de CHK-17
+│   │   ├── 003-expected-values-config-sources.md       # fuentes de esperados y URL; CHK-19
+│   │   └── 004-transport-contract-tests.md             # pruebas de contrato del transporte; ClicNativoUnico
+│   ├── quarantine.md            # registro de la cuarentena reglada (CHK-14)
+│   └── specs/                   # _plantilla.md · login.md · compra.md (aprobadas)
 ├── scripts
-│   ├── check-awk-portability.sh   # CHK-18: construcciones exclusivas de una implementación de awk
-│   ├── check-layers.sh            # CHK-17: reglas de capas
-│   ├── check-mutation-report.sh   # CHK-11: guarda del reporte de PIT
-│   ├── check-no-expected-override.sh # CHK-19: el log E2E sin esperados sobrescritos por -D
-│   ├── check-quarantine.sh        # CHK-14: registro de cuarentena frente a @quarantine
-│   ├── evaluate-quarantine-run.sh # evalúa el job quarantine (fallo esperado vs. error real)
-│   ├── check-required-secrets.sh  # CI/Jenkins: nombra los secrets que faltan
-│   ├── check-traceability.sh      # CHK-12: escenario → spec aprobada
-│   ├── check-unit-purity.sh       # CHK-15/16: src/main puro y unitarias aisladas
-│   ├── run-with-each-awk.sh       # CHK-18: ejecuta un comando con cada awk (mawk, gawk, gawk --posix, busybox)
-│   ├── wait-for-grid.sh           # espera activa a que el Grid esté listo
-│   └── tests/                     # autopruebas de CHK-17, CHK-14, del evaluador de cuarentena y de CHK-18
-├── src/main/java/com/demo      # lógica pura, sin E/S (ADR-001)
+│   ├── check-awk-portability.sh      # CHK-18: construcciones exclusivas de una implementación de awk
+│   ├── check-layers.sh               # CHK-17: reglas de capas (R1–R6)
+│   ├── check-contract-ran.sh         # CHK-20: las pruebas de contrato se ejecutaron de verdad
+│   ├── check-mutation-report.sh      # CHK-11: guarda del reporte de PIT
+│   ├── check-no-expected-override.sh # CHK-19: esperados y destinos de red por -D, por job
+│   ├── check-quarantine.sh           # CHK-14: registro de cuarentena frente a @quarantine
+│   ├── check-required-secrets.sh     # CI/Jenkins: nombra los secrets que faltan
+│   ├── check-traceability.sh         # CHK-12: escenario → spec aprobada
+│   ├── check-unit-purity.sh          # CHK-15/16: src/main puro y unitarias aisladas
+│   ├── evaluate-quarantine-run.sh    # evalúa el job quarantine (fallo esperado vs. error real)
+│   ├── run-with-each-awk.sh          # CHK-18: ejecuta un comando con cada awk (mawk, gawk, gawk --posix, busybox)
+│   ├── wait-for-grid.sh              # espera activa a que el Grid esté listo
+│   └── tests/                        # autopruebas:
+│                                     #   check-awk-portability-test.sh · check-contract-ran-test.sh
+│                                     #   check-layers-test.sh · check-no-expected-override-test.sh
+│                                     #   check-quarantine-test.sh · evaluate-quarantine-run-test.sh
+│                                     #   run-with-each-awk-test.sh
+├── src/main/java/com/demo       # lógica pura, sin E/S ni Selenium (ADR-001); la muta PIT
 │   ├── config
-│   │   ├── BrowserErrorPage.java   # reconoce las páginas de error de Chrome (net::ERR_*)
-│   │   ├── BrowserSettings.java
-│   │   ├── ConfigResolver.java
+│   │   ├── BrowserErrorPage.java     # reconoce las páginas de error de Chrome (net::ERR_*), solo con el host
+│   │   ├── BrowserSettings.java      # opciones del navegador y preferencias de Chrome (D8)
+│   │   ├── ClicNativoUnico.java      # un clic nativo por acción; fallo cerrado si el clic lanza (ADR-004)
+│   │   ├── ConfigResolver.java       # precedencia -D > entorno > archivo (esperados y URL sin entorno), fuente y describeHost
 │   │   ├── DotEnvParser.java
 │   │   └── SecretResolver.java
-│   └── data/Credentials.java
+│   └── data/Credentials.java         # credenciales con toString enmascarado
 └── src/test
     ├── java/com/demo
     │   ├── config/      # pruebas unitarias de src/main/.../config
@@ -248,6 +449,7 @@ Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-00
     │   ├── actions
     │   │   ├── CompraActions.java
     │   │   └── LoginActions.java
+    │   ├── contract/NavegadorContractTest.java  # contrato de Navegador contra páginas locales, CT-01…CT-08 (ADR-004)
     │   ├── hooks/Hooks.java
     │   ├── pages
     │   │   ├── CartPage.java
@@ -261,20 +463,39 @@ Las reglas completas (R1–R7) y su equivalente en ArchUnit están en el [ADR-00
     │   │   ├── CompraSteps.java
     │   │   └── LoginSteps.java
     │   ├── transport
-    │   │   ├── DriverFactory.java
-    │   │   └── Navegador.java
+    │   │   ├── DriverFactory.java  # Chrome, Firefox o Grid; aplica chromePreferences (D8)
+    │   │   └── Navegador.java      # único dueño del WebDriver; un clic y una escritura nativos por acción
     │   └── utils
-    │       ├── ConfigReader.java
+    │       ├── ConfigReader.java       # fachada de configuración; avisa de esperados por -D y registra destinos
     │       ├── CredentialsProvider.java
     │       ├── SecretReader.java
     │       └── TestContext.java
     └── resources
-        ├── config.properties
+        ├── config.properties           # URL, rutas, valores esperados (*.expected*) y datos no sensibles
         ├── junit-platform.properties   # paralelismo por escenario (2 hilos)
+        ├── contract/                   # páginas HTML estáticas, sin red (ADR-004):
+        │                               #   avanza.html · inerte.html · deshabilitado.html · velado.html
         └── features
             ├── compra_e2e.feature
             └── login.feature
 ```
+
+### Vista de diseño
+
+La misma estructura, organizada en cuatro bloques, con la etiqueta del dueño de cada carpeta según la [Regla 02](.claude/rules/02-agent-permissions.md):
+
+1. **Código del framework**
+2. **Especificación y decisiones**
+3. **Calidad y entrega**
+4. **Gobierno y comunidad**
+
+<p align="center">
+  <a href="docs/assets/estructura-del-proyecto.png">
+    <img src="docs/assets/estructura-del-proyecto.png" alt="Estructura del proyecto: cuatro bloques. 01 Código del framework (src/main/java, src/test/java/com/demo y src/test/resources, del engineer). 02 Especificación y decisiones (docs/specs y features del designer, docs/adr del architect y docs/quarantine.md de devops). 03 Calidad y entrega (scripts y CI/CD y build, de devops). 04 Gobierno y comunidad (.claude del usuario; instrucciones, memoria y archivos del repositorio público, del coordinador)." width="100%">
+  </a>
+</p>
+
+> Haz clic en la imagen para verla a tamaño completo (3120×3080).
 
 ## Decisiones de arquitectura
 
@@ -487,6 +708,10 @@ bash scripts/tests/check-no-expected-override-test.sh # CHK-19: autoprueba del c
 bash -c 'set -o pipefail; ./mvnw -B -ntp clean test -Dheadless=true -Dcucumber.filter.tags="not @quarantine" 2>&1 | tee test.log'
 bash scripts/check-no-expected-override.sh test.log
 
+# CHK-20 sobre la misma ejecución: las pruebas de contrato del transporte se ejecutaron de verdad
+bash scripts/tests/check-contract-ran-test.sh
+bash scripts/check-contract-ran.sh target/surefire-reports
+
 # CHK-18: autopruebas que ejercitan awk, con cada implementación (como en CI; requiere gawk)
 bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/check-layers-test.sh
 bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/check-quarantine-test.sh
@@ -498,7 +723,7 @@ bash -c 'set -o pipefail; ./mvnw -B -ntp test-compile org.pitest:pitest-maven:mu
   && bash scripts/check-mutation-report.sh pit.log
 ```
 
-El catálogo completo de comprobaciones (CHK-01…19) y sus comandos está en [`.claude/rules/04-quality-checks.md`](.claude/rules/04-quality-checks.md).
+El catálogo completo de comprobaciones (CHK-01…20) y sus comandos está en [`.claude/rules/04-quality-checks.md`](.claude/rules/04-quality-checks.md).
 
 ### Ejecución contra Selenium Grid
 
@@ -513,10 +738,13 @@ La consola de Grid queda disponible en `http://localhost:4444/ui`. Ejecutar las 
 
 ```bash
 ./mvnw clean test \
+  -Dtest=RunnerTest \
   -Dremote.url=http://localhost:4444 \
   -Dbrowser=chrome \
   -Dheadless=true
 ```
+
+`-Dtest=RunnerTest` ejecuta solo los escenarios: las pruebas de contrato del transporte abren páginas locales por `file:`, que no existen dentro del contenedor del Grid (ADR-004).
 
 Detener y retirar los contenedores:
 
@@ -553,10 +781,10 @@ Para comprobar la evidencia durante desarrollo, puede cambiarse temporalmente un
 
 | Job | Qué hace | Secrets |
 |---|---|---|
-| `test` | CHK-12 (trazabilidad) y la suite completa en Chrome headless, sin `@quarantine`; después, CHK-19 sobre su log | Sí |
-| `e2e-firefox` | Los escenarios E2E en Firefox headless; después, CHK-19 sobre su log | Sí |
+| `test` | CHK-12 (trazabilidad) y la suite completa en Chrome headless, sin `@quarantine`: unitarias, pruebas de contrato del transporte y escenarios; después, CHK-19 sobre su log y CHK-20 sobre sus reportes | Sí |
+| `e2e-firefox` | Los escenarios E2E y las pruebas de contrato del transporte en Firefox headless; después, CHK-19 y CHK-20 | Sí |
 | `e2e-grid` | Los escenarios E2E contra un Selenium Grid (`selenium/standalone-chrome`), con espera activa a que esté listo; después, CHK-19 sobre su log | Sí |
-| `mutation` | CHK-12 (trazabilidad, también aquí para que corra en los PR de forks); CHK-18 (portabilidad de awk); CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, que corren con mawk, gawk y `gawk --posix`; la autoprueba de CHK-19; CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
+| `mutation` | CHK-12 (trazabilidad, también aquí para que corra en los PR de forks); CHK-18 (portabilidad de awk); CHK-17 (capas) y CHK-14 (cuarentena) con sus autopruebas, que corren con mawk, gawk y `gawk --posix`; las autopruebas de CHK-19 y CHK-20; CHK-15/16 y CHK-11 (PIT) con la guarda de reporte | No |
 | `quarantine` | Solo los escenarios `@quarantine`, evaluados por `scripts/evaluate-quarantine-run.sh` contra `docs/quarantine.md`: **verde** si un `defecto-sut` falla por aserción (lo esperado) o un `inestable` falla por aserción o pasa; **verde con aviso** si un `defecto-sut` pasa (revisar la spec) o un `inestable` termina con error (revisar su diagnóstico); **rojo** si un `defecto-sut` termina con error (excepción o timeout) o si la cuarentena no mide nada (cero escenarios, sin reporte, fallo de compilación o un escenario sin fila). Después, CHK-19 sobre su log: un esperado sobrescrito por `-D` lo deja en **rojo** | Sí |
 | `fork-pr-notice` | Solo en los PR que vienen de un fork: avisa (`::notice::` y resumen del run) de que los E2E se omitieron porque esos PR no reciben secrets; un mantenedor los ejecuta antes de fusionar ([CONTRIBUTING.md](CONTRIBUTING.md)) | No |
 
@@ -578,23 +806,423 @@ Los escenarios corren en paralelo con 2 hilos (`src/test/resources/junit-platfor
 
 ### Jenkins
 
-El `Jenkinsfile` declarativo está listo para un servidor Jenkins, aunque todavía no se ha ejecutado en uno real. Reproduce los jobs `test`, `mutation` y `quarantine` de GitHub Actions (Firefox y Grid se cubren solo en GitHub):
+El `Jenkinsfile` es un pipeline declarativo equivalente a los jobs `test`, `mutation` y `quarantine` de GitHub Actions. Firefox y el Grid solo se cubren en GitHub.
 
-1. `Checkout` del commit bajo prueba.
-2. `Traceability SDD (CHK-12)`, `Portabilidad de awk` (CHK-18, con los awk instalados en el agente), `Esperados por -D (ADR-003, R-2)` (autoprueba de CHK-19), `Capas (CHK-17)` y `Cuarentena reglada (CHK-14)`.
-3. `Mutation (CHK-11)`: PIT con la guarda de reporte, sin credenciales.
-4. `Test`: la suite sin `@quarantine` y, aunque Maven falle, CHK-19 sobre su log; recibe credenciales.
-5. `Cuarentena (CHK-14)`: solo los escenarios `@quarantine`, con la misma evaluación que en GitHub. Fallo esperado: etapa verde. Un `defecto-sut` que pasa o un `inestable` con error: etapa inestable. Error real o un esperado sobrescrito por `-D` (CHK-19): falla el build. También recibe credenciales.
-6. `post` de `Test`: publica JUnit y Allure y archiva los reportes, aunque una prueba falle. `Mutation` archiva su reporte y `pit.log`. El `post` global limpia el espacio de trabajo.
+**Estado: verificado en un Jenkins real.** El build `#1` terminó en **SUCCESS** en 7 min 16 s, el 2026-10-13. Corrió en Jenkins 2.541.3 (imagen `jenkins/jenkins:lts-jdk17`) sobre el commit `0a51d89`, con Google Chrome 155 en el agente.
 
-Incluye límites de tiempo globales y por etapa, descarte de builds antiguos y builds no concurrentes. Los bloques de shell de varias órdenes corren en bash con `set -euo pipefail`, y todos usan comillas simples para que Groovy no interpole ningún valor.
+#### Qué ejecuta, en orden
 
-**Para configurarlo:**
+| # | Etapa | Qué hace | Credenciales | Resultado esperado |
+|---|---|---|---|---|
+| 1 | `Checkout` | Descarga el commit bajo prueba | No | — |
+| 2 | `Traceability SDD (CHK-12)` | Cada escenario apunta a una spec aprobada | No | Verde, sin salida |
+| 3 | `Portabilidad de awk` | CHK-18: control estático y autopruebas con cada awk instalado en el agente | No | Verde |
+| 4 | `Capas (CHK-17)` | Autoprueba de las reglas de capas con cada awk, más las reglas sobre el código | No | Verde. Es la etapa sin navegador más larga (unos 5 min) |
+| 5 | `Cuarentena reglada (CHK-14)` | Autopruebas de la cuarentena y del evaluador, más el registro `docs/quarantine.md` | No | Verde |
+| 6 | `Esperados por -D (ADR-003, R-2)` | Autoprueba de CHK-19 | No | Verde |
+| 7 | `Contrato ejecutado, autoprueba (CHK-20)` | Autoprueba de CHK-20 | No | Verde |
+| 8 | `Mutation (CHK-11)` | CHK-15/16 y PIT, con la guarda del reporte. Archiva `pit-reports` y `pit.log` | No | Verde (umbral 80 %) |
+| 9 | `Test` | Suite completa sin `@quarantine` (unitarias, pruebas de contrato y escenarios) y, aunque Maven falle, CHK-19 sobre su log y CHK-20 sobre sus reportes. Publica JUnit y Allure y archiva el HTML de Cucumber, Surefire y Allure. No archiva `test.log` | **Sí** | Verde |
+| 10 | `Cuarentena (CHK-14)` | Solo los escenarios `@quarantine`, con la misma evaluación que en GitHub, y CHK-19 sobre su log. Archiva `quarantine-reports/` sin el log | **Sí** | **Verde** si AC-COMPRA-09 falla por aserción, que es lo esperado. **UNSTABLE** si un `defecto-sut` pasa o un `inestable` termina con error. **FAILURE** ante un error real o un esperado sobrescrito por `-D` |
+| — | `post` global | Limpia el espacio de trabajo (`cleanWs`) | — | — |
 
-1. **Plugins:** Pipeline (Declarative), Credentials Binding, Timestamper, JUnit, Workspace Cleanup y Allure (con una instalación de Allure Commandline en *Global Tool Configuration*).
-2. **Herramientas** (`Manage Jenkins → Tools`): un JDK llamado `jdk-17` (Temurin 17). Maven no hace falta: lo trae `./mvnw`.
-3. **Agente:** Linux con bash, git y Google Chrome.
-4. **Credenciales** (`Manage Jenkins → Credentials`): seis de tipo **Secret text**. El ID de cada una es exactamente el nombre de la variable en `.env.example`, y su valor es el mismo que en tu `.env` (ver [Credenciales de SauceDemo](#credenciales-de-saucedemo-cómo-obtenerlas)).
+**Opciones del pipeline:**
+- límite global de 60 min y límites propios en Mutation (10 min), Test (20 min) y Cuarentena (20 min);
+- conserva 30 builds y los artefactos de 10;
+- sin builds concurrentes (`disableConcurrentBuilds`).
+
+**Ejecución del shell:** los bloques de varias órdenes corren en bash con `set -euo pipefail`. Todos usan comillas simples para que Groovy no interpole ningún valor, y solo `Test` y `Cuarentena` reciben las credenciales (`withCredentials`), que Jenkins enmascara en la consola.
+
+#### Elegir la opción
+
+| | Opción A: servidor existente | Opción B: Jenkins local en Docker |
+|---|---|---|
+| Cuándo usarla | Integrar el pipeline en el Jenkins de tu equipo o de tu organización | Probar el `Jenkinsfile` en tu máquina, sin servidor, y borrarlo al terminar |
+| Qué necesitas | Acceso de administrador a Jenkins y un agente Linux | Docker y salida a Internet durante la construcción de la imagen |
+| Origen del código | El repositorio público de GitHub | Tu clon local, montado en solo lectura (o GitHub) |
+| Tiempo de preparación | 15–20 min | 10–15 min, casi todo construyendo la imagen |
+| Persistencia | Permanente | Efímera: se borra con el paso B8 |
+
+> [!IMPORTANT]
+> Los valores marcados como **exactos** los usa el `Jenkinsfile` literalmente: el nombre de la herramienta `jdk-17`, los seis ID de credenciales y la ruta `Jenkinsfile`. Si no coinciden carácter a carácter, el build falla.
+
+#### Opción A: servidor Jenkins existente
+
+**Requisitos previos**
+
+- [ ] Jenkins con permisos de administrador. Versión verificada: **2.541.3**.
+- [ ] Un agente **Linux x86_64** (puede ser el propio controlador).
+- [ ] Los valores de las seis variables de tu `.env` (ver [Credenciales de SauceDemo](#credenciales-de-saucedemo-cómo-obtenerlas)).
+
+**A1. Versión de Jenkins**
+
+La configuración verificada es Jenkins **2.541.3**, con la imagen `jenkins/jenkins:lts-jdk17`.
+
+> [!NOTE]
+> La línea `lts-jdk17` está congelada en 2.541.3, porque las LTS posteriores exigen Java 21 en el controlador, y algunos plugins compatibles con ella tienen avisos de seguridad publicados (`workflow-multibranch`, `pipeline-groovy-lib`). En un servidor permanente usa la LTS vigente: el Java del controlador no afecta al pipeline, que compila con la herramienta `jdk-17` del paso A3. *Ese montaje con la LTS vigente no está verificado en este repositorio.*
+
+**A2. Plugins**
+
+`Manage Jenkins → Plugins → Available plugins`. Instala los ocho y reinicia Jenkins si te lo pide.
+
+| Plugin | ID | Versión verificada | Lo usa el `Jenkinsfile` para |
+|---|---|---|---|
+| Pipeline | `workflow-aggregator` | 608 | Ejecutar pipelines |
+| Pipeline: Declarative | `pipeline-model-definition` | 2.2293 | `pipeline { … }`, `options` y `post` |
+| Git | `git` | 5.11.0 | `checkout scm` |
+| Credentials Binding | `credentials-binding` | 728 | `withCredentials` y `string(...)` |
+| Timestamper | `timestamper` | 1.30 | `timestamps()` |
+| JUnit | `junit` | 1438 | `junit` |
+| Workspace Cleanup | `ws-cleanup` | 0.49 | `cleanWs` |
+| Allure Jenkins Plugin | `allure-jenkins-plugin` | 3.0.0 | `allure` |
+
+*Verificación:* los ocho aparecen en `Manage Jenkins → Plugins → Installed plugins`.
+
+**A3. Herramientas**
+
+`Manage Jenkins → Tools`:
+
+| Sección | Campo | Valor |
+|---|---|---|
+| JDK installations → *Add JDK* | Name | **`jdk-17`** (exacto) |
+| | `JAVA_HOME` | Ruta de un JDK 17, por ejemplo Temurin 17 |
+| Allure Commandline installations → *Add Allure Commandline* | Name | `allure` |
+| | Instalación | *Install automatically* (versión 2.x; verificada con **2.30.0**) o la ruta de una instalación existente |
+
+Maven no se configura: lo descarga `./mvnw` desde Maven Central y verifica su checksum.
+
+*Verificación:* `jdk-17` y `allure` aparecen guardados en `Manage Jenkins → Tools`.
+
+**A4. Agente**
+
+El pipeline usa `agent any`, así que corre en cualquier nodo con un ejecutor libre. Ese nodo debe cumplir:
+
+| Requisito | Detalle |
+|---|---|
+| Sistema | Linux x86_64 |
+| Programas | `bash`, `git`, `awk` (mawk), **`gawk`** y **Google Chrome** estable. `gawk` hace falta porque CHK-18 prueba los scripts con cada awk instalado |
+| chromedriver | No se instala: Selenium Manager lo resuelve en la primera ejecución |
+| Red de salida | `www.saucedemo.com` (el SUT), `repo.maven.apache.org` (Maven y dependencias), y `googlechromelabs.github.io` y `storage.googleapis.com` (chromedriver) |
+| Memoria compartida | Si el agente es un contenedor, `--shm-size=2g` o más; con menos, Chrome se cierra |
+| Telemetría | Ninguna acción: `pom.xml` ya define `SE_AVOID_STATS=true` y Selenium Manager no envía estadísticas |
+| Ejecutores | Al menos 1. El job no admite builds concurrentes |
+
+*Verificación:* en una consola del agente, `google-chrome --version`, `gawk --version` y `git --version` responden sin error.
+
+**A5. Credenciales**
+
+`Manage Jenkins → Credentials → System → Global credentials (unrestricted) → Add Credentials`. Crea **seis**, todas con esta configuración:
+
+| Campo | Valor |
+|---|---|
+| Kind | `Secret text` |
+| Scope | `Global (Jenkins, nodes, items, all child items, etc)` |
+| Secret | El valor de esa variable en tu `.env` |
+| ID | Uno de los seis nombres de abajo (**exacto**) |
+| Description | Vacía, o un texto que no sea el valor |
+
+Los seis ID, iguales a los nombres de `.env.example`:
+
+```text
+TEST_USER_STANDARD_USERNAME
+TEST_USER_STANDARD_PASSWORD
+TEST_LOGIN_CASES_LOCKED_USER_USERNAME
+TEST_LOGIN_CASES_LOCKED_USER_PASSWORD
+TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME
+TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD
+```
+
+*Verificación:* `Global credentials (unrestricted)` lista exactamente esos seis ID.
+
+**A6. Job**
+
+`New Item` → nombre `spec-driven-selenium-cucumber` (o el que prefieras) → tipo **Pipeline** → *OK*. En la sección *Pipeline*:
+
+| Campo | Valor |
+|---|---|
+| Definition | `Pipeline script from SCM` |
+| SCM | `Git` |
+| Repository URL | `https://github.com/eavilac01/spec-driven-selenium-cucumber.git` |
+| Credentials | `- none -` (el repositorio es público) |
+| Branch Specifier | `*/main`. Para fijar un commit concreto, su SHA completo |
+| Script Path | **`Jenkinsfile`** (exacto) |
+| Lightweight checkout | Desmarcado (configuración verificada) |
+
+*Save* → **Build Now**.
+
+**A7. Criterios de aceptación**
+
+El build está bien configurado si se cumple todo esto:
+
+- [ ] Resultado **SUCCESS**, en unos 7–8 min.
+- [ ] Las diez etapas de la tabla [Qué ejecuta, en orden](#qué-ejecuta-en-orden) en verde.
+- [ ] **Test Result:** 222 pruebas, 0 fallos, 1 omitida (AC-COMPRA-09, en cuarentena).
+- [ ] En la consola de `Test`: `check-no-expected-override: ok: sin esperados sobrescritos por -D y con los destinos de red esperados …` (CHK-19) y `check-contract-ran: ok: 1 clase(s) de contrato con su reporte …` (CHK-20).
+- [ ] **Allure Report** disponible en el build.
+- [ ] Artefactos: `target/cucumber-report.html`, `target/surefire-reports/`, `target/allure-results/`, `target/pit-reports/`, `pit.log` y `quarantine-reports/`.
+- [ ] En la consola de `Cuarentena (CHK-14)`: `VERDE: ejecutados=1 fallaron=1 errores=0 pasaron=0`.
+- [ ] En la consola, ninguna credencial en claro: Jenkins anuncia `Masking supported pattern matches of $TEST_…`.
+
+**A8. Seguridad**
+
+> [!WARNING]
+> No construyas pull requests de forks con estas credenciales. Si usas un job *Multibranch* con GitHub Branch Source, configura *Discover pull requests from forks → Trust: From users with Admin or Write permission*. Si no, el `Jenkinsfile` de un fork podría leer las credenciales.
+
+Restringe además quién puede configurar el job y ver las credenciales.
+
+#### Opción B: Jenkins local y efímero en Docker
+
+Reproduce la configuración verificada en tu máquina:
+
+- Jenkins queda accesible solo en `127.0.0.1:8090`, con inicio de sesión obligatorio y sin acceso anónimo.
+- Lee el repositorio en **solo lectura**, montando únicamente su carpeta `.git`; tu árbol de trabajo, con el `.env`, no se monta.
+- Todo se borra con el paso B8.
+
+**Requisitos previos**
+
+- [ ] Docker Engine (verificado con la 29.9) y unos 3 GB libres.
+- [ ] Salida a Internet durante el paso B3: Docker Hub, `deb.debian.org`, `dl.google.com`, `repo1.maven.org` y `updates.jenkins.io`/`get.jenkins.io`. Durante los builds, la red es la del paso A4.
+- [ ] El puerto `127.0.0.1:8090` libre.
+- [ ] Los valores de las seis variables de tu `.env`.
+
+**B1. Variables de la sesión**
+
+Define una vez estas dos variables en tu terminal; los pasos siguientes las usan:
+
+```bash
+export JENKINS_DIR="$HOME/jenkins-local"        # carpeta de trabajo, fuera del repositorio
+export REPO_DIR="/ruta/a/spec-driven-selenium-cucumber"   # tu clon (debe contener .git)
+mkdir -p "$JENKINS_DIR/ref/jobs/spec-driven-selenium-cucumber" "$JENKINS_DIR/secrets"
+chmod 700 "$JENKINS_DIR/secrets"
+test -d "$REPO_DIR/.git" && echo "REPO_DIR correcto"
+```
+
+**B2. Archivos de la imagen**
+
+Copia y ejecuta cada bloque: cada uno crea un archivo con su contenido exacto. Las comillas de `'EOF'` impiden que el shell sustituya nada, así que `${…}` llega literal.
+
+`Dockerfile`: Jenkins 2.541.3 con JDK 17, `gawk`, Chrome estable (sin actualizaciones automáticas) y Allure 2.30.0.
+
+```bash
+cat > "$JENKINS_DIR/Dockerfile" <<'EOF'
+FROM jenkins/jenkins:lts-jdk17
+
+USER root
+ARG ALLURE_VERSION=2.30.0
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends gawk ca-certificates unzip; \
+    curl -fsSL -o /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb; \
+    apt-get install -y --no-install-recommends /tmp/chrome.deb; \
+    rm -f /tmp/chrome.deb /etc/apt/sources.list.d/google-chrome.list* /etc/cron.daily/google-chrome; \
+    rm -rf /var/lib/apt/lists/*; \
+    curl -fsSL -o /tmp/allure.zip "https://repo1.maven.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"; \
+    unzip -q /tmp/allure.zip -d /opt; \
+    mv "/opt/allure-${ALLURE_VERSION}" /opt/allure; \
+    rm -f /tmp/allure.zip; \
+    google-chrome --version; gawk --version | head -1; /opt/allure/bin/allure --version
+
+COPY --chown=jenkins:jenkins ref/ /usr/share/jenkins/ref/
+COPY --chown=jenkins:jenkins casc.yaml /usr/share/jenkins/casc/jenkins.yaml
+
+USER jenkins
+COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
+ENV CASC_JENKINS_CONFIG=/usr/share/jenkins/casc/jenkins.yaml \
+    JAVA_OPTS="-Djenkins.install.runSetupWizard=false -Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true" \
+    SE_AVOID_STATS=true
+EOF
+```
+
+`plugins.txt`: los ocho plugins del paso A2, más Configuration as Code.
+
+```bash
+cat > "$JENKINS_DIR/plugins.txt" <<'EOF'
+workflow-aggregator
+pipeline-model-definition
+git
+credentials-binding
+timestamper
+junit
+ws-cleanup
+allure-jenkins-plugin
+configuration-as-code
+EOF
+```
+
+`casc.yaml`: configuración como código, con el usuario `admin`, sin registro de usuarios ni acceso anónimo, y las herramientas `jdk-17` y `allure`.
+
+```bash
+cat > "$JENKINS_DIR/casc.yaml" <<'EOF'
+jenkins:
+  systemMessage: "Jenkins local y efímero (127.0.0.1)."
+  numExecutors: 1
+  mode: NORMAL
+  slaveAgentPort: -1
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  crumbIssuer: "standard"
+tool:
+  jdk:
+    installations:
+      - name: "jdk-17"
+        home: "/opt/java/openjdk"
+  allure:
+    installations:
+      - name: "allure"
+        home: "/opt/allure"
+unclassified:
+  location:
+    url: "http://127.0.0.1:8090/"
+EOF
+```
+
+> [!NOTE]
+> `${JENKINS_ADMIN_PASSWORD}` no es una variable de entorno: Configuration as Code la lee del archivo `/run/secrets/JENKINS_ADMIN_PASSWORD` del contenedor, que se monta en el paso B4. La contraseña nunca entra en la imagen.
+
+`config.xml`: el job, creado al arrancar. Lee el `Jenkinsfile` de la rama `main` del repositorio montado en `/repo.git`.
+
+```bash
+cat > "$JENKINS_DIR/ref/jobs/spec-driven-selenium-cucumber/config.xml" <<'EOF'
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job">
+  <description>Jenkinsfile del repositorio local montado en solo lectura (/repo.git).</description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps">
+    <scm class="hudson.plugins.git.GitSCM" plugin="git">
+      <configVersion>2</configVersion>
+      <userRemoteConfigs>
+        <hudson.plugins.git.UserRemoteConfig>
+          <url>file:///repo.git</url>
+        </hudson.plugins.git.UserRemoteConfig>
+      </userRemoteConfigs>
+      <branches>
+        <hudson.plugins.git.BranchSpec>
+          <name>main</name>
+        </hudson.plugins.git.BranchSpec>
+      </branches>
+      <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+      <submoduleCfg class="empty-list"/>
+      <extensions/>
+    </scm>
+    <scriptPath>Jenkinsfile</scriptPath>
+    <lightweight>false</lightweight>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>
+EOF
+```
+
+Para variar el origen del código:
+- **Desde GitHub en vez de tu clon:** cambia `file:///repo.git` por `https://github.com/eavilac01/spec-driven-selenium-cucumber.git` y omite el montaje `-v "$REPO_DIR/.git:/repo.git:ro"` del paso B4.
+- **Un commit concreto:** cambia `main` por su SHA completo.
+
+*Verificación:* `ls -R "$JENKINS_DIR"` muestra `Dockerfile`, `plugins.txt`, `casc.yaml`, `ref/jobs/spec-driven-selenium-cucumber/config.xml` y la carpeta `secrets/`.
+
+**B3. Contraseña de `admin` e imagen**
+
+```bash
+(umask 077; openssl rand -base64 24 > "$JENKINS_DIR/secrets/JENKINS_ADMIN_PASSWORD")
+[ "$(id -u)" = 1000 ] || chmod 644 "$JENKINS_DIR/secrets/JENKINS_ADMIN_PASSWORD"
+docker build -t jenkins-sdsc:local "$JENKINS_DIR"
+```
+
+- La contraseña queda en un archivo `600` dentro de una carpeta `700`.
+- El usuario `jenkins` del contenedor tiene el UID 1000. Si tu UID es otro, la segunda línea abre la lectura del archivo; la carpeta sigue siendo privada.
+- La construcción tarda unos 5–10 min.
+
+*Verificación:* el final de `docker build` muestra la versión de Google Chrome, la de GNU Awk y `2.30.0` (Allure).
+
+**B4. Arranque**
+
+```bash
+docker network create jenkins-sdsc-net
+docker volume create jenkins-sdsc-home
+docker run -d --name jenkins-sdsc \
+  --network jenkins-sdsc-net \
+  -p 127.0.0.1:8090:8080 \
+  --shm-size=2g \
+  -v jenkins-sdsc-home:/var/jenkins_home \
+  -v "$JENKINS_DIR/secrets:/run/secrets:ro" \
+  -v "$REPO_DIR/.git:/repo.git:ro" \
+  jenkins-sdsc:local
+docker logs -f jenkins-sdsc
+```
+
+Espera a la línea `Jenkins is fully up and running` y sal de los logs con `Ctrl+C`; el contenedor sigue en marcha.
+
+*Verificación:* `docker ps --filter name=jenkins-sdsc` muestra el contenedor `Up` con `127.0.0.1:8090->8080/tcp`.
+
+**B5. Acceso**
+
+1. **Lee la contraseña** en una terminal, fuera de cualquier herramienta que registre la salida:
+   ```bash
+   cat "$JENKINS_DIR/secrets/JENKINS_ADMIN_PASSWORD"; echo
+   ```
+2. **Inicia sesión:** abre `http://127.0.0.1:8090/` y entra con el usuario **`admin`** y esa contraseña.
+
+*Verificación:* el panel muestra el job `spec-driven-selenium-cucumber` y el mensaje "Jenkins local y efímero (127.0.0.1)".
+
+**B6. Credenciales**
+
+Crea las seis credenciales del paso A5 en `http://127.0.0.1:8090/manage/credentials/store/system/domain/_/newCredentials`.
+
+*Verificación:* `Global credentials (unrestricted)` lista los seis ID.
+
+**B7. Build**
+
+Abre el job `spec-driven-selenium-cucumber` → **Build Now**. Tarda unos 7–8 min.
+
+*Verificación:* se cumplen los criterios de aceptación del paso A7.
+
+**B8. Limpieza**
+
+```bash
+docker rm -f jenkins-sdsc
+docker volume rm jenkins-sdsc-home
+docker network rm jenkins-sdsc-net
+docker rmi jenkins-sdsc:local jenkins/jenkins:lts-jdk17
+rm -rf "$JENKINS_DIR"
+```
+
+Borra el contenedor, la imagen, el volumen, que guarda las credenciales cifradas, la red y la carpeta con la contraseña.
+
+*Verificación:* `docker ps -a --filter name=jenkins-sdsc` y `docker volume ls --filter name=jenkins-sdsc` no devuelven nada.
+
+**Diferencia con el build verificado**
+
+En la verificación, el chromedriver se copió a la imagen desde la caché de Selenium del host y se usó `SE_OFFLINE=true`, para no salir a Chrome for Testing. Este `Dockerfile` deja que Selenium Manager lo descargue, como en GitHub Actions.
+
+Para reproducir la variante sin red:
+1. Antes del paso B3, copia `~/.cache/selenium/chromedriver/linux64/<versión>/chromedriver` del host a `$JENKINS_DIR/chromedriver`.
+2. Añade al `Dockerfile` la línea `COPY --chown=jenkins:jenkins chromedriver /usr/share/jenkins/ref/.cache/selenium/chromedriver/linux64/<versión>/chromedriver`.
+3. Añade `SE_OFFLINE=true` al `ENV`.
+
+La versión mayor del chromedriver debe coincidir con la del Chrome instalado en la imagen; la muestra la salida del paso B3.
+
+#### Problemas frecuentes en Jenkins
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `Tool type "jdk" does not have an install of "jdk-17" configured` | La herramienta no se llama `jdk-17` | Renómbrala exactamente `jdk-17` (paso A3) |
+| `Could not find credentials entry with ID 'TEST_…'` | Falta la credencial o su ID no coincide | Revisa los seis ID (paso A5) |
+| `Secret faltante: 'TEST_…' (credencial de tipo Secret text con el mismo ID)` | Esa credencial está vacía | Edítala y pon el valor de tu `.env` |
+| Chrome se cierra (`session deleted because of page crash`) | `/dev/shm` pequeño en el contenedor | `--shm-size=2g` o más |
+| `SessionNotCreatedException`: versión de chromedriver incompatible | `SE_OFFLINE=true` con un chromedriver de otra versión mayor | Quita `SE_OFFLINE` o copia el chromedriver de la misma versión mayor que Chrome |
+| `Portabilidad de awk` o `Capas (CHK-17)` falla con `gawk: not found` o con errores de `gawk` | El agente no tiene `gawk`, o un script usa algo exclusivo de una implementación de awk | Instala `gawk` (paso A4). Si falla con un awk concreto, es un defecto del script: ver CHK-18 |
+| El Jenkins local no arranca o Configuration as Code no encuentra `JENKINS_ADMIN_PASSWORD` | Falta `secrets/JENKINS_ADMIN_PASSWORD` o el contenedor no puede leerlo | Repite el paso B3 y revisa el UID |
+| `docker run` falla con `port is already allocated` | El puerto `127.0.0.1:8090` está ocupado | Cambia el puerto en `-p` (B4) y en `url` de `casc.yaml` (B2), y reconstruye la imagen |
+| `Cuarentena (CHK-14)` en **UNSTABLE** | Un `defecto-sut` pasó (posible corrección del SUT) o un `inestable` terminó con error | Lee el aviso en la consola y la sección [Cuarentena y defectos conocidos](#cuarentena-y-defectos-conocidos) |
 
 ### Selenium Grid con Docker Compose
 
@@ -682,7 +1310,7 @@ El repositorio incluye un equipo de subagentes de Claude Code (`.claude/agents/`
 - **Spec Driven Development:** spec aprobada por una persona → feature trazada (`@AC-`, `@tec-`) → código. Ningún nivel se escribe sin el anterior (`.claude/rules/01`).
 - **Permisos por agente:** qué puede escribir, leer y ejecutar cada rol, aplicado también con `permissions` en `.claude/settings.json` (`.claude/rules/02`).
 - **Defensa contra prompt injection:** el contenido de la aplicación, los reportes y los archivos es dato, nunca instrucción (`.claude/rules/03`).
-- **Comprobaciones deterministas:** catálogo CHK-01…19 (sleep, reintentos, capas, control negativo, mutación, trazabilidad, cuarentena, portabilidad de awk, esperados por `-D`), un hook que bloquea `git push` sin el gate DevOps y otro que impide modificar por Bash la configuración de los agentes y los workflows del CI (`.claude/rules/02` y `04`).
+- **Comprobaciones deterministas:** catálogo CHK-01…20 (sleep, reintentos, capas, control negativo, mutación, trazabilidad, cuarentena, portabilidad de awk, esperados y URL por `-D`, contrato del transporte ejecutado), un hook que bloquea `git push` sin el gate DevOps y otro que impide modificar por Bash la configuración de los agentes y los workflows del CI (`.claude/rules/02` y `04`).
 
 Índice, justificación de roles y asignación de modelo: [`.claude/agents/README.md`](.claude/agents/README.md).
 

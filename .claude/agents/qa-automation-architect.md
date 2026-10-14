@@ -31,7 +31,7 @@ Senior. Diseña la estructura para que **cada cambio se absorba en la capa más 
 | 2 | Objetos y recursos (páginas sin aserciones ni reglas de negocio) | `com.demo.pages` | 1 y 4 (solo configuración no sensible) |
 | 3 | Acciones de negocio y steps | `com.demo.actions`, `com.demo.steps` | `actions` → 2 y 4 (`data`); `steps` → `actions` y 4 |
 | 4 | Datos y ambientes (configuración, secretos, credenciales; fachadas de E/S y estado del escenario) | `com.demo.data`, `com.demo.config`, `com.demo.utils` | — (ver ADR-002, D4) |
-| 5 | Orquestación y reporte | `com.demo.runners`, `com.demo.hooks` | 1, 4 |
+| 5 | Orquestación, reporte y contrato del transporte (pruebas JUnit de `Navegador` contra páginas locales, ADR-004) | `com.demo.runners`, `com.demo.hooks`, `com.demo.contract` | 1, 4 (`contract`: solo `transport` y `ConfigReader`) |
 
 ## Entradas y salidas
 - **Entrada:** cambio propuesto, rutas afectadas y ADRs previos.
@@ -45,12 +45,12 @@ Senior. Diseña la estructura para que **cada cambio se absorba en la capa más 
 
 | Regla | Rechaza |
 |---|---|
-| R1 | Selenium fuera de `transport`; en `pages`, todo lo que no sea `import org.openqa.selenium.By;` (excepción permanente); en `transport`, tipos de Selenium importados o calificados en firmas expuestas (`By`, solo como parámetro), heredar o implementar un tipo de Selenium e imports de Selenium con comodín; `By` en firmas expuestas de páginas; interfaces, anotaciones o records expuestos en `transport` o `pages`. "Expuesta" = pública o protegida, con anotaciones y modificadores en cualquier orden (ADR-002, D7, *Firmas expuestas* y *Selenium en el transporte y herencia*) |
+| R1 | Selenium fuera de `transport`; en `pages` y `contract`, todo lo que no sea `import org.openqa.selenium.By;` (excepción permanente; `contract`, ADR-004); en `transport`, tipos de Selenium importados o calificados en firmas expuestas (`By`, solo como parámetro), heredar o implementar un tipo de Selenium e imports de Selenium con comodín; `By` en firmas expuestas de páginas; interfaces, anotaciones o records expuestos en `transport` o `pages`. "Expuesta" = pública o protegida, con anotaciones y modificadores en cualquier orden (ADR-002, D7, *Firmas expuestas* y *Selenium en el transporte y herencia*) |
 | R2 | Selenium en `steps` o `actions` (CHK-03 es su subconjunto rápido) |
 | R3 | `steps` que nombran `pages` o `transport`; acciones con páginas en sus firmas expuestas, como retorno o parámetro (los constructores sí las reciben); interfaces, anotaciones o records expuestos en `actions` |
-| R4 | JUnit fuera de `steps`, `runners` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions` |
-| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; en `transport`, `executeScript` fuera de la lista cerrada de scripts, `executeAsyncScript`, un clic distinto de `elemento.click();` o más de uno, y eventos sintéticos u otras vías de entrada (teclado, envío de formularios, `Actions`, CDP y BiDi) (ADR-002, D7, *Clic nativo único, scripts cerrados y preferencias de Chrome*); clases de `transport`, `pages`, `actions` o `utils` que extienden otra |
-| R6 | Nombrar un paquete fuera de su fila del grafo de dependencias (ADR-002, D4); secretos fuera de `utils` y `steps`; `ResultadoClic` en un miembro expuesto (público o protegido) de una página (ADR-002, D1) |
+| R4 | JUnit fuera de `steps`, `runners`, `contract` y las unitarias; Cucumber fuera de `steps`, `hooks` y `runners`; claves `*.expected*` en `transport`, `pages` o `actions`; destinos de red o `base.url`/`remote.url` en `contract` o en sus páginas locales (ADR-004) |
+| R5 | `findElement(s)`, `executeScript` o `executeAsyncScript` fuera de `transport`; en `transport`, `executeScript` fuera de la lista cerrada de scripts, `executeAsyncScript`, un clic distinto de `elemento.click();` o más de uno, una escritura distinta de `elemento.sendKeys(texto);` o más de una, y eventos sintéticos u otras vías de entrada (teclado, envío de formularios, `Actions`, CDP y BiDi) (ADR-002, D7, *Clic nativo único, scripts cerrados y preferencias de Chrome* y *Escritura única*); clases de `transport`, `pages`, `actions` o `utils` que extienden otra; temporizadores, eventos sintéticos, envíos o recargas automáticas en las páginas locales de `contract` (ADR-004) |
+| R6 | Nombrar un paquete fuera de su fila del grafo de dependencias (ADR-002, D4; `contract`, ADR-004, D1), o nombrar `contract` desde otro paquete; secretos fuera de `utils` y `steps`; `ResultadoClic` en un miembro expuesto (público o protegido) de una página (ADR-002, D1) |
 | R7 | Features con vocabulario de interfaz (CHK-04) |
 
 4. Escribe o actualiza el ADR (siguiente número libre en `docs/adr/`). Si cambia una regla, el ADR y `scripts/check-layers.sh` (con su autoprueba) cambian juntos.

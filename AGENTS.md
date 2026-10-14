@@ -19,24 +19,26 @@ Framework de automatización E2E sobre [SauceDemo](https://www.saucedemo.com), p
 - `bash scripts/check-traceability.sh` — trazabilidad spec → feature (CHK-12)
 - `bash scripts/check-layers.sh` — reglas de capas (CHK-17)
 - `bash scripts/run-with-each-awk.sh --require mawk --require gawk --require gawk-posix -- bash scripts/tests/<autoprueba>.sh` — autoprueba de un script con cada awk, como en CI (CHK-18; requiere `gawk`)
-- `docker compose up -d` y `-Dremote.url=http://localhost:4444` — ejecuta contra el Selenium Grid local
+- `bash scripts/check-contract-ran.sh target/surefire-reports` — tras la suite, comprueba que las pruebas de contrato del transporte se ejecutaron (CHK-20, ADR-004)
+- `docker compose up -d` y `./mvnw -B -ntp clean test -Dtest=RunnerTest -Dheadless=true -Dremote.url=http://localhost:4444` — ejecuta los escenarios contra el Selenium Grid local (`-Dtest=RunnerTest`: las páginas locales de las pruebas de contrato no existen en el contenedor)
 - `allure serve target/allure-results` — abre el reporte (requiere Allure CLI)
-- Lint: no hay linter configurado; las comprobaciones de estilo y calidad están en `.claude/rules/04-quality-checks.md` (CHK-01…19)
+- Lint: no hay linter configurado; las comprobaciones de estilo y calidad están en `.claude/rules/04-quality-checks.md` (CHK-01…20)
 
 ## Estructura del proyecto
 - `docs/specs/` — specs de negocio (fuente de verdad, SDD) y su plantilla `_plantilla.md`
-- `docs/adr/` — decisiones de arquitectura (ADR-001: mutación con PIT; ADR-002: transporte, acciones y capas; ADR-003: fuentes de los valores esperados y de las URL)
+- `docs/adr/` — decisiones de arquitectura (ADR-001: mutación con PIT; ADR-002: transporte, acciones y capas; ADR-003: fuentes de los valores esperados y de las URL; ADR-004: pruebas de contrato del transporte)
 - `docs/quarantine.md` — registro de la cuarentena reglada (`inestable` o `defecto-sut`), validado por CHK-14
 - `src/test/resources/features/` — escenarios Gherkin con tags `@AC-` y `@tec-`
-- `src/main/java/com/demo/config/` y `data/` — lógica pura del framework (configuración, secretos, credenciales, configuración del navegador): sin E/S, Selenium ni Cucumber; es lo que muta PIT
+- `src/main/java/com/demo/config/` y `data/` — lógica pura del framework (configuración, secretos, credenciales, configuración del navegador y `ClicNativoUnico`, el clic nativo único): sin E/S, Selenium ni Cucumber; es lo que muta PIT
 - `src/test/java/com/demo/config/` y `data/` — pruebas unitarias JUnit 5 de esa lógica, aisladas (solo `*Test.java`)
 - `src/test/java/com/demo/steps/` — step definitions: aserciones y valores esperados; solo usan acciones, sin Selenium
 - `src/test/java/com/demo/actions/` — acciones de negocio (`LoginActions`, `CompraActions`): flujos entre páginas, sin aserciones
 - `src/test/java/com/demo/pages/` — page objects por composición sobre `Navegador`; de Selenium solo usan `By`
 - `src/test/java/com/demo/transport/` — `Navegador` (único dueño del `WebDriver`, esperas explícitas) y `DriverFactory` (ADR-002)
 - `src/test/java/com/demo/utils/` — contexto del escenario y fachadas (`ConfigReader`, `SecretReader`, `CredentialsProvider`) que leen el entorno y delegan en `src/main`
-- `scripts/` — comprobaciones del CI (las de CHK-14, CHK-17, CHK-18 y CHK-19 tienen autoprueba en `scripts/tests/`): `check-traceability.sh` (CHK-12), `check-quarantine.sh` y `evaluate-quarantine-run.sh` (CHK-14), `check-unit-purity.sh` (CHK-15/16), `check-layers.sh` (CHK-17), `check-awk-portability.sh` y `run-with-each-awk.sh` (CHK-18), `check-no-expected-override.sh` (CHK-19, ADR-003 R-2), `check-mutation-report.sh` (guarda de CHK-11), `check-required-secrets.sh` y `wait-for-grid.sh`
+- `scripts/` — comprobaciones del CI (las de CHK-14, CHK-17, CHK-18, CHK-19 y CHK-20 tienen autoprueba en `scripts/tests/`): `check-traceability.sh` (CHK-12), `check-quarantine.sh` y `evaluate-quarantine-run.sh` (CHK-14), `check-unit-purity.sh` (CHK-15/16), `check-layers.sh` (CHK-17), `check-awk-portability.sh` y `run-with-each-awk.sh` (CHK-18), `check-no-expected-override.sh` (CHK-19, ADR-003 R-2 y D6), `check-contract-ran.sh` (CHK-20, ADR-004), `check-mutation-report.sh` (guarda de CHK-11), `check-required-secrets.sh` y `wait-for-grid.sh`
 - `src/test/java/com/demo/hooks/` y `runners/` — ciclo de vida del navegador y runner de JUnit Platform
+- `src/test/java/com/demo/contract/` y `src/test/resources/contract/` — pruebas de contrato de `Navegador` contra páginas HTML locales, sin red (ADR-004); solo usan la API pública de `Navegador`, `By` y `ConfigReader`, y ningún otro paquete las nombra
 - `src/test/resources/config.properties` — URLs, rutas, valores esperados y datos de prueba no sensibles
 - `.claude/` — agentes del equipo QE, reglas, hooks y permisos (el hook de protección bloquea las escrituras por Bash en `.claude/**`, `CLAUDE.md`, `MEMORY.md`, `AGENTS.md` y `.github/**`)
 

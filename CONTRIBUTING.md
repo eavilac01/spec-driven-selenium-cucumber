@@ -25,7 +25,7 @@ Nunca se ajusta una aserción para que "coincida" con la aplicación sin cambiar
 
 ## Antes de abrir un pull request
 
-Corre en local las comprobaciones que aplican a tu cambio (el catálogo completo, CHK-01…19, está en [`.claude/rules/04-quality-checks.md`](.claude/rules/04-quality-checks.md)):
+Corre en local las comprobaciones que aplican a tu cambio (el catálogo completo, CHK-01…20, está en [`.claude/rules/04-quality-checks.md`](.claude/rules/04-quality-checks.md)):
 
 ```bash
 ./mvnw -B -ntp clean test -Dheadless=true -Dcucumber.filter.tags="not @quarantine"   # CHK-08: suite completa
