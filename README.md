@@ -578,23 +578,300 @@ Los escenarios corren en paralelo con 2 hilos (`src/test/resources/junit-platfor
 
 ### Jenkins
 
-El `Jenkinsfile` declarativo está listo para un servidor Jenkins, aunque todavía no se ha ejecutado en uno real. Reproduce los jobs `test`, `mutation` y `quarantine` de GitHub Actions (Firefox y Grid se cubren solo en GitHub):
+El `Jenkinsfile` es un pipeline declarativo equivalente a los jobs `test`, `mutation` y `quarantine` de GitHub Actions. Firefox y el Grid solo se cubren en GitHub.
 
-1. `Checkout` del commit bajo prueba.
-2. `Traceability SDD (CHK-12)`, `Portabilidad de awk` (CHK-18, con los awk instalados en el agente), `Esperados por -D (ADR-003, R-2)` (autoprueba de CHK-19), `Capas (CHK-17)` y `Cuarentena reglada (CHK-14)`.
-3. `Mutation (CHK-11)`: PIT con la guarda de reporte, sin credenciales.
-4. `Test`: la suite sin `@quarantine` y, aunque Maven falle, CHK-19 sobre su log; recibe credenciales.
-5. `Cuarentena (CHK-14)`: solo los escenarios `@quarantine`, con la misma evaluación que en GitHub. Fallo esperado: etapa verde. Un `defecto-sut` que pasa o un `inestable` con error: etapa inestable. Error real o un esperado sobrescrito por `-D` (CHK-19): falla el build. También recibe credenciales.
-6. `post` de `Test`: publica JUnit y Allure y archiva los reportes, aunque una prueba falle. `Mutation` archiva su reporte y `pit.log`. El `post` global limpia el espacio de trabajo.
+**Estado: verificado en un Jenkins real.** El build `#1` terminó en **SUCCESS** en 7 min 16 s, el 2026-10-13. Corrió en Jenkins 2.541.3 (imagen `jenkins/jenkins:lts-jdk17`) sobre el commit `0a51d89`, con Google Chrome 155 en el agente.
 
-Incluye límites de tiempo globales y por etapa, descarte de builds antiguos y builds no concurrentes. Los bloques de shell de varias órdenes corren en bash con `set -euo pipefail`, y todos usan comillas simples para que Groovy no interpole ningún valor.
+#### Qué ejecuta, en orden
 
-**Para configurarlo:**
+| # | Etapa | Qué hace | Credenciales | Resultado esperado |
+|---|---|---|---|---|
+| 1 | `Checkout` | Descarga el commit bajo prueba | No | — |
+| 2 | `Traceability SDD (CHK-12)` | Cada escenario apunta a una spec aprobada | No | Verde, sin salida |
+| 3 | `Portabilidad de awk` | CHK-18: control estático y autopruebas con cada awk instalado en el agente | No | Verde |
+| 4 | `Capas (CHK-17)` | Autoprueba de las reglas de capas con cada awk, más las reglas sobre el código | No | Verde. Es la etapa sin navegador más larga (unos 5 min) |
+| 5 | `Cuarentena reglada (CHK-14)` | Autopruebas de la cuarentena y del evaluador, más el registro `docs/quarantine.md` | No | Verde |
+| 6 | `Esperados por -D (ADR-003, R-2)` | Autoprueba de CHK-19 | No | Verde |
+| 7 | `Mutation (CHK-11)` | CHK-15/16 y PIT, con la guarda del reporte. Archiva `pit-reports` y `pit.log` | No | Verde (umbral 80 %) |
+| 8 | `Test` | Suite completa sin `@quarantine` y, aunque Maven falle, CHK-19 sobre su log. Publica JUnit y Allure y archiva el HTML de Cucumber, Surefire y Allure. No archiva `test.log` | **Sí** | Verde |
+| 9 | `Cuarentena (CHK-14)` | Solo los escenarios `@quarantine`, con la misma evaluación que en GitHub, y CHK-19 sobre su log. Archiva `quarantine-reports/` sin el log | **Sí** | **Verde** si AC-COMPRA-09 falla por aserción, que es lo esperado. **UNSTABLE** si un `defecto-sut` pasa o un `inestable` termina con error. **FAILURE** ante un error real o un esperado sobrescrito por `-D` |
+| — | `post` global | Limpia el espacio de trabajo (`cleanWs`) | — | — |
 
-1. **Plugins:** Pipeline (Declarative), Credentials Binding, Timestamper, JUnit, Workspace Cleanup y Allure (con una instalación de Allure Commandline en *Global Tool Configuration*).
-2. **Herramientas** (`Manage Jenkins → Tools`): un JDK llamado `jdk-17` (Temurin 17). Maven no hace falta: lo trae `./mvnw`.
-3. **Agente:** Linux con bash, git y Google Chrome.
-4. **Credenciales** (`Manage Jenkins → Credentials`): seis de tipo **Secret text**. El ID de cada una es exactamente el nombre de la variable en `.env.example`, y su valor es el mismo que en tu `.env` (ver [Credenciales de SauceDemo](#credenciales-de-saucedemo-cómo-obtenerlas)).
+**Opciones del pipeline:**
+- límite global de 60 min y límites propios en Mutation (10 min), Test (20 min) y Cuarentena (20 min);
+- conserva 30 builds y los artefactos de 10;
+- sin builds concurrentes (`disableConcurrentBuilds`).
+
+**Ejecución del shell:** los bloques de varias órdenes corren en bash con `set -euo pipefail`. Todos usan comillas simples para que Groovy no interpole ningún valor, y solo `Test` y `Cuarentena` reciben las credenciales (`withCredentials`), que Jenkins enmascara en la consola.
+
+#### Opción A: configurarlo en un servidor Jenkins existente
+
+Haz los pasos en este orden. Los nombres marcados como **exactos** los usa el `Jenkinsfile` literalmente; si no coinciden, el build falla.
+
+**1. Versión de Jenkins.** La configuración verificada es Jenkins **2.541.3**. La imagen `lts-jdk17` está congelada en esa versión, porque las LTS posteriores exigen Java 21 en el controlador, y algunos plugins compatibles con ella tienen avisos de seguridad publicados (`workflow-multibranch`, `pipeline-groovy-lib`). En un servidor permanente usa la LTS vigente; el Java del controlador no afecta al pipeline, que compila con la herramienta `jdk-17` del paso 3. *Ese montaje con la LTS vigente no está verificado en este repositorio.*
+
+**2. Plugins** (`Manage Jenkins → Plugins → Available plugins`):
+
+| Plugin | ID | Para qué |
+|---|---|---|
+| Pipeline | `workflow-aggregator` | Pipelines |
+| Pipeline: Declarative | `pipeline-model-definition` | `pipeline { … }`, `options`, `post` |
+| Git | `git` | `checkout scm` |
+| Credentials Binding | `credentials-binding` | `withCredentials` y `string(...)` |
+| Timestamper | `timestamper` | `timestamps()` |
+| JUnit | `junit` | `junit` |
+| Workspace Cleanup | `ws-cleanup` | `cleanWs` |
+| Allure Jenkins Plugin | `allure-jenkins-plugin` | `allure` |
+
+Versiones verificadas: `workflow-aggregator` 608, `pipeline-model-definition` 2.2293, `git` 5.11.0, `credentials-binding` 728, `timestamper` 1.30, `junit` 1438, `ws-cleanup` 0.49 y `allure-jenkins-plugin` 3.0.0.
+
+**3. Herramientas** (`Manage Jenkins → Tools`):
+- **JDK:** *Add JDK* → Name: **`jdk-17`** (exacto) → `JAVA_HOME` de un JDK 17, por ejemplo Temurin 17. Maven no hace falta: lo descarga `./mvnw` desde Maven Central y verifica su checksum.
+- **Allure Commandline:** *Add Allure Commandline* → Name: `allure` → una instalación de Allure 2.x (verificada con **2.30.0**). Puedes marcar *Install automatically* o indicar la ruta de una instalación existente. El paso `allure` del `Jenkinsfile` usa la instalación configurada.
+
+**4. Agente** (el nodo donde corre el pipeline; `agent any`):
+
+| Requisito | Detalle |
+|---|---|
+| Sistema | Linux x86_64 |
+| Programas | `bash`, `git`, `awk` (mawk), **`gawk`** (CHK-18 prueba los scripts con cada awk instalado) y **Google Chrome** estable |
+| chromedriver | No hace falta instalarlo: lo resuelve Selenium Manager en la primera ejecución |
+| Red de salida | `www.saucedemo.com` (SUT), Maven Central (`repo.maven.apache.org`, para Maven y dependencias) y, para chromedriver, `googlechromelabs.github.io` y `storage.googleapis.com` |
+| Memoria compartida | Si el agente es un contenedor, `--shm-size=2g` o más; con menos, Chrome se cierra |
+| Telemetría | `pom.xml` ya pone `SE_AVOID_STATS=true` para las pruebas, así que Selenium Manager no envía estadísticas |
+| Ejecutores | Al menos 1. Hay un build a la vez por job |
+
+**5. Credenciales** (`Manage Jenkins → Credentials → System → Global credentials (unrestricted) → Add Credentials`). Crea **seis**, todas con:
+- **Kind:** `Secret text`
+- **Scope:** `Global`
+- **Secret:** el valor de esa variable en tu `.env` (ver [Credenciales de SauceDemo](#credenciales-de-saucedemo-cómo-obtenerlas))
+- **ID:** exactamente uno de estos nombres, iguales a los de `.env.example`:
+  - `TEST_USER_STANDARD_USERNAME`
+  - `TEST_USER_STANDARD_PASSWORD`
+  - `TEST_LOGIN_CASES_LOCKED_USER_USERNAME`
+  - `TEST_LOGIN_CASES_LOCKED_USER_PASSWORD`
+  - `TEST_LOGIN_CASES_INVALID_PASSWORD_USERNAME`
+  - `TEST_LOGIN_CASES_INVALID_PASSWORD_PASSWORD`
+- **Description:** vacía, o un texto que no sea el valor.
+
+Si falta alguna o su ID no coincide, `Test` falla al empezar con `ERROR: Could not find credentials entry with ID '…'`.
+
+**6. Job** (`New Item`):
+1. Nombre: el que quieras, por ejemplo `spec-driven-selenium-cucumber`. Tipo: **Pipeline**. *OK*.
+2. Sección *Pipeline*:
+   - **Definition:** `Pipeline script from SCM`
+   - **SCM:** `Git`
+   - **Repository URL:** `https://github.com/eavilac01/spec-driven-selenium-cucumber.git`
+   - **Credentials:** `- none -` (el repositorio es público)
+   - **Branch Specifier:** `*/main`. Para fijar un commit concreto, pon su SHA completo.
+   - **Script Path:** **`Jenkinsfile`** (exacto)
+   - **Lightweight checkout:** desmarcado (configuración verificada)
+3. *Save* → *Build Now*.
+
+**7. Resultado esperado:** el build termina en **SUCCESS** y tarda unos 7–8 min. En el build:
+- **Test Result:** 204 pruebas con 1 omitida, que es AC-COMPRA-09, en cuarentena.
+- **Allure Report.**
+- **Artefactos:** `target/cucumber-report.html`, `target/surefire-reports/`, `target/allure-results/`, `target/pit-reports/`, `pit.log` y `quarantine-reports/`.
+
+En la consola, `Cuarentena (CHK-14)` muestra `VERDE: ejecutados=1 fallaron=1 errores=0 pasaron=0`.
+
+**8. Seguridad:**
+- No construyas pull requests de forks con estas credenciales. Si usas un job *Multibranch* con GitHub Branch Source, configura *Discover pull requests from forks → Trust: From users with Admin or Write permission*. Si no, el `Jenkinsfile` de un fork podría leer las credenciales.
+- Restringe quién puede configurar el job y ver las credenciales.
+
+#### Opción B: Jenkins local y efímero en Docker (la configuración verificada)
+
+Sirve para probar el `Jenkinsfile` en tu máquina sin un servidor. Jenkins queda solo en `127.0.0.1:8090`, con inicio de sesión obligatorio, y lee el repositorio en **solo lectura** montando únicamente su carpeta `.git`. El árbol de trabajo, con tu `.env`, no se monta.
+
+**Requisitos del host:** Docker, unos 3 GB libres y salida a Docker Hub, `deb.debian.org`, `dl.google.com`, `repo1.maven.org` y `updates.jenkins.io`/`get.jenkins.io` durante la construcción de la imagen. Durante los builds, la salida es la del agente de la opción A.
+
+**1. Prepara una carpeta fuera del repositorio:**
+
+```bash
+mkdir -p ~/jenkins-local/ref/jobs/spec-driven-selenium-cucumber ~/jenkins-local/secrets
+cd ~/jenkins-local
+```
+
+**2. Crea estos cuatro archivos con este contenido exacto:**
+
+`~/jenkins-local/Dockerfile`:
+
+```dockerfile
+FROM jenkins/jenkins:lts-jdk17
+
+USER root
+ARG ALLURE_VERSION=2.30.0
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends gawk ca-certificates unzip; \
+    curl -fsSL -o /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb; \
+    apt-get install -y --no-install-recommends /tmp/chrome.deb; \
+    rm -f /tmp/chrome.deb /etc/apt/sources.list.d/google-chrome.list* /etc/cron.daily/google-chrome; \
+    rm -rf /var/lib/apt/lists/*; \
+    curl -fsSL -o /tmp/allure.zip "https://repo1.maven.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"; \
+    unzip -q /tmp/allure.zip -d /opt; \
+    mv "/opt/allure-${ALLURE_VERSION}" /opt/allure; \
+    rm -f /tmp/allure.zip; \
+    google-chrome --version; gawk --version | head -1; /opt/allure/bin/allure --version
+
+COPY --chown=jenkins:jenkins ref/ /usr/share/jenkins/ref/
+COPY --chown=jenkins:jenkins casc.yaml /usr/share/jenkins/casc/jenkins.yaml
+
+USER jenkins
+COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
+ENV CASC_JENKINS_CONFIG=/usr/share/jenkins/casc/jenkins.yaml \
+    JAVA_OPTS="-Djenkins.install.runSetupWizard=false -Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true" \
+    SE_AVOID_STATS=true
+```
+
+Este `Dockerfile` instala Chrome estable, `gawk` y Allure 2.30.0, y desactiva las actualizaciones automáticas de Chrome. `ALLOW_LOCAL_CHECKOUT` permite leer el repositorio montado en `/repo.git`.
+
+`~/jenkins-local/plugins.txt`:
+
+```text
+workflow-aggregator
+pipeline-model-definition
+git
+credentials-binding
+timestamper
+junit
+ws-cleanup
+allure-jenkins-plugin
+configuration-as-code
+```
+
+`~/jenkins-local/casc.yaml` (configuración como código: usuario `admin`, sin registro de usuarios ni acceso anónimo, herramientas `jdk-17` y `allure`):
+
+```yaml
+jenkins:
+  systemMessage: "Jenkins local y efímero (127.0.0.1)."
+  numExecutors: 1
+  mode: NORMAL
+  slaveAgentPort: -1
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  crumbIssuer: "standard"
+tool:
+  jdk:
+    installations:
+      - name: "jdk-17"
+        home: "/opt/java/openjdk"
+  allure:
+    installations:
+      - name: "allure"
+        home: "/opt/allure"
+unclassified:
+  location:
+    url: "http://127.0.0.1:8090/"
+```
+
+`${JENKINS_ADMIN_PASSWORD}` no es una variable de entorno: Configuration as Code lo lee del archivo `/run/secrets/JENKINS_ADMIN_PASSWORD` del contenedor, que se monta en el paso 4.
+
+`~/jenkins-local/ref/jobs/spec-driven-selenium-cucumber/config.xml` (el job, ya creado al arrancar):
+
+```xml
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job">
+  <description>Jenkinsfile del repositorio local montado en solo lectura (/repo.git).</description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps">
+    <scm class="hudson.plugins.git.GitSCM" plugin="git">
+      <configVersion>2</configVersion>
+      <userRemoteConfigs>
+        <hudson.plugins.git.UserRemoteConfig>
+          <url>file:///repo.git</url>
+        </hudson.plugins.git.UserRemoteConfig>
+      </userRemoteConfigs>
+      <branches>
+        <hudson.plugins.git.BranchSpec>
+          <name>main</name>
+        </hudson.plugins.git.BranchSpec>
+      </branches>
+      <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+      <submoduleCfg class="empty-list"/>
+      <extensions/>
+    </scm>
+    <scriptPath>Jenkinsfile</scriptPath>
+    <lightweight>false</lightweight>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>
+```
+
+Para construir desde GitHub en vez de desde tu copia local, cambia `file:///repo.git` por `https://github.com/eavilac01/spec-driven-selenium-cucumber.git` y omite el montaje de `.git` del paso 4. Para fijar un commit, cambia `main` por su SHA completo.
+
+**3. Genera la contraseña de `admin` y construye la imagen:**
+
+```bash
+cd ~/jenkins-local
+(umask 077; openssl rand -base64 24 > secrets/JENKINS_ADMIN_PASSWORD)
+docker build -t jenkins-sdsc:local .
+```
+
+El archivo queda con permisos `600` y pertenece a tu usuario. El usuario `jenkins` del contenedor tiene el UID 1000: si tu UID no es 1000 (compruébalo con `id -u`), ejecuta también `chmod 644 secrets/JENKINS_ADMIN_PASSWORD`. La carpeta `secrets/` sigue siendo privada (700).
+
+**4. Arranca Jenkins:** sustituye `/ruta/al/repo` por la ruta de tu clon.
+
+```bash
+docker network create jenkins-sdsc-net
+docker volume create jenkins-sdsc-home
+docker run -d --name jenkins-sdsc \
+  --network jenkins-sdsc-net \
+  -p 127.0.0.1:8090:8080 \
+  --shm-size=2g \
+  -v jenkins-sdsc-home:/var/jenkins_home \
+  -v "$HOME/jenkins-local/secrets:/run/secrets:ro" \
+  -v "/ruta/al/repo/.git:/repo.git:ro" \
+  jenkins-sdsc:local
+docker logs -f jenkins-sdsc
+```
+
+Espera a la línea `Jenkins is fully up and running` y sal de los logs con `Ctrl+C`. El contenedor sigue en marcha. Si `127.0.0.1:8090` ya está ocupado, cambia el puerto en `-p` y en `url` de `casc.yaml`, y reconstruye la imagen.
+
+**5. Entra y carga las credenciales:**
+1. En una terminal, ejecuta `cat ~/jenkins-local/secrets/JENKINS_ADMIN_PASSWORD; echo` y copia la contraseña.
+2. Abre `http://127.0.0.1:8090/` e inicia sesión con el usuario **`admin`** y esa contraseña.
+3. Crea las seis credenciales del paso 5 de la opción A en `http://127.0.0.1:8090/manage/credentials/store/system/domain/_/newCredentials`.
+
+**6. Lanza el build:** abre el job `spec-driven-selenium-cucumber` y pulsa **Build Now**. Tarda unos 7–8 min. El resultado esperado es el del paso 7 de la opción A.
+
+**7. Borra todo al terminar:**
+
+```bash
+docker rm -f jenkins-sdsc
+docker volume rm jenkins-sdsc-home
+docker network rm jenkins-sdsc-net
+docker rmi jenkins-sdsc:local jenkins/jenkins:lts-jdk17
+rm -rf ~/jenkins-local
+```
+
+Así eliminas también la contraseña y las credenciales guardadas en el volumen.
+
+**Diferencia con el build verificado:** en la verificación, el chromedriver se copió a la imagen desde la caché de Selenium del host y se usó `SE_OFFLINE=true`, para no salir a Chrome for Testing. Este `Dockerfile` deja que Selenium Manager lo descargue, como en GitHub Actions. Si prefieres la variante sin red, copia `~/.cache/selenium/chromedriver/linux64/<versión>/chromedriver` a `/usr/share/jenkins/ref/.cache/selenium/chromedriver/linux64/<versión>/chromedriver` y añade `SE_OFFLINE=true`. La versión mayor del chromedriver debe coincidir con la del Chrome instalado.
+
+#### Problemas frecuentes en Jenkins
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `Tool type "jdk" does not have an install of "jdk-17" configured` | La herramienta no se llama `jdk-17` | Renómbrala exactamente `jdk-17` en `Manage Jenkins → Tools` |
+| `Could not find credentials entry with ID 'TEST_…'` | Falta la credencial o su ID no coincide | Revisa los seis ID de la lista del paso 5 de la opción A |
+| `Secret faltante: 'TEST_…' (credencial de tipo Secret text con el mismo ID)` | Esa credencial está vacía | Edítala y pon el valor de tu `.env` |
+| Chrome se cierra (`session deleted because of page crash`) | `/dev/shm` pequeño en el contenedor | `--shm-size=2g` o más |
+| `SessionNotCreatedException`: versión de chromedriver incompatible | `SE_OFFLINE=true` con un chromedriver de otra versión mayor | Quita `SE_OFFLINE` o copia el chromedriver de la misma versión mayor que Chrome |
+| La etapa `Portabilidad de awk` o `Capas` falla con `gawk: not found` o con errores de `gawk` | El agente no tiene `gawk`, o un script usa algo exclusivo de una implementación de awk | Instala `gawk`. Si falla con un awk concreto, es un defecto del script: ver CHK-18 |
+| El Jenkins local no arranca o JCasC falla al leer `JENKINS_ADMIN_PASSWORD` | Falta `secrets/JENKINS_ADMIN_PASSWORD` o el contenedor no puede leerlo | Repite el paso 3 de la opción B; revisa el UID |
+| `Cuarentena (CHK-14)` en **UNSTABLE** | Un `defecto-sut` pasó (posible corrección del SUT) o un `inestable` terminó con error | Lee el aviso en la consola y la sección [Cuarentena y defectos conocidos](#cuarentena-y-defectos-conocidos) |
 
 ### Selenium Grid con Docker Compose
 
