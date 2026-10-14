@@ -23,6 +23,7 @@ Un escenario con la etiqueta `@quarantine` queda fuera de la suite que bloquea (
 - Fechas en formato `YYYY-MM-DD`. El ingreso no puede ser posterior a hoy, y una fecha de límite o de revisión vencida hace fallar CHK-14.
 - Una celda vacía o con `—` cuenta como campo ausente.
 - Nunca se copian aquí secretos, credenciales ni texto literal del sistema bajo prueba fuera de lo que ya dice la spec.
+- **Antes de sacar un escenario de la cuarentena porque "pasa"**, se revisa su log en el job `quarantine` (o en la etapa de Jenkins) y se confirma que no aparecen ni la pista de D8, `revisar las preferencias de Chrome (ADR-002, D8)`, ni el INFO `no avanzó; clics efectivos: 1`. En `@AC-COMPRA-09`, un clic nativo perdido tampoco avanza a los datos de envío y daría un verde falso: el escenario "cumpliría" la regla sin que el sistema bajo prueba la cumpla (ADR-004; ADR-002, enmienda parte 3, *Preferencias de Chrome (D8) y respaldo JavaScript del clic (D1)*, "Riesgo relacionado: verde falso en AC-COMPRA-09").
 
 ## Registro
 
