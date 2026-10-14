@@ -187,6 +187,8 @@
                         <!-- ADR-001 (D3): pruebas unitarias de la lógica de src/main/java. -->
                         <include>com/demo/config/**/*Test.java</include>
                         <include>com/demo/data/**/*Test.java</include>
+                        <!-- ADR-004 (D1): pruebas de contrato del transporte (navegador real y páginas locales). -->
+                        <include>com/demo/contract/**/*Test.java</include>
                     </includes>
                     <!-- Selenium Manager hereda el entorno del JVM de Surefire: sin telemetría. -->
                     <environmentVariables>
@@ -217,6 +219,8 @@
                     <targetTests>${pit.targetTests}</targetTests>
                     <excludedTestClasses>
                         <param>com.demo.runners.*</param>
+                        <!-- ADR-004 (D7): las pruebas de contrato abren un navegador; nunca entran en PIT. -->
+                        <param>com.demo.contract.*</param>
                     </excludedTestClasses>
                     <mutators>
                         <mutator>STRONGER</mutator>
